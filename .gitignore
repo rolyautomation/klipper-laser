@@ -4,6 +4,7 @@
 .config
 .config.old
 klippy/.version
+klipper-laser/out/
 
 # Ignore temporary files
 *.log
