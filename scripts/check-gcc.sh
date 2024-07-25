@@ -4,6 +4,11 @@
 f1="$1"
 f2="$2"
 
+# Added for macOS, requires ArmGNUToolchain to be installed
+if [ "$(uname)" = "Darwin" ]; then
+    alias readelf='arm-none-eabi-readelf'
+fi
+
 s1=`readelf -A "$f1" | grep "Tag_ARM_ISA_use"`
 s2=`readelf -A "$f2" | grep "Tag_ARM_ISA_use"`
 
