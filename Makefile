@@ -18,7 +18,9 @@ LD=$(CROSS_PREFIX)ld
 OBJCOPY=$(CROSS_PREFIX)objcopy
 OBJDUMP=$(CROSS_PREFIX)objdump
 STRIP=$(CROSS_PREFIX)strip
-CPP=cpp
+# Explictly set the preprocessor to gcc, for macOS compiles
+#CPP=cpp
+CPP=$(CROSS_PREFIX)gcc -E
 PYTHON=python3
 
 # Source files
