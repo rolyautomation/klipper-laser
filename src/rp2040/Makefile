@@ -8,6 +8,9 @@ dirs-y += src/rp2040 src/generic lib/rp2040/elf2uf2 lib/fast-hash lib/can2040
 CFLAGS += -mcpu=cortex-m0plus -mthumb -Ilib/cmsis-core
 CFLAGS += -Ilib/rp2040 -Ilib/rp2040/cmsis_include -Ilib/fast-hash -Ilib/can2040
 
+#CFLAGS += -Isrc/rp2040 -Ilib/rp2040/common
+CFLAGS += -Isrc/rp2040
+
 # Add source files
 src-y += rp2040/main.c rp2040/watchdog.c rp2040/gpio.c
 src-y += rp2040/adc.c rp2040/timer.c rp2040/bootrom.c
@@ -25,6 +28,32 @@ src-$(CONFIG_USBCANBUS) += ../lib/fast-hash/fasthash.c rp2040/usbserial.c
 src-$(CONFIG_HAVE_GPIO_HARD_PWM) += rp2040/hard_pwm.c
 src-$(CONFIG_HAVE_GPIO_SPI) += rp2040/spi.c
 src-$(CONFIG_HAVE_GPIO_I2C) += rp2040/i2c.c
+# Add XY2-100 interface option
+src-$(CONFIG_XY2100) += rp2040/xy2_100.c
+src-$(CONFIG_XY2100) += rp2040/sdk/gpio.c rp2040/sdk/pio.c rp2040/sdk/claim.c
+#src-$(CONFIG_XY2100) += rp2040/rp2_stdio.c rp2040/rp2_time.c rp2040/rp2_mutex.c
+
+# Path to the pre-built pioasm executable
+PREBUILT_PIOASM_PATH := lib/rp2040/pioasm/pioasm
+
+# Use pioasm executable to generate .pio.h headder files
+$(OUT)lib/rp2040/pioasm/pioasm: $(PREBUILT_PIOASM_PATH)
+	@echo "  Using pre-built pioasm executable"
+	@mkdir -p $(dir $@)
+	@cp $(PREBUILT_PIOASM_PATH) $@
+
+$(OUT)xy2_100.pio.h: src/rp2040/xy2_100.pio $(OUT)lib/rp2040/pioasm/pioasm
+	@echo "  Creating .pio.h file $@"
+	$(Q)$(OUT)lib/rp2040/pioasm/pioasm $< $@
+
+target-y := $(OUT)xy2_100.pio.h
+
+# Build rules for SDK files
+RP2040_SDK_DIR := src/rp2040/sdk
+$(OUT)$(RP2040_SDK_DIR)/%.o: $(RP2040_SDK_DIR)/%.c
+	@echo "  Compiling $@"
+	$(Q)mkdir -p $(dir $@)
+	$(Q)$(CC) $(CFLAGS) -c $< -o $@
 
 # rp2040 stage2 building
 STAGE2_FILE := $(shell echo $(CONFIG_RP2040_STAGE2_FILE))
@@ -58,7 +87,9 @@ rptarget-$(CONFIG_RP2040_HAVE_BOOTLOADER) := $(OUT)klipper.bin
 
 # Set klipper.elf linker rules
 target-y += $(rptarget-y)
-CFLAGS_klipper.elf += -nostdlib -lgcc -lc_nano
+# When compiling on macOS, ArmGNUToolchain can't find some standard functions
+#CFLAGS_klipper.elf += --specs=nosys.specs
+CFLAGS_klipper.elf += -nostdlib -lgcc -lc_nano --specs=nosys.specs
 CFLAGS_klipper.elf += -T $(OUT)src/rp2040/rp2040_link.ld
 OBJS_klipper.elf += $(stage2-y)
 $(OUT)klipper.elf: $(stage2-y) $(OUT)src/rp2040/rp2040_link.ld

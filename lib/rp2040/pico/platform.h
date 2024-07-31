@@ -9,6 +9,8 @@
 
 #include "hardware/platform_defs.h"
 #include <stddef.h>
+#include "hardware/regs/sio.h"
+#include "hardware/regs/addressmap.h"
 
 #ifdef __unix__
 
@@ -104,6 +106,14 @@ static __noreturn void __builtin_unreachable() {
 #ifndef MIN
 #define MIN(a, b) ((b)>(a)?(a):(b))
 #endif
+
+// Adding this back in from the SDK, required by rp2_sync.h - Leo Jul 26, 2024
+#define pico_default_asm(...) __asm (".syntax unified\n" __VA_ARGS__)
+#define pico_default_asm_volatile(...) __asm volatile (".syntax unified\n" __VA_ARGS__)
+
+// Adding this back in from the SDK, required by rp2_stdio.c - Leo Jul 26, 2024
+#define WRAPPER_FUNC(x) __wrap_ ## x
+#define REAL_FUNC(x) __real_ ## x
 
 // abort in our case
 void __noreturn __breakpoint();

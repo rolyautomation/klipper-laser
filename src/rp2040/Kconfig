@@ -131,6 +131,12 @@ choice
        select USBCANBUS
 endchoice
 
+config XY2100
+    bool "Enable XY2-100 protocol"
+    depends on MACH_RP2040
+    help
+        Enable support for the XY2-100 protocol on RP2040 boards.
+
 config RP2040_CANBUS_GPIO_RX
     int "CAN RX gpio number" if CANBUS
     default 4
