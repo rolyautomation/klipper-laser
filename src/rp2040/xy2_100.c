@@ -1,12 +1,25 @@
 //#include <stdio.h>
 //#include "pico/stdlib.h"
 #include <stdint.h> // uint32_t
+void tight_loop_contents(void) {}
+
 #include "sdk/pio.h"
 #include "sched.h"
 #include "hardware/structs/psm.h" // psm_hw
 #include "hardware/structs/watchdog.h" // watchdog_hw
 
 //#include "xy2_100.pio.h"
+
+
+
+#define  M_NO_SDK_ONWIN
+#ifdef   M_NO_SDK_ONWIN
+void  open_piomodulclk(void);
+#endif
+
+
+
+
 
 // ------------- //
 // xy2_100_clock //
@@ -109,10 +122,10 @@ static inline pio_sm_config xy2_100_y_program_get_default_config(uint offset) {
 int interval = 5;
 uint16_t posX = 0;
 uint16_t posY = 0;
-const int PIN_X = 0;
-const int PIN_Y = 1;
-const int PIN_CLOCK = 22;
-const int PIN_SYNC = 3;
+const int PIN_X = 2;
+const int PIN_Y = 3;
+const int PIN_CLOCK = 4;
+const int PIN_SYNC = 5;
 bool increment_plus = true;
 
 void xy2_100_clock_program_init(PIO pio, uint sm, uint offset) {
@@ -200,6 +213,12 @@ void
 xy2_100_init(void)
 {
     PIO pio = pio1;
+
+
+#ifdef   M_NO_SDK_ONWIN
+    open_piomodulclk();
+#endif
+
     uint offset_clock = pio_add_program(pio, &xy2_100_clock_program);
     uint offset_x = pio_add_program(pio, &xy2_100_x_program);
     uint offset_y = pio_add_program(pio, &xy2_100_y_program);
@@ -233,8 +252,8 @@ xy2_100_init(void)
         //alternate_bit();
         uint32_t x_frame = build_frame(posX);
         uint32_t y_frame = build_frame(posY);
-        pio_sm_put(pio, sm_x, x_frame);
-        pio_sm_put(pio, sm_y, y_frame);
+        pio_sm_put_blocking(pio, sm_x, x_frame);
+        pio_sm_put_blocking(pio, sm_y, y_frame);
         //printf("X: %d, Y: %d\n", posX, posY);
         //sleep_us(100);
     }
