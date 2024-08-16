@@ -9,8 +9,7 @@ void tight_loop_contents(void) {}
 #include "hardware/structs/watchdog.h" // watchdog_hw
 
 //#include "xy2_100.pio.h"
-
-
+#define  M_XY2_100_V02   02
 
 #define  M_NO_SDK_ONWIN
 #ifdef   M_NO_SDK_ONWIN
@@ -20,7 +19,343 @@ void  open_piomodulclk(void);
 
 
 
+#ifdef  M_XY2_100_V02
 
+//#define M_DEBUG_INFO_XY   1
+#ifdef  M_DEBUG_INFO_XY
+int xy2_debug_info(const char* fmt, ...)
+{
+    int ret = 0;
+
+#if  1   
+    va_list args;
+    va_start(args, fmt);
+    ret = vprintf(fmt, args);
+    //printf(fmt, args);  //use it have eeror 
+    va_end(args);
+#endif
+
+    return(ret);
+
+}
+#endif
+
+
+#define MS_H_C2   0
+#define MS_H_C1   0
+#define MS_H_C0   1
+#define MS_H_C02  ( (MS_H_C2 << 2) | (MS_H_C1 << 1) | (MS_H_C0 << 0) )
+#define MS_H_C_POS (16+1)
+#define F_XY_VAL_P (1)
+#define F_HIGH_RIGHT_POS  (12)
+
+
+
+#define M_SEL_PIO  (pio0)
+#define M_SEL_SM   (0)
+
+
+
+#if  0
+#define M_IO_CK_SYNC_BASE (4)
+#define M_IO_XY_BASE      (2)
+#else
+#define M_IO_CK_SYNC_BASE (2)
+#define M_IO_XY_BASE      (0)
+#endif
+
+
+#define M_TEST_SCAN_MODE  1
+#if M_TEST_SCAN_MODE
+
+
+uint16_t posX = 0;
+uint16_t posY = 0;
+bool increment_plus = true;
+int increment_position(void) {
+    if (increment_plus) {
+        posX = posX + 8;
+        posY = posY + 8;
+    } else {
+        posX = posX - 8;
+        posY = posY - 8;
+    }
+    if (posX >= 65525) {
+        increment_plus = false;
+    }
+    if (posX <= 10) {
+        increment_plus = true;
+    }
+    return 0;
+}
+
+
+int get_scan_dataxy(uint16_t      * pposX, uint16_t *  pposY)
+{
+	int iret = 0;
+
+    increment_position();
+	if (pposX != NULL)
+	{
+		*pposX = posX;
+
+	}
+	if (pposY != NULL)
+	{
+		*pposY = posY;
+
+	}
+	return(iret);
+	
+}
+
+
+
+#endif
+
+
+uint16_t get_parity_bit(uint16_t value) {
+    value ^= value >> 8;
+    value ^= value >> 4;
+    value ^= value >> 2;
+    value ^= value >> 1;
+    return value & 1;
+}
+
+
+
+//int  comb_senddata_format(uint16_t x_d, uint16_t y_d, uint32_t * ps_xd, uint32_t * ps_yd)
+int  comb_senddata_format(uint16_t x_d, uint16_t y_d, uint32_t * ps_1st_data, uint32_t * ps_sec_data)
+{
+    int iret = 0;
+
+    uint32_t  xd_temp = 0;
+    uint32_t  yd_temp = 0;
+    uint32_t  d_temp_1st = 0;
+    uint32_t  d_temp_sec = 0;    
+    int  i = 0;
+    uint8_t   bitx = 0;
+    uint8_t   bity = 0;
+
+    xd_temp =  (MS_H_C02 <<  MS_H_C_POS) | (x_d << F_XY_VAL_P) | get_parity_bit(x_d);
+    yd_temp =  (MS_H_C02 <<  MS_H_C_POS) | (y_d << F_XY_VAL_P) | get_parity_bit(y_d);
+
+#ifdef  M_DEBUG_INFO_XY
+    xy2_debug_info("xd_temp=%08X\n",xd_temp);
+    xy2_debug_info("yd_temp=%08X\n",yd_temp);
+#endif
+
+    for(i=0; i < 20 ; i++)
+    {
+       bitx = xd_temp & 0x01; 
+       bity = yd_temp & 0x01;
+       xd_temp = xd_temp >> 1;
+       yd_temp = yd_temp >> 1;      
+
+       if (i < 10)
+       {
+           d_temp_sec = d_temp_sec >> 1;
+           if ( bitx )
+           {
+             d_temp_sec = d_temp_sec | 0x80000000;
+           }
+           d_temp_sec = d_temp_sec >> 1;
+           if ( bity )
+           {
+             d_temp_sec = d_temp_sec | 0x80000000;
+
+           }
+
+       }
+       else
+       {
+
+           d_temp_1st = d_temp_1st >> 1;
+           if ( bitx )
+           {
+             d_temp_1st = d_temp_1st | 0x80000000;
+           }
+           d_temp_1st = d_temp_1st >> 1;
+           if ( bity )
+           {
+             d_temp_1st = d_temp_1st | 0x80000000;
+             
+           }
+
+       }
+
+    }
+ 
+    if (ps_1st_data != NULL)
+    {
+        *ps_1st_data = d_temp_1st;
+    }
+    if (ps_sec_data != NULL)
+    {
+        *ps_sec_data = d_temp_sec;
+    }   
+
+    return(iret);
+
+ 
+}
+
+
+
+
+// --------------- //
+// xy2_100_piocode //
+// --------------- //
+
+#define xy2_100_piocode_wrap_target 0
+#define xy2_100_piocode_wrap 10
+
+static const uint16_t xy2_100_piocode_program_instructions[] = {
+            //     .wrap_target
+    0x98a0, //  0: pull   block           side 3     
+    0xf849, //  1: set    y, 9            side 3     
+    0x7902, //  2: out    pins, 2         side 3 [1] 
+    0x1182, //  3: jmp    y--, 2          side 2 [1] 
+    0xf848, //  4: set    y, 8            side 3     
+    0x98a0, //  5: pull   block           side 3     
+    0x7902, //  6: out    pins, 2         side 3 [1] 
+    0x1186, //  7: jmp    y--, 6          side 2 [1] 
+    0x6902, //  8: out    pins, 2         side 1 [1] 
+    0xa142, //  9: nop                    side 0 [1] 
+    0xb942, // 10: nop                    side 3 [1] 
+            //     .wrap
+};
+
+#if !PICO_NO_HARDWARE
+
+
+static const struct pio_program xy2_100_piocode_program = {
+    .instructions = xy2_100_piocode_program_instructions,
+    .length = 11,
+    .origin = -1,
+};
+
+
+static inline pio_sm_config xy2_100_piocode_program_get_default_config(uint offset) {
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_wrap(&c, offset + xy2_100_piocode_wrap_target, offset + xy2_100_piocode_wrap);
+    sm_config_set_sideset(&c, 2, false, false);
+    return c;
+}
+
+
+#endif
+
+
+
+void xy2_100_piocode_program_init(PIO pio, uint sm, uint offset,uint clk_base, uint xy_base) {
+
+   pio_sm_config c = xy2_100_piocode_program_get_default_config(offset);
+
+   //sm_config_set_in_pins(&c, pin_sio0);
+   sm_config_set_set_pins(&c, xy_base, 2);
+
+   sm_config_set_out_pins(&c, xy_base, 2);
+   sm_config_set_out_shift(&c, false, false, 0);
+   //sm_config_set_in_shift(&c, false, false, 0);
+   sm_config_set_sideset_pins(&c, clk_base);
+   //sm_config_set_in_pins(&c, PIN_CLOCK);
+   pio_sm_set_consecutive_pindirs(pio, sm, clk_base, 2, true);
+   pio_sm_set_consecutive_pindirs(pio, sm, xy_base, 2, true);
+
+   pio_sm_set_pins_with_mask(pio, sm, (3u << clk_base), (3u << clk_base) | (3u << xy_base));
+
+
+   //pio_sm_set_pins_with_mask(pio, sm, 0, (1u << pin_sck) | (1u << pin_mosi));
+   //pio_sm_set_pindirs_with_mask(pio, sm, (1u << pin_sck) | (1u << pin_mosi), (1u << pin_sck)
+   // | (1u << pin_mosi) | (1u << pin_miso));  
+
+   pio_gpio_init(pio, clk_base);
+   pio_gpio_init(pio, clk_base+1);
+   pio_gpio_init(pio, xy_base);
+   pio_gpio_init(pio, xy_base+1);      
+
+   //sm_config_set_clkdiv(&c, 31.25f);
+   //sm_config_set_clkdiv(&c, 62.5f);    //cycle 2us,500k
+   sm_config_set_clkdiv(&c, 15.625f);  //cycle .5us, 2M
+
+   pio_sm_init(pio, sm, offset, &c);
+
+
+
+
+}
+
+
+
+
+
+
+
+int config_xy2_pio(unsigned      int  ck_sync_base, unsigned int  xy_base)
+{
+
+
+    int iret = 0;
+	PIO pio = M_SEL_PIO;
+	uint sm_xy2m  = M_SEL_SM;
+
+
+
+#ifdef   M_NO_SDK_ONWIN
+    open_piomodulclk();
+#endif	
+
+    if(ck_sync_base == xy_base)
+    {
+    
+		ck_sync_base = M_IO_CK_SYNC_BASE;
+        xy_base  = M_IO_XY_BASE;
+		
+
+    }
+	
+    uint offset_xy2m = pio_add_program(pio, &xy2_100_piocode_program);
+    //xy2_100_piocode_program_init(pio, sm_xy2m, offset_xy2m,M_IO_CK_SYNC_BASE,M_IO_XY_BASE);
+    xy2_100_piocode_program_init(pio, sm_xy2m, offset_xy2m,ck_sync_base,xy_base);
+    pio_sm_set_enabled(pio, sm_xy2m, true);
+	return(iret);
+	
+		
+
+}
+
+
+int send_xy_data(uint16_t posX, uint16_t posY, unsigned char mode)
+{
+	int iret = 0;
+	PIO pio = M_SEL_PIO;
+	uint sm_xy2m  = M_SEL_SM;	
+    static uint32_t data_snd_part1 = 0;
+    static uint32_t data_snd_part2 = 0;  	
+
+	
+
+
+    if (mode == 0)
+	{
+    	comb_senddata_format(posX, posY, &data_snd_part1, &data_snd_part2);
+		
+	}
+    pio_sm_put_blocking(pio, sm_xy2m, data_snd_part1);
+    pio_sm_put_blocking(pio, sm_xy2m, data_snd_part2); 
+	
+	
+	return iret;
+	
+
+}
+
+
+
+
+
+#else
 // ------------- //
 // xy2_100_clock //
 // ------------- //
@@ -260,3 +595,8 @@ xy2_100_init(void)
     
 }
 DECL_INIT(xy2_100_init);
+
+
+#endif
+
+

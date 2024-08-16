@@ -275,3 +275,22 @@ void pio_sm_drain_tx_fifo(PIO pio, uint sm) {
     }
 }
 */
+
+
+void pio_sm_set_pins_with_mask(PIO pio, uint sm, uint32_t pinvals, uint32_t pin_mask) {
+    check_pio_param(pio);
+    check_sm_param(sm);
+    uint32_t pinctrl_saved = pio->sm[sm].pinctrl;
+    uint32_t execctrl_saved = pio->sm[sm].execctrl;
+    hw_clear_bits(&pio->sm[sm].execctrl, 1u << PIO_SM0_EXECCTRL_OUT_STICKY_LSB);
+    while (pin_mask) {
+        uint base = (uint)__builtin_ctz(pin_mask);
+        pio->sm[sm].pinctrl =
+                (1u << PIO_SM0_PINCTRL_SET_COUNT_LSB) |
+                (base << PIO_SM0_PINCTRL_SET_BASE_LSB);
+        pio_sm_exec(pio, sm, pio_encode_set(pio_pins, (pinvals >> base) & 0x1u));
+        pin_mask &= pin_mask - 1;
+    }
+    pio->sm[sm].pinctrl = pinctrl_saved;
+    pio->sm[sm].execctrl = execctrl_saved;
+}
