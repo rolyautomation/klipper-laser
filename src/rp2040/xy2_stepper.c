@@ -595,6 +595,7 @@ command_config_xy2_stepper(uint32_t *args)
 
 	s->time.waketime = timer_read_time()+ timer_from_us(10000);
 	sched_add_timer(&s->time);
+    
 	
 
 
@@ -613,11 +614,76 @@ xy2_stepper_oid_lookup(uint8_t oid)
 }
 
 
-#define  M_START_PIO_TEST_EN   1
+
+// Report the current position of the xy2
+void
+command_xy2_stepper_get_position(uint32_t *args)
+{
+    uint8_t oid = args[0];
+    struct xy2_stepper *s = xy2_stepper_oid_lookup(oid);
+    irq_disable();
+    //uint32_t position = stepper_get_position(s);
+    uint16_t x_pos = s->xy2_x_pos;
+    uint16_t y_pos = s->xy2_y_pos;    
+    irq_enable();
+    sendf("xy2_stepper_position oid=%c xpos=%hu ypos=%hu", oid, x_pos,y_pos);
+}
+
+DECL_COMMAND(command_xy2_stepper_get_position, "xy2_stepper_get_position oid=%c");
 
 
+// Set the current position of the xy2
+void
+command_xy2_set_position(uint32_t *args)
+{
+    uint8_t oid = args[0];
+    struct xy2_stepper *s = xy2_stepper_oid_lookup(oid);
+    uint16_t x_pos = args[1];
+    uint16_t y_pos = args[2];	
+    irq_disable();
+    //if (s->runcount)
+    if (0)
+    {
+		shutdown("Can't set position time when xy2 100 active");
+    }
+	else
+	{
+    	s->xy2_x_pos = x_pos;
+    	s->xy2_y_pos = y_pos;
+		// write buff
+		send_xy_data(s->xy2_x_pos, s->xy2_y_pos, 0);
+
+	}
+    irq_enable();
+
+	
+}
+DECL_COMMAND(command_xy2_set_position, "xy2_set_position oid=%c x_pos=%hu y_pos=%hu");
+
+
+
+
+void
+xy2_stepper_shutdown(void)
+{
+    uint8_t i;
+    struct xy2_stepper *s;
+    foreach_oid(i, s, command_config_xy2_stepper) {
+		sched_del_timer(&s->time);
+		#if 0
+        move_queue_clear(&s->mq);
+        xy2_stepper_stop(&s->stop_signal, 0);
+		#endif
+    }
+
+}
+DECL_SHUTDOWN(xy2_stepper_shutdown);
+
+
+
+
+//#define  M_START_PIO_TEST_EN   0
 #ifdef  M_START_PIO_TEST_EN
-
 
 #if 0
 #define  M_SEEK_POSX   (0)
@@ -772,56 +838,6 @@ stepper_get_position(struct stepper *s)
 }
 */
 
-// Report the current position of the xy2
-void
-command_xy2_stepper_get_position(uint32_t *args)
-{
-    uint8_t oid = args[0];
-    struct xy2_stepper *s = xy2_stepper_oid_lookup(oid);
-    irq_disable();
-    //uint32_t position = stepper_get_position(s);
-    uint16_t x_pos = s->xy2_x_pos;
-    uint16_t y_pos = s->xy2_y_pos;    
-    irq_enable();
-    sendf("xy2_stepper_position oid=%c xpos=%hu ypos=%hu", oid, x_pos,y_pos);
-}
-
-DECL_COMMAND(command_xy2_stepper_get_position, "xy2_stepper_get_position oid=%c");
-
-
-
-
-
-
-// Set the current position of the xy2
-void
-command_xy2_set_position(uint32_t *args)
-{
-    uint8_t oid = args[0];
-    struct xy2_stepper *s = xy2_stepper_oid_lookup(oid);
-    uint16_t x_pos = args[1];
-    uint16_t y_pos = args[2];	
-    irq_disable();
-    if (s->runcount)
-    {
-		shutdown("Can't set position time when xy2 100 active");
-    }
-	else
-	{
-    	s->xy2_x_pos = x_pos;
-    	s->xy2_y_pos = y_pos;
-		// write buff
-		send_xy_data(s->xy2_x_pos, s->xy2_y_pos, 0);
-		
-
-	}
-    irq_enable();
-
-	
-	
-}
-
-DECL_COMMAND(command_xy2_set_position, "xy2_set_position oid=%c x_pos=%hu y_pos=%hu");
 
 
 
@@ -862,7 +878,7 @@ DECL_COMMAND(command_xy2_stepper_stop_on_trigger,
 
 
 //sched_wake_task(&xy2_100_wake);
-#define M_TESTSCAN_MODE  (1)
+#define M_TESTSCAN_MODE  (0)
 
 
 void
@@ -897,19 +913,5 @@ DECL_TASK(xy2_100_task);
 
 
 
-void
-xy2_stepper_shutdown(void)
-{
-    uint8_t i;
-    struct xy2_stepper *s;
-    foreach_oid(i, s, command_config_xy2_stepper) {
-		sched_del_timer(&s->time);
-		#if 0
-        move_queue_clear(&s->mq);
-        xy2_stepper_stop(&s->stop_signal, 0);
-		#endif
-    }
 
-}
-DECL_SHUTDOWN(xy2_stepper_shutdown);
 
