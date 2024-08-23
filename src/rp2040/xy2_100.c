@@ -259,6 +259,9 @@ void xy2_100_piocode_program_init(PIO pio, uint sm, uint offset,uint clk_base, u
    sm_config_set_out_shift(&c, false, false, 0);
    //sm_config_set_in_shift(&c, false, false, 0);
    sm_config_set_sideset_pins(&c, clk_base);
+
+   //sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);  //add deep fifo
+
    //sm_config_set_in_pins(&c, PIN_CLOCK);
    pio_sm_set_consecutive_pindirs(pio, sm, clk_base, 2, true);
    pio_sm_set_consecutive_pindirs(pio, sm, xy_base, 2, true);
@@ -352,7 +355,54 @@ int send_xy_data(uint16_t posX, uint16_t posY, unsigned char mode)
 }
 
 
+// 1: full
+unsigned char pio_fifo_status(void)
+{
 
+    PIO pio = M_SEL_PIO;
+	uint sm_xy2m  = M_SEL_SM;	  
+    unsigned char  ist = pio_sm_is_tx_fifo_full(pio, sm_xy2m);
+    return (ist);
+
+}
+
+
+void pio_put_onedata(uint32_t data)
+{
+
+    PIO pio = M_SEL_PIO;
+	uint sm_xy2m  = M_SEL_SM;	
+    pio_sm_put(pio, sm_xy2m,data);
+
+
+}
+
+
+void open_pio_isr_reg(void)
+{
+    PIO pio = M_SEL_PIO;
+	//uint sm_xy2m  = M_SEL_SM;
+    pio_set_irq0_source_enabled(pio, pis_sm0_tx_fifo_not_full, true);
+
+
+}
+
+void close_pio_isr_reg(void)
+{
+    PIO pio = M_SEL_PIO;
+    //uint sm_xy2m  = M_SEL_SM;
+    pio_set_irq0_source_enabled(pio, pis_sm0_tx_fifo_not_full, false);
+
+}
+
+
+
+void run_pio_isr_reg(void)
+{
+
+
+
+}
 
 
 #else

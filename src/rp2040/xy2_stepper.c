@@ -5,11 +5,13 @@
 // This file may be distributed under the terms of the GNU GPLv3 license.
 
 #include "autoconf.h" // CONFIG_*
+#include "board/armcm_boot.h" // armcm_enable_irq
 #include "basecmd.h" // oid_alloc
 #include "board/gpio.h" // gpio_out_write
 #include "board/irq.h" // irq_disable
 #include "board/misc.h" // timer_is_before
 #include "command.h" // DECL_COMMAND
+#include "internal.h" // PIO0_IRQ_0_IRQn
 #include "sched.h" // struct timer
 //#include "stepper.h" // stepper_event
 #include "xy2_stepper.h"  // 
@@ -32,9 +34,12 @@
  #define HAVE_AVR_OPTIMIZATION 0
 #endif
 
+//#define  M_TEST_VIR_STEP_GPIO   (0)
+#define  M_TEST_VIR_STEP_GPIO   (1)
 
-
-
+#define  M_FIFO_ISR_WORK_EN     (1)
+#define  M_LINK_GALVO_EN        (1)
+#define  M_COUNT_MUL_TWO        (1)
 
 
 struct stepper_move_vir {
@@ -54,6 +59,7 @@ struct stepper_vir {
     uint32_t count;
     uint32_t next_step_time, step_pulse_ticks;
     struct gpio_out step_pin, dir_pin;
+    uint8_t step_pin_num;
     uint32_t position;
     struct move_queue_head mq;
     struct trsync_signal stop_signal;
@@ -74,7 +80,11 @@ stepper_load_next_vir(struct stepper_vir *s)
 {
     if (move_queue_empty(&s->mq)) {
         // There is no next move - the queue is empty
+     
         s->count = 0;
+        #ifdef  M_LINK_GALVO_EN
+        update_vir_postion_info(s->step_pin_num, s->position, s->count, 0);  
+        #endif         
         return SF_DONE;
     }
 
@@ -98,10 +108,20 @@ stepper_load_next_vir(struct stepper_vir *s)
     // Add all steps to s->position (stepper_get_position() can calc mid-move)
     if (m->flags & MF_DIR) {
         s->position = -s->position + m->count;
+        #if M_TEST_VIR_STEP_GPIO
         gpio_out_toggle_noirq(s->dir_pin);
+        #endif
     } else {
         s->position += m->count;
     }
+
+    #ifdef  M_LINK_GALVO_EN
+    if (HAVE_SINGLE_SCHEDULE && s->flags & SF_SINGLE_SCHED) {
+        update_vir_postion_info(s->step_pin_num, s->position, s->count, 0);  
+    } else {
+        update_vir_postion_info(s->step_pin_num, s->position, s->count, M_COUNT_MUL_TWO);   
+    }
+    #endif     
 
     move_free(m);
     return SF_RESCHEDULE;
@@ -112,7 +132,12 @@ uint_fast8_t
 stepper_event_edge_vir(struct timer *t)
 {
     struct stepper_vir *s = container_of(t, struct stepper_vir, time);
+    #if M_TEST_VIR_STEP_GPIO
     gpio_out_toggle_noirq(s->step_pin);
+    #endif 
+    #ifdef  M_LINK_GALVO_EN
+    update_vir_postion_info(s->step_pin_num, s->position, s->count, 0);  
+    #endif      
     uint32_t count = s->count - 1;
     if (likely(count)) {
         s->count = count;
@@ -130,18 +155,27 @@ static uint_fast8_t
 stepper_event_avr_vir(struct timer *t)
 {
     struct stepper_vir *s = container_of(t, struct stepper_vir, time);
+    #if M_TEST_VIR_STEP_GPIO
     gpio_out_toggle_noirq(s->step_pin);
+    #endif
+    #ifdef  M_LINK_GALVO_EN
+    update_vir_postion_info(s->step_pin_num, s->position, s->count, 0);  
+    #endif     
     uint16_t *pcount = (void*)&s->count, count = *pcount - 1;
     if (likely(count)) {
         *pcount = count;
         s->time.waketime += s->interval;
+        #if M_TEST_VIR_STEP_GPIO
         gpio_out_toggle_noirq(s->step_pin);
+        #endif
         if (s->flags & SF_HAVE_ADD)
             s->interval += s->add;
         return SF_RESCHEDULE;
     }
     uint_fast8_t ret = stepper_load_next_vir(s);
+    #if M_TEST_VIR_STEP_GPIO    
     gpio_out_toggle_noirq(s->step_pin);
+    #endif    
     return ret;
 }
 
@@ -150,7 +184,12 @@ uint_fast8_t
 stepper_event_full_vir(struct timer *t)
 {
     struct stepper_vir *s = container_of(t, struct stepper_vir, time);
+    #if M_TEST_VIR_STEP_GPIO
     gpio_out_toggle_noirq(s->step_pin);
+    #endif
+    #ifdef  M_LINK_GALVO_EN
+    update_vir_postion_info(s->step_pin_num, s->position, s->count, M_COUNT_MUL_TWO);  
+    #endif     
     uint32_t curtime = timer_read_time();
     uint32_t min_next_time = curtime + s->step_pulse_ticks;
     s->count--;
@@ -189,6 +228,7 @@ stepper_event_vir(struct timer *t)
     return stepper_event_full_vir(t);
 }
 
+
 void
 command_config_stepper_vir(uint32_t *args)
 {
@@ -196,16 +236,25 @@ command_config_stepper_vir(uint32_t *args)
     int_fast8_t invert_step = args[3];
     s->flags = invert_step > 0 ? SF_INVERT_STEP : 0;
     s->step_pin = gpio_out_setup(args[1], s->flags & SF_INVERT_STEP);
+    #ifdef M_LINK_GALVO_EN
+    s->step_pin_num = args[1];
+    set_record_axis_info(args[1]);
+    #endif
     s->dir_pin = gpio_out_setup(args[2], 0);
     s->position = -POSITION_BIAS;
     s->step_pulse_ticks = args[4];
     move_queue_setup(&s->mq, sizeof(struct stepper_move_vir));
     if (HAVE_EDGE_OPTIMIZATION) {
+
+        s->time.func = stepper_event_edge_vir;
+
         if (!s->step_pulse_ticks && invert_step < 0)
             s->flags |= SF_SINGLE_SCHED;
         else
             s->time.func = stepper_event_full_vir;
     } else if (HAVE_AVR_OPTIMIZATION) {
+        s->time.func = stepper_event_avr_vir;
+
         if (s->step_pulse_ticks <= AVR_STEP_INSNS)
             s->flags |= SF_SINGLE_SCHED;
         else
@@ -325,9 +374,15 @@ stepper_stop_vir(struct trsync_signal *tss, uint8_t reason)
     s->position = -stepper_get_position_vir(s);
     s->count = 0;
     s->flags = (s->flags & (SF_INVERT_STEP|SF_SINGLE_SCHED)) | SF_NEED_RESET;
+    #if M_TEST_VIR_STEP_GPIO
     gpio_out_write(s->dir_pin, 0);
+    #endif
     if (!(HAVE_EDGE_OPTIMIZATION && s->flags & SF_SINGLE_SCHED))
+        #if M_TEST_VIR_STEP_GPIO   
         gpio_out_write(s->step_pin, s->flags & SF_INVERT_STEP);
+        #else
+        ;
+        #endif
     while (!move_queue_empty(&s->mq)) {
         struct move_node *mn = move_queue_pop(&s->mq);
         struct stepper_move_vir *m = container_of(mn, struct stepper_move_vir, node);
@@ -359,16 +414,7 @@ stepper_shutdown_vir(void)
 DECL_SHUTDOWN(stepper_shutdown_vir);
 
 
-
-
-
-
-
-
 static struct task_wake xy2_100_wake;
-
-
-
 
 #if 0
 
@@ -543,6 +589,319 @@ reschedule_min:
 
 
 
+#ifdef  M_FIFO_ISR_WORK_EN
+
+
+typedef uint32_t ring_data_t;
+typedef uint16_t hdata_t;
+typedef uint8_t  ring_len_t;
+//typedef size_t   ring_len_t;
+
+struct ring_buffer_t {
+  /** Buffer memory.  X,Y value */
+  ring_data_t *buffer;   
+  /** Buffer mask. */
+  ring_len_t buffer_mask;
+  /** Index of tail. */
+  ring_len_t tail_index;
+  /** Index of head. */
+  ring_len_t head_index;
+};
+
+typedef struct ring_buffer_t ring_buffer_t;
+
+struct mvirxy_sync_pio_t {
+    uint32_t position;
+    uint8_t  gpiono;
+    uint8_t  flag;
+};
+
+typedef struct mvirxy_sync_pio_t mvirxy_sync_pio_t;
+
+
+
+#define   M_XY2_P1      (0)
+#define   M_XY2_P2      (1)
+#define   M_XY2_RESTART (2)
+
+struct ring_pio_t {
+
+  ring_buffer_t   ring_data;
+  uint8_t      cur_index;
+  uint32_t     last_send_ar[2];
+  mvirxy_sync_pio_t  * p_sync_pio;
+  uint32_t     coord_factor;
+};
+
+
+#define  M_BUF_SIZE_LEN     (32)
+//#define  M_BUF_SIZE_LEN   (64)
+#define  RING_BUFFER_MASK(rb) (rb->buffer_mask)
+
+void ring_buffer_init(ring_buffer_t *buffer, ring_data_t *buf, size_t buf_size) {
+  buffer->buffer = buf;
+  buffer->buffer_mask = buf_size - 1;
+  buffer->tail_index = 0;
+  buffer->head_index = 0;
+
+}
+
+struct ring_pio_t   * gp_ring_pio_mang = NULL;
+mvirxy_sync_pio_t     g_sync_pio_data[2] = { {.flag=0,},{.flag=0,}};
+
+
+
+int  set_record_axis_info(uint8_t  gpio_step_num)
+{
+     int iret = 0;
+     int i = 0;
+     uint8_t   temp;
+
+     for(i=0;i < 2; i++)
+     {
+        if (g_sync_pio_data[i].flag == 0)
+        {
+            g_sync_pio_data[i].flag = 1;
+            g_sync_pio_data[i].gpiono = gpio_step_num;
+            //g_sync_pio_data[i].position = -POSITION_BIAS;
+            g_sync_pio_data[i].position = 0;
+            break;
+        }
+
+     }
+     if ((g_sync_pio_data[0].flag) && (g_sync_pio_data[1].flag))
+     {
+         if (g_sync_pio_data[0].gpiono  >  g_sync_pio_data[1].gpiono) 
+         {
+            temp = g_sync_pio_data[0].gpiono;
+            g_sync_pio_data[0].gpiono = g_sync_pio_data[1].gpiono;
+            g_sync_pio_data[1].gpiono = temp;
+            
+         }  
+                
+     }
+     return(iret);
+
+ 
+}
+
+
+static uint32_t
+stepper_get_position_vir_funxy(uint32_t position_in, uint16_t count,uint8_t mode)
+{
+    uint32_t position = position_in;
+    // If stepper is mid-move, subtract out steps not yet taken
+    //if (HAVE_SINGLE_SCHEDULE && s->flags & SF_SINGLE_SCHED)
+    if (mode == 0)
+        position -= count;
+    else
+        position -= count / 2;
+    // The top bit of s->position is an optimized reverse direction flag
+    if (position & 0x80000000)
+        position  = -position;
+
+    position = position - POSITION_BIAS;
+    return position;
+
+}
+
+
+
+int  update_vir_postion_info(uint8_t  gpio_step_num, uint32_t position, uint16_t count, uint8_t mode)
+{
+
+     int iret = 0;
+     int i = 0;
+     uint16_t posX = 0;
+     uint16_t posY = 0;
+     int todoflag = 1;
+     uint32_t realposition = 0; 
+     for(i=0; i < 2; i++)
+     {
+
+        if (g_sync_pio_data[i].gpiono == gpio_step_num)
+        {
+            //g_sync_pio_data[i].position = position;
+            realposition = stepper_get_position_vir_funxy(position,count,mode);
+            if (g_sync_pio_data[i].position == realposition)
+            {
+                todoflag = 0;
+            }
+            g_sync_pio_data[i].position = realposition;
+            break;
+        }
+
+
+     }
+
+     if (todoflag == 0)
+     {
+        iret = 1;
+        return(iret);
+     }
+         
+     //todo after
+     posX = g_sync_pio_data[0].position & 0xFFFF;
+     posY = g_sync_pio_data[1].position & 0xFFFF;     
+     upadte_new_onedata(posX, posY);
+     
+     return(iret);
+
+          
+}
+
+
+/**
+ * Returns whether a ring buffer is empty.
+ * @param buffer The buffer for which it should be returned whether it is empty.
+ * @return 1 if empty; 0 otherwise.
+ */
+
+inline uint8_t ring_buffer_is_empty(ring_buffer_t *buffer) {
+  return (buffer->head_index == buffer->tail_index);
+}
+
+/**
+ * Returns whether a ring buffer is full.
+ * @param buffer The buffer for which it should be returned whether it is full.
+ * @return 1 if full; 0 otherwise.
+ */
+inline uint8_t ring_buffer_is_full(ring_buffer_t *buffer) {
+  return ((buffer->head_index - buffer->tail_index) & RING_BUFFER_MASK(buffer)) == RING_BUFFER_MASK(buffer);
+}
+
+
+uint8_t ring_buffer_queue(ring_buffer_t *buffer, hdata_t datax, hdata_t datay) {
+  /* Is buffer full? */
+  if(ring_buffer_is_full(buffer)) {
+    /* Is going to overwrite the oldest byte */
+    /* Increase tail index */
+    //buffer->tail_index = ((buffer->tail_index + 1) & RING_BUFFER_MASK(buffer));
+    //buff is small, or  send too slow
+    return 0;
+  }
+
+  /* Place data in buffer */
+  buffer->buffer[buffer->head_index] =  ( datay << 16 ) | datax;
+  buffer->head_index = ((buffer->head_index + 1) & RING_BUFFER_MASK(buffer));
+  return 1;
+
+}
+
+
+/**
+ * Returns the oldest byte in a ring buffer.
+ * @param buffer The buffer from which the data should be returned.
+ * @param data A pointer to the location at which the data should be placed.
+ * @return 1 if data was returned; 0 otherwise.
+ */
+uint8_t ring_buffer_dequeue(ring_buffer_t *buffer, hdata_t * pdatax, hdata_t * pdatay) {
+  if(ring_buffer_is_empty(buffer)) {
+    /* No items */
+    return 0;
+  }
+  
+  *pdatax = buffer->buffer[buffer->tail_index] & 0xFFFF;
+  *pdatay = (buffer->buffer[buffer->tail_index] >> 16 ) & 0xFFFF;  
+  buffer->tail_index = ((buffer->tail_index + 1) & RING_BUFFER_MASK(buffer));
+  return 1;
+}
+
+
+
+
+
+
+void
+xy2_100_pio_irq_handler(struct ring_pio_t * xy2_ring_pio)
+{
+    uint8_t  t_ring_st = 0;
+    hdata_t  datax = 0; 
+    hdata_t  datay = 0; 
+
+    if (xy2_ring_pio == NULL)
+        return;
+    
+    //if (pio_fifo_status() == 0)  
+    while(pio_fifo_status() == 0)
+    {
+        
+       if ( xy2_ring_pio->cur_index >  M_XY2_P2 )
+       {
+            xy2_ring_pio->cur_index = 0;
+            //update data
+            t_ring_st = ring_buffer_dequeue(&xy2_ring_pio->ring_data, &datax, &datay);
+            if (t_ring_st)
+            {
+                comb_senddata_format(datax, datay, &(xy2_ring_pio->last_send_ar[0]),  &(xy2_ring_pio->last_send_ar[1]));
+
+            }
+            
+
+       }
+       pio_put_onedata(xy2_ring_pio->last_send_ar[xy2_ring_pio->cur_index]);
+       xy2_ring_pio->cur_index += 1;
+       
+    }  
+       
+}
+
+void
+PIO0_IRQHandler_xy2(void)
+{
+    xy2_100_pio_irq_handler(gp_ring_pio_mang);
+
+}
+
+uint8_t upadte_new_onedata(uint16_t posX, uint16_t posY)
+{
+       uint8_t  iret = 0;
+       iret = ring_buffer_queue(&(gp_ring_pio_mang->ring_data), posX, posY);
+       return(iret);
+       
+}
+
+
+uint8_t upadte_new_onedata_first(uint16_t posX, uint16_t posY)
+{
+       uint8_t  iret = 0;
+       struct ring_pio_t * xy2_ring_pio = gp_ring_pio_mang;
+       iret = ring_buffer_queue(&(gp_ring_pio_mang->ring_data), posX, posY);
+       xy2_ring_pio->cur_index = M_XY2_RESTART;
+       return(iret);
+       
+}
+
+void  clean_gvar_toinit(void)
+{
+    g_sync_pio_data[0].flag = 0;
+    g_sync_pio_data[1].flag = 0;
+
+}
+
+
+void  open_pio_isr(void)
+{
+
+
+      armcm_enable_irq(PIO0_IRQHandler_xy2, PIO0_IRQ_0_IRQn, 7);  //time  2；
+      open_pio_isr_reg();
+
+
+
+
+}
+
+
+void  close_pio_isr(void)
+{
+
+     close_pio_isr_reg();
+     clean_gvar_toinit();
+    
+}
+
+#endif
 
 
 struct xy2_stepper {
@@ -552,9 +911,8 @@ struct xy2_stepper {
 	uint32_t next_step_time;
     uint16_t xy2_x_pos;
     uint16_t xy2_y_pos;	//record x,y position
-	
-};
 
+};
 
 
 
@@ -565,7 +923,9 @@ xy2_stepper_event_tm(struct timer *t)
     //gpio_out_toggle_noirq(s->step_pin);
     uint32_t curtime = timer_read_time();
     //uint32_t min_next_time = curtime + s->step_pulse_ticks;
-    uint32_t min_next_time = curtime + timer_from_us(10000); //10ms
+    //uint32_t min_next_time = curtime + timer_from_us(10000); //10ms
+    //uint32_t min_next_time = curtime + timer_from_us(10);    
+    uint32_t min_next_time = curtime + timer_from_us(3000000);
 
     sched_wake_task(&xy2_100_wake);
 
@@ -587,21 +947,35 @@ command_config_xy2_stepper(uint32_t *args)
 	s->xbase_pin_no = args[2];
 	s->xy2_x_pos = args[3];
 	s->xy2_y_pos = args[4];
+
+    ring_data_t * buff  = alloc_chunk(sizeof(ring_data_t)*M_BUF_SIZE_LEN);
+    gp_ring_pio_mang = alloc_chunk(sizeof(*gp_ring_pio_mang));
+
+
+
+    if( (gp_ring_pio_mang != NULL) && (buff != NULL))
+        ring_buffer_init( &(gp_ring_pio_mang->ring_data), buff, M_BUF_SIZE_LEN);
+    gp_ring_pio_mang->p_sync_pio = g_sync_pio_data;
+    gp_ring_pio_mang->coord_factor = args[5];
+
     //move_queue_setup(&s->mq, sizeof(struct xy2_stepper_move));
     s->time.func = xy2_stepper_event_tm;
 	//to do xy2
     config_xy2_pio(s->clk_pin_no, s->xbase_pin_no);
+#ifdef  M_FIFO_ISR_WORK_EN
+    upadte_new_onedata_first(s->xy2_x_pos,s->xy2_y_pos);
+    open_pio_isr();
+#else
 	send_xy_data(s->xy2_x_pos, s->xy2_y_pos, 0);
-
 	s->time.waketime = timer_read_time()+ timer_from_us(10000);
-	sched_add_timer(&s->time);
-    
-	
+	sched_add_timer(&s->time);    
+#endif
 
 
 }
+
 DECL_COMMAND(command_config_xy2_stepper, "config_xy2_stepper oid=%c clkb_pin=%c"
-             " xb_pin=%c x_pos=%hu y_pos=%hu");
+             " xb_pin=%c x_pos=%hu y_pos=%hu coord_factor=%u");
 
 
 
@@ -632,6 +1006,25 @@ command_xy2_stepper_get_position(uint32_t *args)
 DECL_COMMAND(command_xy2_stepper_get_position, "xy2_stepper_get_position oid=%c");
 
 
+
+
+void
+command_xy2_vir_get_position(uint32_t *args)
+{
+    uint8_t oid = args[0];
+    struct xy2_stepper *s = xy2_stepper_oid_lookup(oid);
+    irq_disable();
+    //uint32_t position = stepper_get_position(s);
+    uint32_t x_pos_vir = g_sync_pio_data[0].position;
+    uint32_t y_pos_vir = g_sync_pio_data[1].position;    
+    irq_enable();
+    sendf("xy2_vir_position oid=%c xvpos=%u yvpos=%u", oid, x_pos_vir,y_pos_vir);
+}
+
+DECL_COMMAND(command_xy2_vir_get_position, "xy2_vir_get_position oid=%c");
+
+
+
 // Set the current position of the xy2
 void
 command_xy2_set_position(uint32_t *args)
@@ -651,7 +1044,11 @@ command_xy2_set_position(uint32_t *args)
     	s->xy2_x_pos = x_pos;
     	s->xy2_y_pos = y_pos;
 		// write buff
+#ifdef  M_FIFO_ISR_WORK_EN    
+        upadte_new_onedata(s->xy2_x_pos, s->xy2_y_pos);
+#else
 		send_xy_data(s->xy2_x_pos, s->xy2_y_pos, 0);
+#endif        
 
 	}
     irq_enable();
@@ -675,6 +1072,10 @@ xy2_stepper_shutdown(void)
         xy2_stepper_stop(&s->stop_signal, 0);
 		#endif
     }
+#ifdef  M_FIFO_ISR_WORK_EN 
+    close_pio_isr();
+
+#endif
 
 }
 DECL_SHUTDOWN(xy2_stepper_shutdown);
@@ -886,8 +1287,9 @@ xy2_100_task(void)
 {
 
     if (!sched_check_wake(&xy2_100_wake))
+    {
         return;
-
+    }
 
 	if (M_TESTSCAN_MODE)
 	{
@@ -904,7 +1306,6 @@ xy2_100_task(void)
 
 	}
 	
-			
 	
 }
 DECL_TASK(xy2_100_task);

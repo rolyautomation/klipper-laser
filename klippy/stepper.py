@@ -20,12 +20,13 @@ MIN_BOTH_EDGE_DURATION = 0.000000200
 class MCU_stepper:
     def __init__(self, name, step_pin_params, dir_pin_params,
                  rotation_dist, steps_per_rotation,
-                 step_pulse_duration=None, units_in_radians=False):
+                 step_pulse_duration=None, units_in_radians=False, step_mvirtualmode=0):
         self._name = name
         self._rotation_dist = rotation_dist
         self._steps_per_rotation = steps_per_rotation
         self._step_pulse_duration = step_pulse_duration
         self._units_in_radians = units_in_radians
+        self._step_mvirtualmode = step_mvirtualmode
         self._step_dist = rotation_dist / steps_per_rotation
         self._mcu = step_pin_params['chip']
         self._oid = oid = self._mcu.create_oid()
@@ -83,26 +84,47 @@ class MCU_stepper:
             self._step_pulse_duration = 0.
             invert_step = -1
         step_pulse_ticks = self._mcu.seconds_to_clock(self._step_pulse_duration)
-        self._mcu.add_config_cmd(
-            "config_stepper oid=%d step_pin=%s dir_pin=%s invert_step=%d"
-            " step_pulse_ticks=%u" % (self._oid, self._step_pin, self._dir_pin,
-                                      invert_step, step_pulse_ticks))
-        self._mcu.add_config_cmd("reset_step_clock oid=%d clock=0"
-                                 % (self._oid,), on_restart=True)
-        step_cmd_tag = self._mcu.lookup_command(
-            "queue_step oid=%c interval=%u count=%hu add=%hi").get_command_tag()
-        dir_cmd_tag = self._mcu.lookup_command(
-            "set_next_step_dir oid=%c dir=%c").get_command_tag()
-        self._reset_cmd_tag = self._mcu.lookup_command(
-            "reset_step_clock oid=%c clock=%u").get_command_tag()
-        self._get_position_cmd = self._mcu.lookup_query_command(
-            "stepper_get_position oid=%c",
-            "stepper_position oid=%c pos=%i", oid=self._oid)
+
+        if (self._step_mvirtualmode > 0):
+            self._mcu.add_config_cmd(
+                "config_stepper_vir oid=%d step_pin=%s dir_pin=%s invert_step=%d"
+                " step_pulse_ticks=%u" % (self._oid, self._step_pin, self._dir_pin,
+                                        invert_step, step_pulse_ticks))
+            self._mcu.add_config_cmd("reset_step_clock_vir oid=%d clock=0"
+                                    % (self._oid,), on_restart=True)
+            step_cmd_tag = self._mcu.lookup_command(
+                "queue_step_vir oid=%c interval=%u count=%hu add=%hi").get_command_tag()
+            dir_cmd_tag = self._mcu.lookup_command(
+                "set_next_step_dir_vir oid=%c dir=%c").get_command_tag()
+            self._reset_cmd_tag = self._mcu.lookup_command(
+                "reset_step_clock_vir oid=%c clock=%u").get_command_tag()
+            self._get_position_cmd = self._mcu.lookup_query_command(
+                "stepper_get_position_vir oid=%c",
+                "stepper_position_vir oid=%c pos=%i", oid=self._oid)
+
+        else:     
+            self._mcu.add_config_cmd(
+                "config_stepper oid=%d step_pin=%s dir_pin=%s invert_step=%d"
+                " step_pulse_ticks=%u" % (self._oid, self._step_pin, self._dir_pin,
+                                        invert_step, step_pulse_ticks))
+            self._mcu.add_config_cmd("reset_step_clock oid=%d clock=0"
+                                    % (self._oid,), on_restart=True)
+            step_cmd_tag = self._mcu.lookup_command(
+                "queue_step oid=%c interval=%u count=%hu add=%hi").get_command_tag()
+            dir_cmd_tag = self._mcu.lookup_command(
+                "set_next_step_dir oid=%c dir=%c").get_command_tag()
+            self._reset_cmd_tag = self._mcu.lookup_command(
+                "reset_step_clock oid=%c clock=%u").get_command_tag()
+            self._get_position_cmd = self._mcu.lookup_query_command(
+                "stepper_get_position oid=%c",
+                "stepper_position oid=%c pos=%i", oid=self._oid)
+
         max_error = self._mcu.get_max_stepper_error()
         max_error_ticks = self._mcu.seconds_to_clock(max_error)
         ffi_main, ffi_lib = chelper.get_ffi()
         ffi_lib.stepcompress_fill(self._stepqueue, max_error_ticks,
                                   step_cmd_tag, dir_cmd_tag)
+
     def get_oid(self):
         return self._oid
     def get_step_dist(self):
@@ -245,9 +267,13 @@ def PrinterStepper(config, units_in_radians=False):
         config, units_in_radians, True)
     step_pulse_duration = config.getfloat('step_pulse_duration', None,
                                           minval=0., maxval=.001)
+
+    step_mvirtualmode = config.getfloat('step_mvirtualmode', 0,
+                                          minval=0., maxval= 1 )
+
     mcu_stepper = MCU_stepper(name, step_pin_params, dir_pin_params,
                               rotation_dist, steps_per_rotation,
-                              step_pulse_duration, units_in_radians)
+                              step_pulse_duration, units_in_radians, step_mvirtualmode)
     # Register with helper modules
     for mname in ['stepper_enable', 'force_move', 'motion_report']:
         m = printer.load_object(config, mname)
