@@ -11,7 +11,7 @@ class CoreXYGalvoKinematics:
     def __init__(self, toolhead, config):
         # Setup axis rails
         self.rails = [stepper.LookupMultiRail(config.getsection('stepper_' + n))
-                      for n in 'xyz']
+                      for n in 'xyzabc']
         for s in self.rails[1].get_steppers():
             self.rails[0].get_endstops()[0][0].add_stepper(s)
         for s in self.rails[0].get_steppers():
@@ -24,8 +24,11 @@ class CoreXYGalvoKinematics:
         self.rails[0].setup_itersolve('corexy_stepper_alloc', b'+')
         self.rails[1].setup_itersolve('corexy_stepper_alloc', b'-')        
         """
-
         
+        self.rails[0].setup_itersolve('corexy_stepper_alloc', b'+')
+        self.rails[1].setup_itersolve('corexy_stepper_alloc', b'-')
+        self.rails[2].setup_itersolve('cartesian_stepper_alloc', b'z')
+
         self._hradiation_angle = config.getfloat('hradiation_angle', 0.35, minval=0.,
                                       maxval=1)
         self._focus_distance = config.getfloat('focus_distance', 160, minval=10,
@@ -35,21 +38,18 @@ class CoreXYGalvoKinematics:
         logging.info("galvo param at (%.3f %.3f %.2f)",
                      self._hradiation_angle, self._focus_distance, self._half_distance_galvo)
 
-        self.rails[0].setup_itersolve('galvo_stepper_alloc', b'+', 
+        self.rails[3].setup_itersolve('galvo_stepper_alloc', b'a', 
+                                  self._hradiation_angle,self._focus_distance,
+                                  self._half_distance_galvo)                        
+
+        self.rails[4].setup_itersolve('galvo_stepper_alloc', b'b', 
                                   self._hradiation_angle,self._focus_distance,
                                   self._half_distance_galvo)     
-        self.rails[1].setup_itersolve('galvo_stepper_alloc', b'-',
+        self.rails[5].setup_itersolve('galvo_stepper_alloc', b'c',
                                   self._hradiation_angle,self._focus_distance,
-                                  self._half_distance_galvo)     
+                                  self._half_distance_galvo)  
 
-
-        """
-        #self.rails[0].setup_itersolve('corexy_stepper_alloc', b'+')
-        #self.rails[1].setup_itersolve('corexy_stepper_alloc', b'-')
-        """
-        self.rails[2].setup_itersolve('cartesian_stepper_alloc', b'z')
         
-
         for s in self.get_steppers():
             s.set_trapq(toolhead.get_trapq())
             toolhead.register_step_generator(s.generate_steps)
@@ -62,7 +62,7 @@ class CoreXYGalvoKinematics:
             'max_z_velocity', max_velocity, above=0., maxval=max_velocity)
         self.max_z_accel = config.getfloat(
             'max_z_accel', max_accel, above=0., maxval=max_accel)
-        self.limits = [(1.0, -1.0)] * 3
+        self.limits = [(1.0, -1.0)] * (3+3)
         ranges = [r.get_range() for r in self.rails]
         self.axes_min = toolhead.Coord(*[r[0] for r in ranges], e=0.)
         self.axes_max = toolhead.Coord(*[r[1] for r in ranges], e=0.)
@@ -71,10 +71,15 @@ class CoreXYGalvoKinematics:
 
     def calc_position(self, stepper_positions):
         pos = [stepper_positions[rail.get_name()] for rail in self.rails]
+        x = 0.5 * (pos[0] + pos[1])
+        y = 0.5 * (pos[0] - pos[1])
         #return [0.5 * (pos[0] + pos[1]), 0.5 * (pos[0] - pos[1]), pos[2]]
-        bx = math.tan(pos[0]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
-        cy = math.tan(pos[1]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
-        return [bx, cy, pos[2]]
+        #bx = math.tan(pos[0]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
+        #cy = math.tan(pos[1]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
+        bx = math.tan(pos[4]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
+        cy = math.tan(pos[5]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo        
+        #return [bx, cy, pos[2]]
+        return [x, y, pos[2], pos[3], bx, by]
 
     def set_position(self, newpos, homing_axes):
         for i, rail in enumerate(self.rails):

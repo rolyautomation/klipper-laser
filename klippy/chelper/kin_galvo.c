@@ -23,44 +23,84 @@ struct galvo_stepper {
 };
 
 
-//#define M_GALVO_MOD_BC_AXIS
+#define M_GALVO_MOD_BC_AXIS
 #ifdef M_GALVO_MOD_BC_AXIS
 
 
+
 static double
-galvo_stepper_b_calc_position(struct stepper_kinematics *sk, struct move *m 
-                              ,double move_time)
+galvo_stepper_b_calc_position(struct stepper_kinematics *sk, struct move *m
+                                  , double move_time)
 {
-    double adjusted b = move_get_coord(m, move time).b - HALF_GALVO_DISTANCE;
-    double angle = atan2(adjusted_b, THETA_FOCUS_DISTANCE);
-    return angle;
+    struct galvo_stepper *gs = container_of(sk, struct galvo_stepper, sk);
+    struct coord c = move_get_coord(m, move_time);
+    double adjusted_b = c.b - gs->half_distance_galvo;
+    double angle = atan2(adjusted_b, gs->focus_distance);
+    angle = angle + gs->hradiation_angle;  
+    return angle;    
+    //return c.x + c.y;
+
 
 }
+
 static double
 galvo_stepper_c_calc_position(struct stepper_kinematics *sk, struct move *m
-                               ,double move time)
+                                   , double move_time)
 {
-    double adjusted_c = move_get_coord(m, move time).c- HALF_GALVO_DISTANCE;
-    double angle = atan2(adjusted_c, THETA_FOCUS_DISTANCE);
-    return angle;
+
+    struct galvo_stepper *gs = container_of(sk, struct galvo_stepper, sk);
+    struct coord c = move_get_coord(m, move_time);
+    double adjusted_c = c.c - gs->half_distance_galvo;
+    double angle = atan2(adjusted_c, gs->focus_distance);
+    angle = angle + gs->hradiation_angle;
+    return angle;   
+    //return c.x - c.y;
+
 
 }
+
+
+static double
+cart_stepper_a_calc_position(struct stepper_kinematics *sk, struct move *m
+                             , double move_time)
+{
+    return move_get_coord(m, move_time).a;
+
+}
+
 
 
 struct stepper_kinematics * __visible
-galvo_stepper_alloc(char axis)
+galvo_stepper_alloc(char type,double hradiation_angle, double focus_distance, double half_distance_galvo)
 {
-    struct stepper_kinematics *sk= malloc(sizeof(*sk));
-    memset(sk,0,sizeof(*sk));
-    if (axis =='b') {
-        sk->calc_position_cb = galvo_stepper_b_calc_position;
-        sk->active_flags = AF_Z;
-    }else if(axis =='c') {
-        sk->calc_position_cb = galvo_stepper_c_calc_position;
-        sk->active_flags = AF_Z;
+    struct galvo_stepper *gs = malloc(sizeof(*gs));
+    memset(gs, 0, sizeof(*gs));
+
+    gs->hradiation_angle = hradiation_angle;
+    gs->focus_distance = focus_distance; 
+    gs->half_distance_galvo = half_distance_galvo;
+
+  
+    if (type == 'b')
+    {
+         gs->sk.calc_position_cb = galvo_stepper_b_calc_position;
+         gs->sk.active_flags = AF_B;
     }
-    return sk;
+    else if (type == 'c')
+    {
+         gs->sk.calc_position_cb = galvo_stepper_c_calc_position;
+         gs->sk.active_flags= AF_C;
+    }
+    else if (type == 'a')
+    {
+          gs->sk.calc_position_cb = cart_stepper_a_calc_position;
+          gs->sk.active_flags = AF_A;
+    }
+    return &gs->sk;
+    
+
 }
+
 
 #else
 

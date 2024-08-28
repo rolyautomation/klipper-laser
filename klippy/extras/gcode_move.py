@@ -39,16 +39,16 @@ class GCodeMove:
         self.Coord = gcode.Coord
         # G-Code coordinate manipulation
         self.absolute_coord = self.absolute_extrude = True
-        self.base_position = [0.0, 0.0, 0.0, 0.0]
-        self.last_position = [0.0, 0.0, 0.0, 0.0]
-        self.homing_position = [0.0, 0.0, 0.0, 0.0]
+        self.base_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.last_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.homing_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.speed = 25.
         self.speed_factor = 1. / 60.
         self.extrude_factor = 1.
         # G-Code state
         self.saved_states = {}
         self.move_transform = self.move_with_transform = None
-        self.position_with_transform = (lambda: [0., 0., 0., 0.])
+        self.position_with_transform = (lambda: [0., 0., 0., 0., 0.0, 0.0, 0.0])
     def _handle_ready(self):
         self.is_printer_ready = True
         if self.move_transform is None:
@@ -123,14 +123,26 @@ class GCodeMove:
                     else:
                         # value relative to base coordinate position
                         self.last_position[pos] = v + self.base_position[pos]
+
+            for pos, axis in enumerate('ABC'):
+                if axis in params:ABC
+                    v = float(params[axis])
+                    if not self.absolute_coord:
+                        # value relative to position of last move
+                        self.last_position[pos+3] += v
+                    else:
+                        # value relative to base coordinate position
+                        self.last_position[pos+3] = v + self.base_position[pos+3]
+                        
+
             if 'E' in params:
                 v = float(params['E']) * self.extrude_factor
                 if not self.absolute_coord or not self.absolute_extrude:
                     # value relative to position of last move
-                    self.last_position[3] += v
+                    self.last_position[3+3] += v
                 else:
                     # value relative to base coordinate position
-                    self.last_position[3] = v + self.base_position[3]
+                    self.last_position[3+3] = v + self.base_position[3+3]
             if 'F' in params:
                 gcode_speed = float(params['F'])
                 if gcode_speed <= 0.:
