@@ -79,7 +79,7 @@ class CoreXYGalvoKinematics:
         bx = math.tan(pos[4]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
         cy = math.tan(pos[5]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo        
         #return [bx, cy, pos[2]]
-        return [x, y, pos[2], pos[3], bx, by]
+        return [x, y, pos[2], pos[3], bx, cy]
 
     def set_position(self, newpos, homing_axes):
         for i, rail in enumerate(self.rails):
