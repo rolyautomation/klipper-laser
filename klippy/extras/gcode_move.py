@@ -125,7 +125,7 @@ class GCodeMove:
                         self.last_position[pos] = v + self.base_position[pos]
 
             for pos, axis in enumerate('ABC'):
-                if axis in params:ABC
+                if axis in params:
                     v = float(params[axis])
                     if not self.absolute_coord:
                         # value relative to position of last move
