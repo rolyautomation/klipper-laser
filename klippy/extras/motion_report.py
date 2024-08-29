@@ -112,7 +112,8 @@ class DumpTrapQ:
         move_time = max(0., min(move.move_t, print_time - move.print_time))
         dist = (move.start_v + .5 * move.accel * move_time) * move_time;
         pos = (move.start_x + move.x_r * dist, move.start_y + move.y_r * dist,
-               move.start_z + move.z_r * dist)
+               move.start_z + move.z_r * dist, move.start_a + move.a_r * dist,
+               move.start_b + move.b_r * dist, move.start_c + move.c_r * dist)
         velocity = move.start_v + move.accel * move_time
         return pos, velocity
     def _process_batch(self, eventtime):
@@ -204,7 +205,8 @@ class PrinterMotionReport:
         if eventtime < self.next_status_time or not self.trapqs:
             return self.last_status
         self.next_status_time = eventtime + STATUS_REFRESH_TIME
-        xyzpos = (0., 0., 0.)
+        #add abc axis
+        xyzpos = (0., 0., 0., 0., 0., 0.)
         epos = (0.,)
         xyzvelocity = evelocity = 0.
         # Calculate current requested toolhead position
@@ -212,7 +214,7 @@ class PrinterMotionReport:
         print_time = mcu.estimated_print_time(eventtime)
         pos, velocity = self.trapqs['toolhead'].get_trapq_position(print_time)
         if pos is not None:
-            xyzpos = pos[:3]
+            xyzpos = pos[:6]
             xyzvelocity = velocity
         # Calculate requested position of currently active extruder
         toolhead = self.printer.lookup_object('toolhead')

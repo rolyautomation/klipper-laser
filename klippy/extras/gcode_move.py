@@ -88,7 +88,7 @@ class GCodeMove:
         return old_transform
     def _get_gcode_position(self):
         p = [lp - bp for lp, bp in zip(self.last_position, self.base_position)]
-        p[3] /= self.extrude_factor
+        p[3+3] /= self.extrude_factor
         return p
     def _get_gcode_speed(self):
         return self.speed / self.speed_factor
@@ -185,7 +185,8 @@ class GCodeMove:
     def cmd_M114(self, gcmd):
         # Get Current Position
         p = self._get_gcode_position()
-        gcmd.respond_raw("X:%.3f Y:%.3f Z:%.3f E:%.3f" % tuple(p))
+        #gcmd.respond_raw("X:%.3f Y:%.3f Z:%.3f E:%.3f" % tuple(p))
+        gcmd.respond_raw("X:%.3f Y:%.3f Z:%.3f A:%.3f B:%.3f C:%.3f E:%.3f" % tuple(p))
     def cmd_M220(self, gcmd):
         # Set speed factor override percentage
         value = gcmd.get_float('S', 100., above=0.) / (60. * 100.)
@@ -264,16 +265,16 @@ class GCodeMove:
                             for s in steppers])
         cinfo = [(s.get_name(), s.get_commanded_position()) for s in steppers]
         stepper_pos = " ".join(["%s:%.6f" % (a, v) for a, v in cinfo])
-        kinfo = zip("XYZ", kin.calc_position(dict(cinfo)))
+        kinfo = zip("XYZABC", kin.calc_position(dict(cinfo)))
         kin_pos = " ".join(["%s:%.6f" % (a, v) for a, v in kinfo])
         toolhead_pos = " ".join(["%s:%.6f" % (a, v) for a, v in zip(
-            "XYZE", toolhead.get_position())])
+            "XYZABCE", toolhead.get_position())])
         gcode_pos = " ".join(["%s:%.6f"  % (a, v)
-                              for a, v in zip("XYZE", self.last_position)])
+                              for a, v in zip("XYZABCE", self.last_position)])
         base_pos = " ".join(["%s:%.6f"  % (a, v)
-                             for a, v in zip("XYZE", self.base_position)])
+                             for a, v in zip("XYZABCE", self.base_position)])
         homing_pos = " ".join(["%s:%.6f"  % (a, v)
-                               for a, v in zip("XYZ", self.homing_position)])
+                               for a, v in zip("XYZABC", self.homing_position)])
         gcmd.respond_info("mcu: %s\n"
                           "stepper: %s\n"
                           "kinematic: %s\n"
