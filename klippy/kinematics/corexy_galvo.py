@@ -69,6 +69,9 @@ class CoreXYGalvoKinematics:
     def get_steppers(self):
         return [s for rail in self.rails for s in rail.get_steppers()]
 
+    def get_galvo_coord_confactor(self):
+        return self._half_distance_galvo        
+
     def calc_position(self, stepper_positions):
         pos = [stepper_positions[rail.get_name()] for rail in self.rails]
         x = 0.5 * (pos[0] + pos[1])
@@ -106,7 +109,7 @@ class CoreXYGalvoKinematics:
             # Perform homing
             homing_state.home_rails([rail], forcepos, homepos)
     def _motor_off(self, print_time):
-        self.limits = [(1.0, -1.0)] * 3
+        self.limits = [(1.0, -1.0)] * (3+3)
     def _check_endstops(self, move):
         end_pos = move.end_pos
         for i in (0, 1, 2):

@@ -46,6 +46,7 @@ class GCodeMove:
         self.speed_factor = 1. / 60.
         self.extrude_factor = 1.
         # G-Code state
+        self.galvo_coord_confactor = None
         self.saved_states = {}
         self.move_transform = self.move_with_transform = None
         self.position_with_transform = (lambda: [0., 0., 0., 0., 0.0, 0.0, 0.0])
@@ -112,6 +113,14 @@ class GCodeMove:
     # G-Code movement commands
     def cmd_G1(self, gcmd):
         # Move
+
+        if self.galvo_coord_confactor is None:
+            toolhead = self.printer.lookup_object('toolhead', None)
+            if toolhead is None:
+                raise gcmd.error("Printer not ready in cmd G1")
+            kin = toolhead.get_kinematics()
+            self.galvo_coord_confactor = kin.get_galvo_coord_confactor()            
+
         params = gcmd.get_command_parameters()
         try:
             for pos, axis in enumerate('XYZ'):
@@ -127,6 +136,9 @@ class GCodeMove:
             for pos, axis in enumerate('ABC'):
                 if axis in params:
                     v = float(params[axis])
+                    if self.galvo_coord_confactor is not None and pos > 0 :
+                        v = v +  self.galvo_coord_confactor
+
                     if not self.absolute_coord:
                         # value relative to position of last move
                         self.last_position[pos+3] += v
