@@ -87,7 +87,9 @@ defs_trapq = """
         double print_time, move_t;
         double start_v, accel;
         double start_x, start_y, start_z;
+        double start_a, start_b, start_c;
         double x_r, y_r, z_r;
+        double a_r, b_r, c_r;
     };
 
     struct trapq *trapq_alloc(void);
