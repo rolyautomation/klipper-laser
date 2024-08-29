@@ -8,8 +8,9 @@ class HomingOverride:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.start_pos = [config.getfloat('set_position_' + a, None)
-                          for a in 'xyz']
-        self.axes = config.get('axes', 'XYZ').upper()
+                          for a in 'xyzabc']
+        #default value: XYZABC                  
+        self.axes = config.get('axes', 'XYZABC').upper()
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
         self.template = gcode_macro.load_template(config, 'gcode')
         self.in_script = False
