@@ -186,13 +186,14 @@ class GCodeMove:
         self.absolute_coord = False
     def cmd_G92(self, gcmd):
         # Set position
-        offsets = [ gcmd.get_float(a, None) for a in 'XYZE' ]
+        offsets = [ gcmd.get_float(a, None) for a in 'XYZABCE' ]
         for i, offset in enumerate(offsets):
             if offset is not None:
-                if i == 3:
+                #if i == 3:
+                if i == 6:
                     offset *= self.extrude_factor
                 self.base_position[i] = self.last_position[i] - offset
-        if offsets == [None, None, None, None]:
+        if offsets == [None, None, None, None, None, None, None]:
             self.base_position = list(self.last_position)
     def cmd_M114(self, gcmd):
         # Get Current Position
