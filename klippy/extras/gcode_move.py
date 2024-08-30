@@ -136,10 +136,13 @@ class GCodeMove:
             for pos, axis in enumerate('ABC'):
                 if axis in params:
                     v = float(params[axis])
+                    cur_absolute_coord = self.absolute_coord
                     if self.galvo_coord_confactor is not None and pos > 0 :
                         v = v +  self.galvo_coord_confactor
+                        cur_absolute_coord = True
 
-                    if not self.absolute_coord:
+                    #if not self.absolute_coord:
+                    if not cur_absolute_coord:                    
                         # value relative to position of last move
                         self.last_position[pos+3] += v
                     else:
