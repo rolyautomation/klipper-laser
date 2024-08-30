@@ -117,14 +117,32 @@ class CoreXYGalvoKinematics:
                 and (end_pos[i] < self.limits[i][0]
                      or end_pos[i] > self.limits[i][1])):
                 if self.limits[i][0] > self.limits[i][1]:
-                    raise move.move_error("Must home axis first")
+                    raise move.move_error("Must home axis XYZ first")
                 raise move.move_error()
+        for i in (3, 4, 5):
+            if (i == 3) :
+                continue
+            #logging.info("check limits (%.3f %.3f %.2f)",
+                     #end_pos[i], self.limits[i][0], self.limits[i][1])                
+            if (move.axes_d[i]
+                and (end_pos[i] < self.limits[i][0]
+                     or end_pos[i] > self.limits[i][1])):
+                if self.limits[i][0] > self.limits[i][1]:
+                    raise move.move_error("Must home axis ABC first")
+                raise move.move_error()
+
     def check_move(self, move):
         limits = self.limits
         xpos, ypos = move.end_pos[:2]
         if (xpos < limits[0][0] or xpos > limits[0][1]
             or ypos < limits[1][0] or ypos > limits[1][1]):
             self._check_endstops(move)
+        #bc
+        bpos, cpos = move.end_pos[4:6]
+        if (bpos < limits[0+4][0] or bpos > limits[0+4][1]
+            or cpos < limits[1+4][0] or cpos > limits[1+4][1]):
+            self._check_endstops(move)         
+
         if not move.axes_d[2]:
             # Normal XY move - use defaults
             return
