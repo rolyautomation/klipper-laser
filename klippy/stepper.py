@@ -205,6 +205,11 @@ class MCU_stepper:
         if ret:
             raise error("Internal error in stepcompress")
         self._query_mcu_position()
+
+    def soft_homing_BC_AXIS(self):
+        if (self._step_mvirtualmode > 0):
+            self._query_mcu_position()
+    
     def _query_mcu_position(self):
         if self._mcu.is_fileoutput():
             return
@@ -443,6 +448,10 @@ class PrinterRail:
     def set_position(self, coord):
         for stepper in self.steppers:
             stepper.set_position(coord)
+            
+    def soft_homing_BC_AXIS(self):
+        for stepper in self.steppers:
+            stepper.soft_homing_BC_AXIS()
 
 # Wrapper for dual stepper motor support
 def LookupMultiRail(config, need_position_minmax=True,

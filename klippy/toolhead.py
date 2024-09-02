@@ -460,6 +460,8 @@ class ToolHead:
             self.printer.invoke_shutdown("Exception in flush_handler")
         return self.reactor.NEVER
     # Movement commands
+    def soft_homing_BC_AXIS(self):
+        self.kin.soft_homing_BC_AXIS()
     def get_position(self):
         return list(self.commanded_pos)
     def set_position(self, newpos, homing_axes=()):

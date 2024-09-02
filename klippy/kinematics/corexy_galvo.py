@@ -84,6 +84,10 @@ class CoreXYGalvoKinematics:
         #return [bx, cy, pos[2]]
         return [x, y, pos[2], pos[3], bx, cy]
 
+    def soft_homing_BC_AXIS(self): 
+        self.rails[4].soft_homing_BC_AXIS()       
+        self.rails[5].soft_homing_BC_AXIS()   
+
     def set_position(self, newpos, homing_axes):
         for i, rail in enumerate(self.rails):
             rail.set_position(newpos)

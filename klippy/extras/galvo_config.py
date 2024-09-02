@@ -10,6 +10,7 @@ class GalvoConfigCtrl:
     cmd_SET_POS_GALVO_help = "Sets the pos x y of a galvo"   
     cmd_QUERY_POS_GALVO_help =  "Query the pos x y of a galvo"   
     cmd_QUERY_POS_GALVO_VIR_help =  "Query the pos x y of a galvo vir"  
+    cmd_RESET_POS_GALVO_VIR_help =  "Reset the pos x y of a galvo vir"  
 
     def __init__(self, config):
    
@@ -53,7 +54,10 @@ class GalvoConfigCtrl:
                                desc=self.cmd_QUERY_POS_GALVO_help)
 
         gcode.register_command("QUERY_POS_GALVO_VIR", self.cmd_QUERY_POS_GALVO_VIR,
-                               desc=self.cmd_QUERY_POS_GALVO_VIR_help)                               
+                               desc=self.cmd_QUERY_POS_GALVO_VIR_help)    
+
+        gcode.register_command("RESET_POS_GALVO_VIR", self.cmd_RESET_POS_GALVO_VIR,
+                               desc=self.cmd_RESET_POS_GALVO_VIR_help)                                                             
                                                                
         self._last_clock = 0
         self._x_pos_rd = 0
@@ -94,8 +98,22 @@ class GalvoConfigCtrl:
 
 
     def cmd_SET_POS_GALVO(self, gcmd):
-        self._x_pos = gcmd.get_int('X', 0, minval=0, maxval=65535)
-        self._y_pos = gcmd.get_int('Y', 0, minval=0, maxval=65535)
+
+        b_x_pos = gcmd.get_int('B', None, minval=0, maxval=65535)
+        c_y_pos = gcmd.get_int('C', None, minval=0, maxval=65535)
+
+        if b_x_pos is not None:
+            self._x_pos = b_x_pos
+        else:      
+            self._x_pos = gcmd.get_int('X', 0, minval=0, maxval=65535)
+
+        if c_y_pos is not None:
+            self._y_pos = c_y_pos
+        else: 
+            self._y_pos = gcmd.get_int('Y', 0, minval=0, maxval=65535)          
+
+        #self._x_pos = gcmd.get_int('X', 0, minval=0, maxval=65535)
+        #self._y_pos = gcmd.get_int('Y', 0, minval=0, maxval=65535)
         #logging.info("SET_POS_GALVO X=%d,Y=%d", x, y)
 
         # Obtain print_time and apply requested settings
@@ -131,7 +149,11 @@ class GalvoConfigCtrl:
         self._x_pos_rd_vir = params['xvpos']
         self._y_pos_rd_vir = params['yvpos']        
 
-
+    def cmd_RESET_POS_GALVO_VIR(self, gcmd):
+        toolhead = self.printer.lookup_object('toolhead')
+        toolhead.soft_homing_BC_AXIS()
+        msg = "ok"
+        gcmd.respond_raw(msg)
 
 def load_config_prefix(config):
     return GalvoConfigCtrl(config)
