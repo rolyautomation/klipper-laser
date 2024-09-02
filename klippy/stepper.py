@@ -222,6 +222,9 @@ class MCU_stepper:
         ffi_main, ffi_lib = chelper.get_ffi()
         ret = ffi_lib.stepcompress_set_last_position(self._stepqueue, clock,
                                                      last_pos)
+
+        #logging.info("last_pos at (%s:%d,%d)", self.get_name(),last_pos,self._invert_dir)     
+
         if ret:
             raise error("Internal error in stepcompress")
         self._set_mcu_position(last_pos)
@@ -448,7 +451,7 @@ class PrinterRail:
     def set_position(self, coord):
         for stepper in self.steppers:
             stepper.set_position(coord)
-            
+
     def soft_homing_BC_AXIS(self):
         for stepper in self.steppers:
             stepper.soft_homing_BC_AXIS()

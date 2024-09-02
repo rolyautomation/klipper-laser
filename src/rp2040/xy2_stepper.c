@@ -762,6 +762,18 @@ int  update_vir_postion_info(uint8_t  gpio_step_num, uint32_t position, uint16_t
         iret = 1;
         return(iret);
      }
+
+     //very important to G28 bug
+     if (g_sync_pio_data[0].position  & 0x80000000)
+     {
+         g_sync_pio_data[0].position = -g_sync_pio_data[0].position;
+     }
+
+     if (g_sync_pio_data[1].position & 0x80000000)
+     {
+         g_sync_pio_data[1].position = -g_sync_pio_data[1].position;
+     }
+     
          
      //todo after
      #if 0
@@ -1081,6 +1093,8 @@ command_xy2_set_position(uint32_t *args)
         {
 
             stepper_init_position_value();
+            g_sync_pio_data[0].position = 0;
+            g_sync_pio_data[1].position = 0;
             //  under test code
             //s->xy2_x_pos++;
             //s->xy2_y_pos++;
