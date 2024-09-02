@@ -401,6 +401,24 @@ command_stepper_stop_on_trigger_vir(uint32_t *args)
 DECL_COMMAND(command_stepper_stop_on_trigger_vir,
              "stepper_stop_on_trigger_vir oid=%c trsync_oid=%c");
 
+
+
+
+void stepper_init_position_value(void)
+{
+
+    uint8_t i;
+    struct stepper_vir *s;
+    foreach_oid(i, s, command_config_stepper_vir) {
+        s->position = -POSITION_BIAS;
+        //test is ok
+        //shutdown("reset position value in test");
+    }
+
+
+}
+
+
 void
 stepper_shutdown_vir(void)
 {
@@ -410,6 +428,8 @@ stepper_shutdown_vir(void)
         move_queue_clear(&s->mq);
         stepper_stop_vir(&s->stop_signal, 0);
     }
+    stepper_init_position_value();
+
 }
 DECL_SHUTDOWN(stepper_shutdown_vir);
 
@@ -712,10 +732,13 @@ int  update_vir_postion_info(uint8_t  gpio_step_num, uint32_t position, uint16_t
 
      int iret = 0;
      int i = 0;
+     uint32_t posX_32 = 0;
+     uint32_t posY_32 = 0;     
      uint16_t posX = 0;
      uint16_t posY = 0;
      int todoflag = 1;
      uint32_t realposition = 0; 
+     unsigned char  bitv = gp_ring_pio_mang->coord_factor;
      for(i=0; i < 2; i++)
      {
 
@@ -741,11 +764,21 @@ int  update_vir_postion_info(uint8_t  gpio_step_num, uint32_t position, uint16_t
      }
          
      //todo after
+     #if 0
      posX = g_sync_pio_data[0].position & 0xFFFF;
-     posY = g_sync_pio_data[1].position & 0xFFFF;     
+     posY = g_sync_pio_data[1].position & 0xFFFF;    
+     #endif 
+     posX_32 = g_sync_pio_data[0].position << bitv ;
+     posY_32 = g_sync_pio_data[1].position << bitv ;  
+     posX = posX_32  & 0xFFFF;
+     posY = posY_32  & 0xFFFF;     
+     if (  (posX_32 >> 16)   > 0)
+            posX = 0xFFFF;
+     if (  (posY_32 >> 16)   > 0)
+            posY = 0xFFFF;        
      upadte_new_onedata(posX, posY);
-     
      return(iret);
+
 
           
 }
@@ -1012,7 +1045,7 @@ void
 command_xy2_vir_get_position(uint32_t *args)
 {
     uint8_t oid = args[0];
-    struct xy2_stepper *s = xy2_stepper_oid_lookup(oid);
+    //struct xy2_stepper *s = xy2_stepper_oid_lookup(oid);
     irq_disable();
     //uint32_t position = stepper_get_position(s);
     uint32_t x_pos_vir = g_sync_pio_data[0].position;
@@ -1043,6 +1076,16 @@ command_xy2_set_position(uint32_t *args)
 	{
     	s->xy2_x_pos = x_pos;
     	s->xy2_y_pos = y_pos;
+
+        if ( (x_pos == 0) && (y_pos == 0) )
+        {
+
+            stepper_init_position_value();
+            //  under test code
+            //s->xy2_x_pos++;
+            //s->xy2_y_pos++;
+            
+        }
 		// write buff
 #ifdef  M_FIFO_ISR_WORK_EN    
         upadte_new_onedata(s->xy2_x_pos, s->xy2_y_pos);
