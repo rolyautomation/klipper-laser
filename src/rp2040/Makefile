@@ -46,7 +46,7 @@ $(OUT)xy2_100.pio.h: src/rp2040/xy2_100.pio $(OUT)lib/rp2040/pioasm/pioasm
 	@echo "  Creating .pio.h file $@"
 	$(Q)$(OUT)lib/rp2040/pioasm/pioasm $< $@
 
-target-y := $(OUT)xy2_100.pio.h
+#target-y := $(OUT)xy2_100.pio.h
 
 # Build rules for SDK files
 RP2040_SDK_DIR := src/rp2040/sdk
