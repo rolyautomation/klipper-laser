@@ -29,7 +29,7 @@ src-$(CONFIG_HAVE_GPIO_HARD_PWM) += rp2040/hard_pwm.c
 src-$(CONFIG_HAVE_GPIO_SPI) += rp2040/spi.c
 src-$(CONFIG_HAVE_GPIO_I2C) += rp2040/i2c.c
 # Add XY2-100 interface option
-src-$(CONFIG_XY2100) += rp2040/xy2_100.c  rp2040/xy2_stepper.c
+src-$(CONFIG_XY2100) += rp2040/xy2_100.c  rp2040/xy2_stepper.c  rp2040/stepper_pwm.c
 src-$(CONFIG_XY2100) += rp2040/sdk/gpio.c rp2040/sdk/pio.c rp2040/sdk/claim.c
 #src-$(CONFIG_XY2100) += rp2040/rp2_stdio.c rp2040/rp2_time.c rp2040/rp2_mutex.c
 

@@ -37,12 +37,12 @@
 //#define  M_TEST_VIR_STEP_GPIO   (0)
 #define  M_TEST_VIR_STEP_GPIO   (1)
 
-#define  M_FIFO_ISR_WORK_EN     (1)
-#define  M_LINK_GALVO_EN        (1)
-#define  M_COUNT_MUL_TWO        (1)
+//#define  M_FIFO_ISR_WORK_EN     (1)
+//#define  M_LINK_GALVO_EN        (1)
+#define  M_COUNT_MUL_TWO          (1)
+#define  M_PWM_OUT_EN             (1)
 
-
-struct stepper_move_vir {
+struct stepper_move_pwm {
     struct move_node node;
     uint32_t interval;
     int16_t add;
@@ -52,14 +52,21 @@ struct stepper_move_vir {
 
 enum { MF_DIR=1<<0 };
 
-struct stepper_vir {
+struct stepper_pwm {
     struct timer time;
     uint32_t interval;
     int16_t add;
     uint32_t count;
     uint32_t next_step_time, step_pulse_ticks;
     struct gpio_out step_pin, dir_pin;
+    #ifdef M_LINK_GALVO_EN
     uint8_t step_pin_num;
+    #endif
+    #ifdef M_PWM_OUT_EN
+    uint8_t  mode;
+    uint16_t pwm_upper_val;
+    uint8_t  oid_pwm;    //must pwm stepper on same mcu 
+    #endif
     uint32_t position;
     struct move_queue_head mq;
     struct trsync_signal stop_signal;
@@ -76,21 +83,21 @@ enum {
 
 // Setup a stepper for the next move in its queue
 static uint_fast8_t
-stepper_load_next_vir(struct stepper_vir *s)
+stepper_load_next_pwm(struct stepper_pwm *s)
 {
     if (move_queue_empty(&s->mq)) {
         // There is no next move - the queue is empty
      
         s->count = 0;
         #ifdef  M_LINK_GALVO_EN
-        update_vir_postion_info(s->step_pin_num, s->position, s->count, 0);  
+        update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
         #endif         
         return SF_DONE;
     }
 
     // Load next 'struct stepper_move' into 'struct stepper'
     struct move_node *mn = move_queue_pop(&s->mq);
-    struct stepper_move_vir *m = container_of(mn, struct stepper_move_vir, node);
+    struct stepper_move_pwm *m = container_of(mn, struct stepper_move_pwm, node);
     s->add = m->add;
     s->interval = m->interval + m->add;
     if (HAVE_SINGLE_SCHEDULE && s->flags & SF_SINGLE_SCHED) {
@@ -117,9 +124,9 @@ stepper_load_next_vir(struct stepper_vir *s)
 
     #ifdef  M_LINK_GALVO_EN
     if (HAVE_SINGLE_SCHEDULE && s->flags & SF_SINGLE_SCHED) {
-        update_vir_postion_info(s->step_pin_num, s->position, s->count, 0);  
+        update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
     } else {
-        update_vir_postion_info(s->step_pin_num, s->position, s->count, M_COUNT_MUL_TWO);   
+        update_pwm_postion_info(s->step_pin_num, s->position, s->count, M_COUNT_MUL_TWO);   
     }
     #endif     
 
@@ -129,14 +136,14 @@ stepper_load_next_vir(struct stepper_vir *s)
 
 // Optimized step function to step on each step pin edge
 uint_fast8_t
-stepper_event_edge_vir(struct timer *t)
+stepper_event_edge_pwm(struct timer *t)
 {
-    struct stepper_vir *s = container_of(t, struct stepper_vir, time);
+    struct stepper_pwm *s = container_of(t, struct stepper_pwm, time);
     #if M_TEST_VIR_STEP_GPIO
     gpio_out_toggle_noirq(s->step_pin);
     #endif 
     #ifdef  M_LINK_GALVO_EN
-    update_vir_postion_info(s->step_pin_num, s->position, s->count, 0);  
+    update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
     #endif      
     uint32_t count = s->count - 1;
     if (likely(count)) {
@@ -145,21 +152,21 @@ stepper_event_edge_vir(struct timer *t)
         s->interval += s->add;
         return SF_RESCHEDULE;
     }
-    return stepper_load_next_vir(s);
+    return stepper_load_next_pwm(s);
 }
 
 #define AVR_STEP_INSNS 40 // minimum instructions between step gpio pulses
 
 // AVR optimized step function
 static uint_fast8_t
-stepper_event_avr_vir(struct timer *t)
+stepper_event_avr_pwm(struct timer *t)
 {
-    struct stepper_vir *s = container_of(t, struct stepper_vir, time);
+    struct stepper_pwm *s = container_of(t, struct stepper_pwm, time);
     #if M_TEST_VIR_STEP_GPIO
     gpio_out_toggle_noirq(s->step_pin);
     #endif
     #ifdef  M_LINK_GALVO_EN
-    update_vir_postion_info(s->step_pin_num, s->position, s->count, 0);  
+    update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
     #endif     
     uint16_t *pcount = (void*)&s->count, count = *pcount - 1;
     if (likely(count)) {
@@ -172,7 +179,7 @@ stepper_event_avr_vir(struct timer *t)
             s->interval += s->add;
         return SF_RESCHEDULE;
     }
-    uint_fast8_t ret = stepper_load_next_vir(s);
+    uint_fast8_t ret = stepper_load_next_pwm(s);
     #if M_TEST_VIR_STEP_GPIO    
     gpio_out_toggle_noirq(s->step_pin);
     #endif    
@@ -181,14 +188,14 @@ stepper_event_avr_vir(struct timer *t)
 
 // Regular "double scheduled" step function
 uint_fast8_t
-stepper_event_full_vir(struct timer *t)
+stepper_event_full_pwm(struct timer *t)
 {
-    struct stepper_vir *s = container_of(t, struct stepper_vir, time);
+    struct stepper_pwm *s = container_of(t, struct stepper_pwm, time);
     #if M_TEST_VIR_STEP_GPIO
     gpio_out_toggle_noirq(s->step_pin);
     #endif
     #ifdef  M_LINK_GALVO_EN
-    update_vir_postion_info(s->step_pin_num, s->position, s->count, M_COUNT_MUL_TWO);  
+    update_pwm_postion_info(s->step_pin_num, s->position, s->count, M_COUNT_MUL_TWO);  
     #endif     
     uint32_t curtime = timer_read_time();
     uint32_t min_next_time = curtime + s->step_pulse_ticks;
@@ -205,7 +212,7 @@ stepper_event_full_vir(struct timer *t)
         s->time.waketime = s->next_step_time;
         return SF_RESCHEDULE;
     }
-    uint_fast8_t ret = stepper_load_next_vir(s);
+    uint_fast8_t ret = stepper_load_next_pwm(s);
     if (ret == SF_DONE || !timer_is_before(s->time.waketime, min_next_time))
         return ret;
     // Next step event is too close to the last unstep
@@ -219,20 +226,20 @@ reschedule_min:
 
 // Optimized entry point for step function (may be inlined into sched.c code)
 uint_fast8_t
-stepper_event_vir(struct timer *t)
+stepper_event_pwm(struct timer *t)
 {
     if (HAVE_EDGE_OPTIMIZATION)
-        return stepper_event_edge_vir(t);
+        return stepper_event_edge_pwm(t);
     if (HAVE_AVR_OPTIMIZATION)
-        return stepper_event_avr_vir(t);
-    return stepper_event_full_vir(t);
+        return stepper_event_avr_pwm(t);
+    return stepper_event_full_pwm(t);
 }
 
 
 void
-command_config_stepper_vir(uint32_t *args)
+command_config_stepper_pwm(uint32_t *args)
 {
-    struct stepper_vir *s = oid_alloc(args[0], command_config_stepper_vir, sizeof(*s));
+    struct stepper_pwm *s = oid_alloc(args[0], command_config_stepper_pwm, sizeof(*s));
     int_fast8_t invert_step = args[3];
     s->flags = invert_step > 0 ? SF_INVERT_STEP : 0;
     s->step_pin = gpio_out_setup(args[1], s->flags & SF_INVERT_STEP);
@@ -243,42 +250,42 @@ command_config_stepper_vir(uint32_t *args)
     s->dir_pin = gpio_out_setup(args[2], 0);
     s->position = -POSITION_BIAS;
     s->step_pulse_ticks = args[4];
-    move_queue_setup(&s->mq, sizeof(struct stepper_move_vir));
+    move_queue_setup(&s->mq, sizeof(struct stepper_move_pwm));
     if (HAVE_EDGE_OPTIMIZATION) {
 
-        s->time.func = stepper_event_edge_vir;
+        s->time.func = stepper_event_edge_pwm;
 
         if (!s->step_pulse_ticks && invert_step < 0)
             s->flags |= SF_SINGLE_SCHED;
         else
-            s->time.func = stepper_event_full_vir;
+            s->time.func = stepper_event_full_pwm;
     } else if (HAVE_AVR_OPTIMIZATION) {
-        s->time.func = stepper_event_avr_vir;
+        s->time.func = stepper_event_avr_pwm;
 
         if (s->step_pulse_ticks <= AVR_STEP_INSNS)
             s->flags |= SF_SINGLE_SCHED;
         else
-            s->time.func = stepper_event_full_vir;
+            s->time.func = stepper_event_full_pwm;
     } else if (!CONFIG_INLINE_STEPPER_HACK) {
-        s->time.func = stepper_event_full_vir;
+        s->time.func = stepper_event_full_pwm;
     }
 }
-DECL_COMMAND(command_config_stepper_vir, "config_stepper_vir oid=%c step_pin=%c"
+DECL_COMMAND(command_config_stepper_pwm, "config_stepper_pwm oid=%c step_pin=%c"
              " dir_pin=%c invert_step=%c step_pulse_ticks=%u");
 
 // Return the 'struct stepper' for a given stepper oid
-static struct stepper_vir *
-stepper_oid_lookup_vir(uint8_t oid)
+static struct stepper_pwm *
+stepper_oid_lookup_pwm(uint8_t oid)
 {
-    return oid_lookup(oid, command_config_stepper_vir);
+    return oid_lookup(oid, command_config_stepper_pwm);
 }
 
 // Schedule a set of steps with a given timing
 void
-command_queue_step_vir(uint32_t *args)
+command_queue_step_pwm(uint32_t *args)
 {
-    struct stepper_vir *s = stepper_oid_lookup_vir(args[0]);
-    struct stepper_move_vir *m = move_alloc();
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    struct stepper_move_pwm *m = move_alloc();
     m->interval = args[1];
     m->count = args[2];
     if (!m->count)
@@ -300,31 +307,55 @@ command_queue_step_vir(uint32_t *args)
     } else {
         s->flags = flags;
         move_queue_push(&m->node, &s->mq);
-        stepper_load_next_vir(s);
+        stepper_load_next_pwm(s);
         sched_add_timer(&s->time);
     }
     irq_enable();
 }
-DECL_COMMAND(command_queue_step_vir,
-             "queue_step_vir oid=%c interval=%u count=%hu add=%hi");
+DECL_COMMAND(command_queue_step_pwm,
+             "queue_step_pwm oid=%c interval=%u count=%hu add=%hi");
 
 // Set the direction of the next queued step
 void
-command_set_next_step_dir_vir(uint32_t *args)
+command_set_next_step_dir_pwm(uint32_t *args)
 {
-    struct stepper_vir *s = stepper_oid_lookup_vir(args[0]);
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
     uint8_t nextdir = args[1] ? SF_NEXT_DIR : 0;
     irq_disable();
     s->flags = (s->flags & ~SF_NEXT_DIR) | nextdir;
     irq_enable();
 }
-DECL_COMMAND(command_set_next_step_dir_vir, "set_next_step_dir_vir oid=%c dir=%c");
+DECL_COMMAND(command_set_next_step_dir_pwm, "set_next_step_dir_pwm oid=%c dir=%c");
+
+
+
+#ifdef M_PWM_OUT_EN
+
+void
+command_bind_pwm_oid_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->oid_pwm = args[1];
+    irq_enable();
+
+}
+DECL_COMMAND(command_bind_pwm_oid_stepper_pwm, "bind_oid_pwm oid=%c pwmoid=%c");
+
+
+
+
+
+#endif
+
+
+
 
 // Set an absolute time that the next step will be relative to
 void
-command_reset_step_clock_vir(uint32_t *args)
+command_reset_step_clock_pwm(uint32_t *args)
 {
-    struct stepper_vir *s = stepper_oid_lookup_vir(args[0]);
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
     uint32_t waketime = args[1];
     irq_disable();
     if (s->count)
@@ -333,11 +364,11 @@ command_reset_step_clock_vir(uint32_t *args)
     s->flags &= ~SF_NEED_RESET;
     irq_enable();
 }
-DECL_COMMAND(command_reset_step_clock_vir, "reset_step_clock_vir oid=%c clock=%u");
+DECL_COMMAND(command_reset_step_clock_pwm, "reset_step_clock_pwm oid=%c clock=%u");
 
 // Return the current stepper position.  Caller must disable irqs.
 static uint32_t
-stepper_get_position_vir(struct stepper_vir *s)
+stepper_get_position_pwm(struct stepper_pwm *s)
 {
     uint32_t position = s->position;
     // If stepper is mid-move, subtract out steps not yet taken
@@ -353,25 +384,25 @@ stepper_get_position_vir(struct stepper_vir *s)
 
 // Report the current position of the stepper
 void
-command_stepper_get_position_vir(uint32_t *args)
+command_stepper_get_position_pwm(uint32_t *args)
 {
     uint8_t oid = args[0];
-    struct stepper_vir *s = stepper_oid_lookup_vir(oid);
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(oid);
     irq_disable();
-    uint32_t position = stepper_get_position_vir(s);
+    uint32_t position = stepper_get_position_pwm(s);
     irq_enable();
-    sendf("stepper_position_vir oid=%c pos=%i", oid, position - POSITION_BIAS);
+    sendf("stepper_position_pwm oid=%c pos=%i", oid, position - POSITION_BIAS);
 }
-DECL_COMMAND(command_stepper_get_position_vir, "stepper_get_position_vir oid=%c");
+DECL_COMMAND(command_stepper_get_position_pwm, "stepper_get_position_pwm oid=%c");
 
 // Stop all moves for a given stepper (caller must disable IRQs)
 static void
-stepper_stop_vir(struct trsync_signal *tss, uint8_t reason)
+stepper_stop_pwm(struct trsync_signal *tss, uint8_t reason)
 {
-    struct stepper_vir *s = container_of(tss, struct stepper_vir, stop_signal);
+    struct stepper_pwm *s = container_of(tss, struct stepper_pwm, stop_signal);
     sched_del_timer(&s->time);
     s->next_step_time = s->time.waketime = 0;
-    s->position = -stepper_get_position_vir(s);
+    s->position = -stepper_get_position_pwm(s);
     s->count = 0;
     s->flags = (s->flags & (SF_INVERT_STEP|SF_SINGLE_SCHED)) | SF_NEED_RESET;
     #if M_TEST_VIR_STEP_GPIO
@@ -385,53 +416,38 @@ stepper_stop_vir(struct trsync_signal *tss, uint8_t reason)
         #endif
     while (!move_queue_empty(&s->mq)) {
         struct move_node *mn = move_queue_pop(&s->mq);
-        struct stepper_move_vir *m = container_of(mn, struct stepper_move_vir, node);
+        struct stepper_move_pwm *m = container_of(mn, struct stepper_move_pwm, node);
         move_free(m);
     }
 }
 
 // Set the stepper to stop on a "trigger event" (used in homing)
 void
-command_stepper_stop_on_trigger_vir(uint32_t *args)
+command_stepper_stop_on_trigger_pwm(uint32_t *args)
 {
-    struct stepper_vir *s = stepper_oid_lookup_vir(args[0]);
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
     struct trsync *ts = trsync_oid_lookup(args[1]);
-    trsync_add_signal(ts, &s->stop_signal, stepper_stop_vir);
+    trsync_add_signal(ts, &s->stop_signal, stepper_stop_pwm);
 }
-DECL_COMMAND(command_stepper_stop_on_trigger_vir,
-             "stepper_stop_on_trigger_vir oid=%c trsync_oid=%c");
+DECL_COMMAND(command_stepper_stop_on_trigger_pwm,
+             "stepper_stop_on_trigger_pwm oid=%c trsync_oid=%c");
 
 
 
-
-void stepper_init_position_value(void)
-{
-
-    uint8_t i;
-    struct stepper_vir *s;
-    foreach_oid(i, s, command_config_stepper_vir) {
-        s->position = -POSITION_BIAS;
-        //test is ok
-        //shutdown("reset position value in test");
-    }
-
-
-}
 
 
 void
-stepper_shutdown_vir(void)
+stepper_shutdown_pwm(void)
 {
     uint8_t i;
-    struct stepper_vir *s;
-    foreach_oid(i, s, command_config_stepper_vir) {
+    struct stepper_pwm *s;
+    foreach_oid(i, s, command_config_stepper_pwm) {
         move_queue_clear(&s->mq);
-        stepper_stop_vir(&s->stop_signal, 0);
+        stepper_stop_pwm(&s->stop_signal, 0);
     }
-    stepper_init_position_value();
 
 }
-DECL_SHUTDOWN(stepper_shutdown_vir);
+DECL_SHUTDOWN(stepper_shutdown_pwm);
 
 
 
