@@ -86,21 +86,40 @@ class MCU_stepper:
         step_pulse_ticks = self._mcu.seconds_to_clock(self._step_pulse_duration)
 
         if (self._step_mvirtualmode > 0):
-            self._mcu.add_config_cmd(
-                "config_stepper_vir oid=%d step_pin=%s dir_pin=%s invert_step=%d"
-                " step_pulse_ticks=%u" % (self._oid, self._step_pin, self._dir_pin,
-                                        invert_step, step_pulse_ticks))
-            self._mcu.add_config_cmd("reset_step_clock_vir oid=%d clock=0"
-                                    % (self._oid,), on_restart=True)
-            step_cmd_tag = self._mcu.lookup_command(
-                "queue_step_vir oid=%c interval=%u count=%hu add=%hi").get_command_tag()
-            dir_cmd_tag = self._mcu.lookup_command(
-                "set_next_step_dir_vir oid=%c dir=%c").get_command_tag()
-            self._reset_cmd_tag = self._mcu.lookup_command(
-                "reset_step_clock_vir oid=%c clock=%u").get_command_tag()
-            self._get_position_cmd = self._mcu.lookup_query_command(
-                "stepper_get_position_vir oid=%c",
-                "stepper_position_vir oid=%c pos=%i", oid=self._oid)
+                #eq 2, pwm
+            if (self._step_mvirtualmode > 2):
+                self._mcu.add_config_cmd(
+                    "config_stepper_pwm oid=%d step_pin=%s dir_pin=%s invert_step=%d"
+                    " step_pulse_ticks=%u" % (self._oid, self._step_pin, self._dir_pin,
+                                            invert_step, step_pulse_ticks))
+                self._mcu.add_config_cmd("reset_step_clock_pwm oid=%d clock=0"
+                                        % (self._oid,), on_restart=True)
+                step_cmd_tag = self._mcu.lookup_command(
+                    "queue_step_pwm oid=%c interval=%u count=%hu add=%hi").get_command_tag()
+                dir_cmd_tag = self._mcu.lookup_command(
+                    "set_next_step_dir_pwm oid=%c dir=%c").get_command_tag()
+                self._reset_cmd_tag = self._mcu.lookup_command(
+                    "reset_step_clock_pwm oid=%c clock=%u").get_command_tag()
+                self._get_position_cmd = self._mcu.lookup_query_command(
+                    "stepper_get_position_pwm oid=%c",
+                    "stepper_position_pwm oid=%c pos=%i", oid=self._oid)
+            else:
+                # eq 1,xy
+                self._mcu.add_config_cmd(
+                    "config_stepper_vir oid=%d step_pin=%s dir_pin=%s invert_step=%d"
+                    " step_pulse_ticks=%u" % (self._oid, self._step_pin, self._dir_pin,
+                                            invert_step, step_pulse_ticks))
+                self._mcu.add_config_cmd("reset_step_clock_vir oid=%d clock=0"
+                                        % (self._oid,), on_restart=True)
+                step_cmd_tag = self._mcu.lookup_command(
+                    "queue_step_vir oid=%c interval=%u count=%hu add=%hi").get_command_tag()
+                dir_cmd_tag = self._mcu.lookup_command(
+                    "set_next_step_dir_vir oid=%c dir=%c").get_command_tag()
+                self._reset_cmd_tag = self._mcu.lookup_command(
+                    "reset_step_clock_vir oid=%c clock=%u").get_command_tag()
+                self._get_position_cmd = self._mcu.lookup_query_command(
+                    "stepper_get_position_vir oid=%c",
+                    "stepper_position_vir oid=%c pos=%i", oid=self._oid)                
 
         else:     
             self._mcu.add_config_cmd(
@@ -121,6 +140,8 @@ class MCU_stepper:
 
         max_error = self._mcu.get_max_stepper_error()
         max_error_ticks = self._mcu.seconds_to_clock(max_error)
+        logging.info("stepcompress_fill=%.6f  %d", max_error,max_error_ticks)
+
         ffi_main, ffi_lib = chelper.get_ffi()
         ffi_lib.stepcompress_fill(self._stepqueue, max_error_ticks,
                                   step_cmd_tag, dir_cmd_tag)
@@ -277,7 +298,7 @@ def PrinterStepper(config, units_in_radians=False):
                                           minval=0., maxval=.001)
 
     step_mvirtualmode = config.getfloat('step_mvirtualmode', 0,
-                                          minval=0., maxval= 1 )
+                                          minval=0., maxval= 2 )
 
     mcu_stepper = MCU_stepper(name, step_pin_params, dir_pin_params,
                               rotation_dist, steps_per_rotation,

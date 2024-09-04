@@ -355,6 +355,7 @@ class ExtruderStepperPWM:
         '''
 
     def _handle_connect(self):
+        logging.info("_handle_connect  extruderpwm")
         toolhead = self.printer.lookup_object('toolhead')
         toolhead.register_step_generator(self.stepper.generate_steps)
         self._set_pressure_advance(self.config_pa, self.config_smooth_time)
@@ -466,6 +467,7 @@ class PrinterExtruderPWM:
         #self.max_extrude_ratio = max_cross_section / self.filament_area
         #logging.info("Extruder max_extrude_ratio=%.6f", self.max_extrude_ratio)
         #new add  240904
+        
         def_max_extrude_ratio = 1
         toolhead = self.printer.lookup_object('toolhead')
         max_velocity, max_accel = toolhead.get_max_velocity()
@@ -479,6 +481,9 @@ class PrinterExtruderPWM:
             'max_extrude_only_distance', 50., minval=0.)
         self.instant_corner_v = config.getfloat(
             'instantaneous_corner_velocity', 1., minval=0.)
+
+        logging.info("PrinterExtruderPWM =%.6f", self.max_e_velocity) 
+
         # Setup extruder trapq (trapezoidal motion queue)
         ffi_main, ffi_lib = chelper.get_ffi()
         self.trapq = ffi_main.gc(ffi_lib.trapq_alloc(), ffi_lib.trapq_free)
@@ -500,7 +505,11 @@ class PrinterExtruderPWM:
         gcode.register_mux_command("ACTIVATE_EXTRUDER", "EXTRUDER",
                                    self.name, self.cmd_ACTIVATE_EXTRUDER,
                                    desc=self.cmd_ACTIVATE_EXTRUDER_help)
+
+        logging.info("PrinterExtruderPWM end") 
+
     def update_move_time(self, flush_time, clear_history_time):
+        logging.info("update_move_time extruderpwm") 
         self.trapq_finalize_moves(self.trapq, flush_time, clear_history_time)
     def get_status(self, eventtime):
         #sts = self.heater.get_status(eventtime)
@@ -513,12 +522,15 @@ class PrinterExtruderPWM:
         return self.name
     def get_heater(self):
         #return self.heater
+        logging.info("get_heater extruderpwm") 
         return 0
     def get_trapq(self):
         return self.trapq
     def stats(self, eventtime):
         #return self.heater.stats(eventtime)
-        return 0
+        logging.info("stats extruderpwm") 
+        return False, "expwmstates=%d" % (1,)
+        
     def check_move(self, move):
         axis_r = move.axes_r[3+3]
         '''
@@ -611,6 +623,7 @@ class PrinterExtruderPWM:
 
 def add_printer_objects(config):
     printer = config.get_printer()
+    #logging.info("add_printer_objects") 
     for i in range(99):
         section = 'extruderpwm'
         if i:
