@@ -512,12 +512,15 @@ class PrinterExtruderPWM:
         logging.info("update_move_time extruderpwm") 
         self.trapq_finalize_moves(self.trapq, flush_time, clear_history_time)
     def get_status(self, eventtime):
+        #logging.info("get_status extruderpwm") 
         #sts = self.heater.get_status(eventtime)
         #sts['can_extrude'] = self.heater.can_extrude
         #if self.extruder_stepper is not None:
         #    sts.update(self.extruder_stepper.get_status(eventtime))
-        #return sts
-        return 0
+        sts = {'extpwm': 'no info'}
+        #sts['extpwm'] = 'no info'
+        return sts
+    #   return 0
     def get_name(self):
         return self.name
     def get_heater(self):
@@ -528,8 +531,12 @@ class PrinterExtruderPWM:
         return self.trapq
     def stats(self, eventtime):
         #return self.heater.stats(eventtime)
-        logging.info("stats extruderpwm") 
-        return False, "expwmstates=%d" % (1,)
+        #logging.info("stats extruderpwm") 
+        return (False, "extpwm")        
+    #def stats(self, eventtime):
+        #return self.heater.stats(eventtime)
+        #logging.info("stats extruderpwm") 
+        #return False, "expwmstates=%d" % (1,)
         
     def check_move(self, move):
         axis_r = move.axes_r[3+3]

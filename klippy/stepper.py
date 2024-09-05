@@ -87,7 +87,8 @@ class MCU_stepper:
 
         if (self._step_mvirtualmode > 0):
                 #eq 2, pwm
-            if (self._step_mvirtualmode > 2):
+            if (self._step_mvirtualmode > 1):
+
                 self._mcu.add_config_cmd(
                     "config_stepper_pwm oid=%d step_pin=%s dir_pin=%s invert_step=%d"
                     " step_pulse_ticks=%u" % (self._oid, self._step_pin, self._dir_pin,
@@ -102,7 +103,11 @@ class MCU_stepper:
                     "reset_step_clock_pwm oid=%c clock=%u").get_command_tag()
                 self._get_position_cmd = self._mcu.lookup_query_command(
                     "stepper_get_position_pwm oid=%c",
-                    "stepper_position_pwm oid=%c pos=%i", oid=self._oid)
+                    "stepper_position_pwm oid=%c pos=%i", oid=self._oid) 
+
+                step_cmd_tag = self.convert_tag_to_signed(step_cmd_tag)
+                dir_cmd_tag = self.convert_tag_to_signed(dir_cmd_tag)
+
             else:
                 # eq 1,xy
                 self._mcu.add_config_cmd(
@@ -140,11 +145,17 @@ class MCU_stepper:
 
         max_error = self._mcu.get_max_stepper_error()
         max_error_ticks = self._mcu.seconds_to_clock(max_error)
-        logging.info("stepcompress_fill=%.6f  %d", max_error,max_error_ticks)
+        #logging.info("stepcompress_fill=%.6f  %d", max_error,max_error_ticks)
+        logging.info("stepcompress_fill_tag =%i  %i", step_cmd_tag,dir_cmd_tag)
 
         ffi_main, ffi_lib = chelper.get_ffi()
         ffi_lib.stepcompress_fill(self._stepqueue, max_error_ticks,
                                   step_cmd_tag, dir_cmd_tag)
+
+
+    def convert_tag_to_signed(self,unsigned_tag):
+        signed_tag = unsigned_tag if unsigned_tag < 0x80000000 else unsigned_tag - 0x100000000
+        return signed_tag
 
     def get_oid(self):
         return self._oid
