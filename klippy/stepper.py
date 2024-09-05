@@ -41,6 +41,8 @@ class MCU_stepper:
         self._step_both_edge = self._req_step_both_edge = False
         self._mcu_position_offset = 0.
         self._reset_cmd_tag = self._get_position_cmd = None
+        #self._bindpwm_cmd_tag = None
+        self._bindpwm_cmd  = None
         self._active_callbacks = []
         ffi_main, ffi_lib = chelper.get_ffi()
         self._stepqueue = ffi_main.gc(ffi_lib.stepcompress_alloc(oid),
@@ -104,6 +106,12 @@ class MCU_stepper:
                 self._get_position_cmd = self._mcu.lookup_query_command(
                     "stepper_get_position_pwm oid=%c",
                     "stepper_position_pwm oid=%c pos=%i", oid=self._oid) 
+
+                #self._bindpwm_cmd_tag = self._mcu.lookup_command(
+                #    "bind_oid_pwm oid=%c pwmoid=%c").get_command_tag()  
+
+                self._bindpwm_cmd =  self._mcu.lookup_command(
+                    "bind_oid_pwm oid=%c pwmoid=%c")
 
                 step_cmd_tag = self.convert_tag_to_signed(step_cmd_tag)
                 dir_cmd_tag = self.convert_tag_to_signed(dir_cmd_tag)
@@ -242,6 +250,11 @@ class MCU_stepper:
         if (self._step_mvirtualmode > 0):
             self._query_mcu_position()
     
+    def bind_stepper_pwm(self, pwm_oid):
+        if (self._bindpwm_cmd is not None):
+            self._bindpwm_cmd.send([self._oid,pwm_oid])  
+            #logging.info("bind_stepper_pwm:%i %i is ok", self._oid,pwm_oid)  
+
     def _query_mcu_position(self):
         if self._mcu.is_fileoutput():
             return

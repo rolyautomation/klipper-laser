@@ -409,6 +409,8 @@ class MCU_pwm:
         self._last_clock = 0
         self._pwm_max = 0.
         self._set_cmd = None
+    def get_mcu_pwm_oid(self):
+        return self._oid        
     def get_mcu(self):
         return self._mcu
     def setup_max_duration(self, max_duration):

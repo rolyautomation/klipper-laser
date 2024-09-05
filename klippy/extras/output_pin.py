@@ -3,6 +3,7 @@
 # Copyright (C) 2017-2024  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
+import logging
 
 PIN_MIN_TIME = 0.100
 RESEND_HOST_TIME = 0.300 + PIN_MIN_TIME
@@ -50,10 +51,34 @@ class PrinterOutputPin:
         self.mcu_pin.setup_start_value(self.last_value, self.shutdown_value)
         # Register commands
         pin_name = config.get_name().split()[1]
+
+        self._epwm_name =  pin_name
+        if self._epwm_name == 'extrdpwm':
+            self.printer.register_event_handler("klippy:connect",
+                                                self._handle_connect_bind)
+
+            #extruderpwm = self.printer.lookup_object('extruderpwm')
+            #pwm_oid =  self.mcu_pin.get_mcu_pwm_oid()
+            #pwm_oid = 0
+            #extruderpwm.set_extrdpwm_oid(pwm_oid)
+            #logging.info("bind pwm: %s %i", self._epwm_name, pwm_oid) 
+
+
         gcode = self.printer.lookup_object('gcode')
         gcode.register_mux_command("SET_PIN", "PIN", pin_name,
                                    self.cmd_SET_PIN,
                                    desc=self.cmd_SET_PIN_help)
+
+    def _handle_connect_bind(self):
+        if self._epwm_name == 'extrdpwm':
+            extruderpwm = self.printer.lookup_object('extruderpwm')
+            pwm_oid =  self.mcu_pin.get_mcu_pwm_oid()
+            mcu_pwm =   self.mcu_pin.get_mcu()
+            #pwm_oid = 0
+            extruderpwm.set_extrdpwm_oid(pwm_oid,mcu_pwm)
+            #logging.info("bind pwm: %s %s %i", mcu_pwm, self._epwm_name, pwm_oid)   
+
+
     def get_status(self, eventtime):
         return {'value': self.last_value}
     def _set_pin(self, print_time, value, is_resend=False):

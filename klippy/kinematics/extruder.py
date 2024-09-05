@@ -380,6 +380,20 @@ class ExtruderStepperPWM:
         self.stepper.set_position([extruder.last_position, 0., 0.])
         self.stepper.set_trapq(extruder.get_trapq())
         self.motion_queue = extruder_name
+
+    def set_extruder_stepper_pwm(self, pwm_oid,mcu_id):
+        if (self.stepper is not None):
+            extstepper_oid = self.stepper.get_oid()
+            extstepper_mcu = self.stepper.get_mcu()
+            extstepper_name = self.stepper.get_name()
+            if(extstepper_mcu is mcu_id ):
+                self.stepper.bind_stepper_pwm(pwm_oid)
+                logging.info("set_extruder_stepper_pwm:%s %i", extstepper_name,extstepper_oid)
+            else:
+                #logging.info("set_extruder_stepper_pwm:%s %i fail: not same mcu", extstepper_name,extstepper_oid) 
+                raise self.printer.command_error("'%s' is not same mcu,please check."
+                                             % (extstepper_name,))               
+
     def _set_pressure_advance(self, pressure_advance, smooth_time):
         old_smooth_time = self.pressure_advance_smooth_time
         if not self.pressure_advance:
@@ -507,6 +521,7 @@ class PrinterExtruderPWM:
                                    self.name, self.cmd_ACTIVATE_EXTRUDER,
                                    desc=self.cmd_ACTIVATE_EXTRUDER_help)
 
+        self._extrdpwm_oid = None
         logging.info("PrinterExtruderPWM end") 
 
     def update_move_time(self, flush_time, clear_history_time):
@@ -522,6 +537,13 @@ class PrinterExtruderPWM:
         #sts['extpwm'] = 'no info'
         return sts
     #   return 0
+    def set_extrdpwm_oid(self, pwm_oid=None, mcu_id=None):
+        self._extrdpwm_oid = pwm_oid
+        if (self._extrdpwm_oid is not None):
+            self.extruder_stepper.set_extruder_stepper_pwm(pwm_oid,mcu_id)
+            #logging.info("rev bind pwm: %i", pwm_oid)
+            pass
+        #return self.name
     def get_name(self):
         return self.name
     def get_heater(self):
