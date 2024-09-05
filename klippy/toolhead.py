@@ -507,7 +507,7 @@ class ToolHead:
             eventtime = self.reactor.pause(eventtime + 0.100)
     def set_extruder(self, extruder, extrude_pos):
         self.extruder = extruder
-        self.commanded_pos[3] = extrude_pos
+        self.commanded_pos[3+3] = extrude_pos
     def get_extruder(self):
         return self.extruder
     # Homing "drip move" handling

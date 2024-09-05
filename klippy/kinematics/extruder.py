@@ -498,7 +498,8 @@ class PrinterExtruderPWM:
             self.extruder_stepper.stepper.set_trapq(self.trapq)
         # Register commands
         gcode = self.printer.lookup_object('gcode')
-        if self.name == 'extruder':
+        #if self.name == 'extruder':
+        if self.name == 'extruderpwm':
             toolhead.set_extruder(self, 0.)
             gcode.register_command("M104", self.cmd_M104)
             gcode.register_command("M109", self.cmd_M109)
