@@ -124,3 +124,26 @@ command_set_pwm_out(uint32_t *args)
 }
 DECL_COMMAND(command_set_pwm_out,
              "set_pwm_out pin=%u cycle_ticks=%u value=%hu");
+
+
+
+
+
+//directly set  pwm  in extruder
+#define  M_DEF_SET_PWM_EXTRUDER
+#ifdef M_DEF_SET_PWM_EXTRUDER
+
+void 
+direct_set_pwm_pulse_width(uint8_t pwd_oid, uint32_t val)
+{
+    
+    struct pwm_out_s *p = oid_lookup(pwd_oid, command_config_pwm_out);
+    if (p != NULL)
+    {
+        gpio_pwm_write(p->pin, val);
+    }
+    
+
+}
+
+#endif

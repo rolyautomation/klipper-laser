@@ -17,7 +17,8 @@
 //#include "xy2_stepper.h"  // 
 #include "trsync.h" // trsync_add_signal
 
-
+extern void direct_set_pwm_pulse_width(uint8_t pwd_oid, uint32_t val);
+void  set_pwm_pulse_width(uint8_t flag,uint8_t pwd_oid, uint32_t val);
 
 #if CONFIG_INLINE_STEPPER_HACK && CONFIG_HAVE_STEPPER_BOTH_EDGE
  #define HAVE_SINGLE_SCHEDULE 1
@@ -66,6 +67,7 @@ struct stepper_pwm {
     uint8_t  mode;
     uint16_t pwm_upper_val;
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
+    uint8_t  oid_pwm_flag;
     #endif
     uint32_t position;
     struct move_queue_head mq;
@@ -91,7 +93,10 @@ stepper_load_next_pwm(struct stepper_pwm *s)
         s->count = 0;
         #ifdef  M_LINK_GALVO_EN
         update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
-        #endif         
+        #endif  
+        #ifdef M_PWM_OUT_EN
+        set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 0);
+        #endif               
         return SF_DONE;
     }
 
@@ -128,7 +133,10 @@ stepper_load_next_pwm(struct stepper_pwm *s)
     } else {
         update_pwm_postion_info(s->step_pin_num, s->position, s->count, M_COUNT_MUL_TWO);   
     }
-    #endif     
+    #endif   
+    #ifdef M_PWM_OUT_EN
+    set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    #endif      
 
     move_free(m);
     return SF_RESCHEDULE;
@@ -144,7 +152,10 @@ stepper_event_edge_pwm(struct timer *t)
     #endif 
     #ifdef  M_LINK_GALVO_EN
     update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
-    #endif      
+    #endif  
+    #ifdef M_PWM_OUT_EN
+    set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    #endif
     uint32_t count = s->count - 1;
     if (likely(count)) {
         s->count = count;
@@ -167,7 +178,10 @@ stepper_event_avr_pwm(struct timer *t)
     #endif
     #ifdef  M_LINK_GALVO_EN
     update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
-    #endif     
+    #endif  
+    #ifdef M_PWM_OUT_EN
+    set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    #endif         
     uint16_t *pcount = (void*)&s->count, count = *pcount - 1;
     if (likely(count)) {
         *pcount = count;
@@ -196,7 +210,10 @@ stepper_event_full_pwm(struct timer *t)
     #endif
     #ifdef  M_LINK_GALVO_EN
     update_pwm_postion_info(s->step_pin_num, s->position, s->count, M_COUNT_MUL_TWO);  
-    #endif     
+    #endif  
+    #ifdef M_PWM_OUT_EN
+    set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    #endif         
     uint32_t curtime = timer_read_time();
     uint32_t min_next_time = curtime + s->step_pulse_ticks;
     s->count--;
@@ -337,6 +354,7 @@ command_bind_pwm_oid_stepper_pwm(uint32_t *args)
     struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
     irq_disable();
     s->oid_pwm = args[1];
+    s->oid_pwm_flag  = 1;
     irq_enable();
 
 }
@@ -344,6 +362,17 @@ DECL_COMMAND(command_bind_pwm_oid_stepper_pwm, "bind_oid_pwm oid=%c pwmoid=%c");
 
 
 
+
+void 
+set_pwm_pulse_width(uint8_t flag,uint8_t pwd_oid, uint32_t val)
+{
+    if (flag)
+    {
+        direct_set_pwm_pulse_width(pwd_oid, val);
+
+    }
+
+}
 
 
 #endif
