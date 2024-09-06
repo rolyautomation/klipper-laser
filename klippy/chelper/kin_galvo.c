@@ -35,7 +35,8 @@ galvo_stepper_b_calc_position(struct stepper_kinematics *sk, struct move *m
     struct galvo_stepper *gs = container_of(sk, struct galvo_stepper, sk);
     struct coord c = move_get_coord(m, move_time);
     double adjusted_b = c.b - gs->half_distance_galvo;
-    double angle = atan2(adjusted_b, gs->focus_distance);
+    //double angle = atan2(adjusted_b, gs->focus_distance);
+    double angle = adjusted_b/gs->focus_distance;
     angle = angle + gs->hradiation_angle;  
     return angle;    
     //return c.x + c.y;
@@ -51,7 +52,8 @@ galvo_stepper_c_calc_position(struct stepper_kinematics *sk, struct move *m
     struct galvo_stepper *gs = container_of(sk, struct galvo_stepper, sk);
     struct coord c = move_get_coord(m, move_time);
     double adjusted_c = c.c - gs->half_distance_galvo;
-    double angle = atan2(adjusted_c, gs->focus_distance);
+    //double angle = atan2(adjusted_c, gs->focus_distance);
+    double angle =  adjusted_c/gs->focus_distance;
     angle = angle + gs->hradiation_angle;
     return angle;   
     //return c.x - c.y;

@@ -33,7 +33,8 @@ class CoreXYGalvoKinematics:
                                       maxval=1)
         self._focus_distance = config.getfloat('focus_distance', 160, minval=10,
                                       maxval=500)
-        self._half_distance_galvo =  self._focus_distance * math.tan(self._hradiation_angle)
+        #self._half_distance_galvo =  self._focus_distance * math.tan(self._hradiation_angle)
+        self._half_distance_galvo =  self._focus_distance * self._hradiation_angle
 
         logging.info("galvo param at (%.3f %.3f %.2f)",
                      self._hradiation_angle, self._focus_distance, self._half_distance_galvo)
@@ -79,8 +80,10 @@ class CoreXYGalvoKinematics:
         #return [0.5 * (pos[0] + pos[1]), 0.5 * (pos[0] - pos[1]), pos[2]]
         #bx = math.tan(pos[0]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
         #cy = math.tan(pos[1]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
-        bx = math.tan(pos[4]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
-        cy = math.tan(pos[5]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo        
+        #bx = math.tan(pos[4]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
+        #cy = math.tan(pos[5]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo     
+        bx = (pos[4]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
+        cy = (pos[5]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo             
         #return [bx, cy, pos[2]]
         return [x, y, pos[2], pos[3], bx, cy]
 
