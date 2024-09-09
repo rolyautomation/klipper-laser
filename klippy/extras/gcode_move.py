@@ -5,6 +5,17 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 
+
+# Enum
+#Close
+PWM_MODE_IDLE = 0
+#Continuous
+PWM_MODE_M3   = 1
+#Dynamic
+PWM_MODE_M4   = 2
+
+
+
 class GCodeMove:
     def __init__(self, config):
         self.printer = printer = config.get_printer()
@@ -32,23 +43,39 @@ class GCodeMove:
             func = getattr(self, 'cmd_' + cmd)
             desc = getattr(self, 'cmd_' + cmd + '_help', None)
             gcode.register_command(cmd, func, False, desc)
-        gcode.register_command('G0', self.cmd_G1)
+        #gcode.register_command('G0', self.cmd_G1)
         gcode.register_command('M114', self.cmd_M114, True)
         gcode.register_command('GET_POSITION', self.cmd_GET_POSITION, True,
                                desc=self.cmd_GET_POSITION_help)
         self.Coord = gcode.Coord
         # G-Code coordinate manipulation
         self.absolute_coord = self.absolute_extrude = True
+        # Use relative distances 
+        self.absolute_extrude = False
         self.base_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.last_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.homing_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.speed = 25.
         self.speed_factor = 1. / 60.
         self.extrude_factor = 1.
+        #M3 M4 M5
+        self.pwm_work_mode = 0
+        self.pwm_work_curpower = 0
+        self.pwm_work_mode_use = 0
+        self.pwm_work_curpower_use = 0  
+        gcode.register_command('G0', self.cmd_G0_LASER)   
+        #gcode.register_command('M3', self.cmd_M3_LASER)  
+        #gcode.register_command('M4', self.cmd_M4_LASER)  
+        #gcode.register_command('M5', self.cmd_M5_LASER)             
+        gcode.register_command('M301', self.cmd_M3_LASER)  
+        gcode.register_command('M302', self.cmd_M4_LASER)  
+        gcode.register_command('M303', self.cmd_M5_LASER)  
+
         # G-Code state
         self.galvo_coord_confactor = None
         self.saved_states = {}
         self.move_transform = self.move_with_transform = None
+        self.predict_move_distance_with_transform  = None
         self.position_with_transform = (lambda: [0., 0., 0., 0., 0.0, 0.0, 0.0])
     def _handle_ready(self):
         self.is_printer_ready = True
@@ -56,6 +83,7 @@ class GCodeMove:
             toolhead = self.printer.lookup_object('toolhead')
             self.move_with_transform = toolhead.move
             self.position_with_transform = toolhead.get_position
+            self.predict_move_distance_with_transform = toolhead.predict_move_distance
         self.reset_last_position()
     def _handle_shutdown(self):
         if not self.is_printer_ready:
@@ -110,8 +138,69 @@ class GCodeMove:
     def reset_last_position(self):
         if self.is_printer_ready:
             self.last_position = self.position_with_transform()
+
+    def cmd_M3_LASER(self, gcmd):  
+        params = gcmd.get_command_parameters()  
+        if 'S' in params:             
+            v = float(params['S'])
+            if v <= 0.:
+                v = 0.
+            if v >= 1000.:
+                v = 1000. 
+            v = v/1000.0 * 255
+            self.pwm_work_curpower = v
+        self.pwm_work_mode =  PWM_MODE_M3
+
+    def cmd_M4_LASER(self, gcmd):  
+
+        params = gcmd.get_command_parameters()  
+        if 'S' in params:             
+            v = float(params['S'])
+            if v <= 0.:
+                v = 0.
+            if v >= 1000.:
+                v = 1000. 
+            v = v/1000.0 * 255
+            self.pwm_work_curpower = v
+        self.pwm_work_mode =  PWM_MODE_M4
+
+    def cmd_M5_LASER(self, gcmd):  
+        self.pwm_work_curpower = 0
+        self.pwm_work_mode =  PWM_MODE_IDLE        
+        self.pwm_work_mode_use = PWM_MODE_IDLE
+
+    def cmd_G0_LASER(self, gcmd):
+        self.pwm_work_mode_use =  PWM_MODE_IDLE
+        params = gcmd.get_command_parameters()  
+        if 'S' in params:             
+            v = float(params['S'])
+            if v <= 0.:
+                v = 0.
+            if v >= 1000.:
+                v = 1000. 
+            v = v/1000.0 * 255
+            self.pwm_work_curpower = v        
+        self.pwm_work_curpower_use =  self.pwm_work_curpower
+        self.cmd_G1_Prefun(gcmd)  
+
     # G-Code movement commands
     def cmd_G1(self, gcmd):
+        # Move
+        self.pwm_work_mode_use =  self.pwm_work_mode
+        params = gcmd.get_command_parameters()  
+        if 'S' in params:             
+            v = float(params['S'])
+            if v <= 0.:
+                v = 0.
+            if v >= 1000.:
+                v = 1000. 
+            v = v/1000.0 * 255
+            self.pwm_work_curpower = v  
+        self.pwm_work_curpower_use =  self.pwm_work_curpower                     
+        self.cmd_G1_Prefun(gcmd)     
+
+    # G-Code movement commands
+    def cmd_G1_Prefun(self, gcmd):
         # Move
 
         if self.galvo_coord_confactor is None:
@@ -173,10 +262,22 @@ class GCodeMove:
                     raise gcmd.error("Invalid speed in '%s'"
                                      % (gcmd.get_commandline(),))
                 self.speed = gcode_speed * self.speed_factor
+
+            move_e_axis_d = 0
+            if self.predict_move_distance_with_transform is not None:
+                move_e_axis_d = self.predict_move_distance_with_transform(self.last_position)
+                # value relative to position of last move
+                self.last_position[3+3] += move_e_axis_d
+
+
         except ValueError as e:
             raise gcmd.error("Unable to parse move '%s'"
                              % (gcmd.get_commandline(),))
+
+        logging.info("\npwm: pwm_work_curpower_use=%s pwm_work_mode_use=%s move_e_axis_d=%s \n",
+                self.pwm_work_curpower_use, self.pwm_work_mode_use, move_e_axis_d)     
         self.move_with_transform(self.last_position, self.speed)
+
     # G-Code coordinate manipulation
     def cmd_G20(self, gcmd):
         # Set units to inches

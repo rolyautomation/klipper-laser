@@ -12,7 +12,9 @@ import mcu, chelper, kinematics.extruder
 
 # Class to track each move request
 class Move:
-    def __init__(self, toolhead, start_pos, end_pos, speed):
+    def __init__(self, toolhead, start_pos, end_pos, speed, pwmmode=None, pwmvalue=None):
+        self.pwmmode =  pwmmode
+        self.pwmvalue = pwmvalue
         self.toolhead = toolhead
         self.start_pos = tuple(start_pos)
         self.end_pos = tuple(end_pos)
@@ -460,6 +462,19 @@ class ToolHead:
             self.printer.invoke_shutdown("Exception in flush_handler")
         return self.reactor.NEVER
     # Movement commands
+    def predict_move_distance(self,newpos):
+        start_pos_in = self.commanded_pos
+        end_pos_in   = newpos
+        start_pos_use = tuple(start_pos_in)
+        end_pos_use  = tuple(end_pos_in)
+        axes_d = [end_pos_use[i] - start_pos_use[i] for i in (0, 1, 2, 3, 4, 5, 6)]
+        move_d = math.sqrt(sum([d*d for d in axes_d[:6]]))
+        if move_d < .000000001:
+            move_d = 0.01
+        else:  
+            move_d =  move_d/2
+        return(move_d)
+        
     def soft_homing_BC_AXIS(self):
         self.kin.soft_homing_BC_AXIS()
     def get_position(self):
@@ -473,8 +488,8 @@ class ToolHead:
         self.commanded_pos[:] = newpos
         self.kin.set_position(newpos, homing_axes)
         self.printer.send_event("toolhead:set_position")
-    def move(self, newpos, speed):
-        move = Move(self, self.commanded_pos, newpos, speed)
+    def move(self, newpos, speed, pwmmode=None, pwmvalue=None):
+        move = Move(self, self.commanded_pos, newpos, speed, pwmmode, pwmvalue)
         if not move.move_d:
             return
         if move.is_kinematic_move:
