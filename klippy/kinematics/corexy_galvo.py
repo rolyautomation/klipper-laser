@@ -33,6 +33,10 @@ class CoreXYGalvoKinematics:
                                       maxval=1)
         self._focus_distance = config.getfloat('focus_distance', 160, minval=10,
                                       maxval=500)
+
+        self._magnify_factor = config.getfloat('magnify_factor', 1, minval=1,
+                                      maxval=300)
+
         #self._half_distance_galvo =  self._focus_distance * math.tan(self._hradiation_angle)
         self._half_distance_galvo =  self._focus_distance * self._hradiation_angle
 
@@ -40,15 +44,15 @@ class CoreXYGalvoKinematics:
                      self._hradiation_angle, self._focus_distance, self._half_distance_galvo)
 
         self.rails[3].setup_itersolve('galvo_stepper_alloc', b'a', 
-                                  self._hradiation_angle,self._focus_distance,
-                                  self._half_distance_galvo)                        
+                                  self._hradiation_angle, self._focus_distance,
+                                  self._half_distance_galvo, self._magnify_factor)                        
 
         self.rails[4].setup_itersolve('galvo_stepper_alloc', b'b', 
                                   self._hradiation_angle,self._focus_distance,
-                                  self._half_distance_galvo)     
+                                  self._half_distance_galvo, self._magnify_factor)     
         self.rails[5].setup_itersolve('galvo_stepper_alloc', b'c',
-                                  self._hradiation_angle,self._focus_distance,
-                                  self._half_distance_galvo)  
+                                  self._hradiation_angle, self._focus_distance,
+                                  self._half_distance_galvo, self._magnify_factor)  
 
         
         for s in self.get_steppers():
@@ -82,8 +86,8 @@ class CoreXYGalvoKinematics:
         #cy = math.tan(pos[1]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
         #bx = math.tan(pos[4]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
         #cy = math.tan(pos[5]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo     
-        bx = (pos[4]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
-        cy = (pos[5]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo             
+        bx = (pos[4]/self._magnify_factor-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
+        cy = (pos[5]/self._magnify_factor-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo             
         #return [bx, cy, pos[2]]
         return [x, y, pos[2], pos[3], bx, cy]
 

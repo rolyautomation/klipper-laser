@@ -123,7 +123,7 @@ defs_kin_corexy = """
 defs_kin_galvo = """
     struct stepper_kinematics *galvo_stepper_alloc(char type
               ,double hradiation_angle, double focus_distance
-              , double half_distance_galvo);
+              ,double half_distance_galvo, double magnify_factor);
 """
 
 defs_kin_corexz = """

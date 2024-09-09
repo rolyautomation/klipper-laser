@@ -20,6 +20,7 @@
 struct galvo_stepper {
     struct stepper_kinematics sk;
     double hradiation_angle, focus_distance, half_distance_galvo;
+    double magnify_factor;
 };
 
 
@@ -37,7 +38,7 @@ galvo_stepper_b_calc_position(struct stepper_kinematics *sk, struct move *m
     double adjusted_b = c.b - gs->half_distance_galvo;
     //double angle = atan2(adjusted_b, gs->focus_distance);
     double angle = adjusted_b/gs->focus_distance;
-    angle = angle + gs->hradiation_angle;  
+    angle = (angle + gs->hradiation_angle) * gs->magnify_factor;  
     return angle;    
     //return c.x + c.y;
 
@@ -54,7 +55,7 @@ galvo_stepper_c_calc_position(struct stepper_kinematics *sk, struct move *m
     double adjusted_c = c.c - gs->half_distance_galvo;
     //double angle = atan2(adjusted_c, gs->focus_distance);
     double angle =  adjusted_c/gs->focus_distance;
-    angle = angle + gs->hradiation_angle;
+    angle = (angle + gs->hradiation_angle) * gs->magnify_factor;
     return angle;   
     //return c.x - c.y;
 
@@ -73,7 +74,7 @@ cart_stepper_a_calc_position(struct stepper_kinematics *sk, struct move *m
 
 
 struct stepper_kinematics * __visible
-galvo_stepper_alloc(char type,double hradiation_angle, double focus_distance, double half_distance_galvo)
+galvo_stepper_alloc(char type,double hradiation_angle, double focus_distance, double half_distance_galvo, double magnify_factor)
 {
     struct galvo_stepper *gs = malloc(sizeof(*gs));
     memset(gs, 0, sizeof(*gs));
@@ -81,6 +82,7 @@ galvo_stepper_alloc(char type,double hradiation_angle, double focus_distance, do
     gs->hradiation_angle = hradiation_angle;
     gs->focus_distance = focus_distance; 
     gs->half_distance_galvo = half_distance_galvo;
+    gs->magnify_factor = magnify_factor;
 
   
     if (type == 'b')
