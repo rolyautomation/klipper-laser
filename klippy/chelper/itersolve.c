@@ -36,6 +36,14 @@ itersolve_gen_steps_range(struct stepper_kinematics *sk, struct move *m
         start = 0.;
     if (end > m->move_t)
         end = m->move_t;
+
+    stepcompress_set_pwm_data(sk->sc, 0, 0, 0);        
+    if ( m->pwm_syncd.enf > 0 )
+    {
+        
+        stepcompress_set_pwm_data(sk->sc, m->pwm_syncd.pwmmode, m->pwm_syncd.pwmval, 0);        
+      
+    }
     struct timepos old_guess = {start, sk->commanded_pos}, guess = old_guess;
     int sdir = stepcompress_get_step_dir(sk->sc);
     int is_dir_change = 0, have_bracket = 0, check_oscillate = 0;

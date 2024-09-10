@@ -47,6 +47,11 @@ struct stepcompress {
     // History tracking
     int64_t last_position;
     struct list_head history_list;
+    // pwm mode
+    uint16_t pwm_mode;  
+    uint32_t pwm_pv1;  
+    uint32_t pwm_pv2;
+
 };
 
 struct step_move {
@@ -323,6 +328,18 @@ stepcompress_get_step_dir(struct stepcompress *sc)
     return sc->next_step_dir;
 }
 
+
+void
+stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, 
+    uint32_t pwm_pv1, uint32_t pwm_pv2)
+{
+    p_sc_insk->pwm_mode = pwm_mode;
+    p_sc_insk->pwm_pv1 = pwm_pv1;
+    p_sc_insk->pwm_pv2 = pwm_pv2;
+}
+
+
+
 // Determine the "print time" of the last_step_clock
 static void
 calc_last_step_print_time(struct stepcompress *sc)
@@ -360,11 +377,13 @@ add_move(struct stepcompress *sc, uint64_t first_clock, struct step_move *move)
     int len = 5;
     if ( sc->step_ctag_typef > 0 )
     {
-        len = 5;
-
+        msg[5] = sc->pwm_mode;  
+        msg[6] = sc->pwm_pv1;  
+        msg[7] = sc->pwm_pv2;
+        len = 5+3;
     }
     struct queue_message *qm = message_alloc_and_encode(msg, len);
-    
+
 
     #else
     // Create and queue a queue_step command old

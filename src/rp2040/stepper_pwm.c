@@ -48,6 +48,11 @@ struct stepper_move_pwm {
     uint32_t interval;
     int16_t add;
     uint16_t count;
+    #ifdef M_PWM_OUT_EN    
+    uint8_t  mode;
+    uint16_t p_v1;
+    uint16_t p_v2;  
+    #endif       
     uint8_t flags;
 };
 
@@ -64,8 +69,10 @@ struct stepper_pwm {
     uint8_t step_pin_num;
     #endif
     #ifdef M_PWM_OUT_EN
-    uint8_t  mode;
-    uint16_t pwm_upper_val;
+    //uint8_t  mode;
+    //uint16_t p_v1;
+    //uint16_t p_v2;  
+    ////uint16_t pwm_upper_val;
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
     uint8_t  oid_pwm_flag;
     #endif
@@ -83,6 +90,159 @@ enum {
     SF_SINGLE_SCHED=1<<4, SF_HAVE_ADD=1<<5
 };
 
+
+struct pwm_ctrl_s_t {
+    uint32_t interval;
+    int16_t  add;
+    uint16_t count;
+    uint8_t  mode;
+    uint16_t p_v1;
+    uint16_t p_v2; 
+
+    uint8_t  oid_pwm;    //must pwm stepper on same mcu 
+    uint8_t  oid_pwm_flag;   
+
+    //uint32_t cur_pwm_val;
+    uint32_t last_pwm_val;
+
+};
+
+typedef struct pwm_ctrl_s_t pwm_ctrl_s_t;
+
+
+#define M_PROCESS_PWM_IDLE   (0)
+#define M_PROCESS_PWM_START  (1)
+#define M_PROCESS_PWM_RUN    (2)
+#define M_PROCESS_PWM_NCHG   (3)
+#define M_PROCESS_PWM_NOCMD  (4)
+
+
+
+//PWM_MODE_IDLE = 0
+//#Continuous
+#define PWM_MODE_M3     (1)
+//#Dynamic
+#define PWM_MODE_M4     (2)
+#define PWM_MODE_CLS    (3)
+
+
+pwm_ctrl_s_t  g_pwm_ctrl_data;
+
+void  set_pwm_ctrl_data(uint8_t oid_pwm_flag, uint8_t  oid_pwm)
+{
+    if(oid_pwm_flag > 0)
+        g_pwm_ctrl_data.last_pwm_val = 0;   
+    g_pwm_ctrl_data.oid_pwm_flag = oid_pwm_flag;
+    g_pwm_ctrl_data.oid_pwm  = oid_pwm;
+
+}
+
+void  load_next_pwm_ctrl_data(uint32_t interval, int16_t  add, uint16_t count, uint8_t  mode, uint16_t p_v1, uint16_t p_v2)
+{
+      
+    g_pwm_ctrl_data.interval = interval;
+    g_pwm_ctrl_data.add = add;
+    g_pwm_ctrl_data.count = count;
+    g_pwm_ctrl_data.mode = mode;
+    g_pwm_ctrl_data.p_v1 = p_v1;
+    g_pwm_ctrl_data.p_v2 = p_v2;
+
+}
+
+void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
+{
+    uint32_t cur_pwm_val=0;
+    uint8_t  flag = 0;
+
+    switch(runstep)
+    {
+        case M_PROCESS_PWM_START:
+             if (g_pwm_ctrl_data.mode == PWM_MODE_M3)
+             {
+                cur_pwm_val = g_pwm_ctrl_data.p_v1;
+                flag = 1;
+             } 
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_M4)
+             {
+                cur_pwm_val = g_pwm_ctrl_data.p_v1;
+                flag = 1;
+             } 
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
+             {
+                if ( g_pwm_ctrl_data.last_pwm_val == 0)
+                     g_pwm_ctrl_data.last_pwm_val= 1;  //force run one
+                cur_pwm_val = 0;
+                flag = 1;
+             }                          
+            break;
+        case M_PROCESS_PWM_RUN:
+             if (g_pwm_ctrl_data.mode == PWM_MODE_M3)
+             {
+                cur_pwm_val = g_pwm_ctrl_data.p_v1;
+                flag = 1;
+             } 
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_M4)
+             {
+                cur_pwm_val = g_pwm_ctrl_data.p_v1;
+                flag = 1;
+             } 
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
+             {
+                //g_pwm_ctrl_data.last_pwm_val = 1;  //force run one
+                cur_pwm_val = 0;
+                flag = 1;
+             }           
+            break;   
+        case M_PROCESS_PWM_NCHG:
+             if (g_pwm_ctrl_data.mode == PWM_MODE_M3)
+             {
+                //cur_pwm_val = g_pwm_ctrl_data.p_v1;
+                flag = 0;
+             } 
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_M4)
+             {
+                //cur_pwm_val = g_pwm_ctrl_data.p_v1;
+                flag = 0;
+             } 
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
+             {
+                //g_pwm_ctrl_data.last_pwm_val = 1;  //force run one
+                cur_pwm_val = 0;
+                flag = 0;
+             }          
+            break;
+        case M_PROCESS_PWM_NOCMD:
+             if (g_pwm_ctrl_data.mode == PWM_MODE_M3)
+             {
+                cur_pwm_val = 0;
+                flag = 1;
+             } 
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_M4)
+             {
+                cur_pwm_val = 0;
+                flag = 1;
+             } 
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
+             {
+                //g_pwm_ctrl_data.last_pwm_val = 1;  //force run one
+                cur_pwm_val = 0;
+                flag = 1;
+             }          
+            break;                      
+        default :
+            flag = 0;
+
+    }
+    if ( (flag) && (cur_pwm_val != g_pwm_ctrl_data.last_pwm_val))
+    {
+        g_pwm_ctrl_data.last_pwm_val = cur_pwm_val;
+        set_pwm_pulse_width(g_pwm_ctrl_data.oid_pwm_flag ,g_pwm_ctrl_data.oid_pwm, cur_pwm_val);
+    }
+
+
+}
+
+
 // Setup a stepper for the next move in its queue
 static uint_fast8_t
 stepper_load_next_pwm(struct stepper_pwm *s)
@@ -95,7 +255,8 @@ stepper_load_next_pwm(struct stepper_pwm *s)
         update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
         #endif  
         #ifdef M_PWM_OUT_EN
-        set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 0);
+        //set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 0);
+        update_next_pwm_ctrl_data(M_PROCESS_PWM_NOCMD, 0);
         #endif               
         return SF_DONE;
     }
@@ -127,6 +288,7 @@ stepper_load_next_pwm(struct stepper_pwm *s)
         s->position += m->count;
     }
 
+
     #ifdef  M_LINK_GALVO_EN
     if (HAVE_SINGLE_SCHEDULE && s->flags & SF_SINGLE_SCHED) {
         update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
@@ -135,7 +297,9 @@ stepper_load_next_pwm(struct stepper_pwm *s)
     }
     #endif   
     #ifdef M_PWM_OUT_EN
-    set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    //set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    load_next_pwm_ctrl_data(m->interval, m->add, s->count, m->mode, m->p_v1, m->p_v2);
+    update_next_pwm_ctrl_data(M_PROCESS_PWM_START, s->count);    
     #endif      
 
     move_free(m);
@@ -154,7 +318,9 @@ stepper_event_edge_pwm(struct timer *t)
     update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
     #endif  
     #ifdef M_PWM_OUT_EN
-    set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    //set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    //update_next_pwm_ctrl_data(M_PROCESS_PWM_RUN, s->count-1); 
+    update_next_pwm_ctrl_data(M_PROCESS_PWM_RUN, s->count); 
     #endif
     uint32_t count = s->count - 1;
     if (likely(count)) {
@@ -180,7 +346,8 @@ stepper_event_avr_pwm(struct timer *t)
     update_pwm_postion_info(s->step_pin_num, s->position, s->count, 0);  
     #endif  
     #ifdef M_PWM_OUT_EN
-    set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    //set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    update_next_pwm_ctrl_data(M_PROCESS_PWM_RUN, s->count); 
     #endif         
     uint16_t *pcount = (void*)&s->count, count = *pcount - 1;
     if (likely(count)) {
@@ -212,7 +379,8 @@ stepper_event_full_pwm(struct timer *t)
     update_pwm_postion_info(s->step_pin_num, s->position, s->count, M_COUNT_MUL_TWO);  
     #endif  
     #ifdef M_PWM_OUT_EN
-    set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    //set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
+    update_next_pwm_ctrl_data(M_PROCESS_PWM_RUN, s->count); 
     #endif         
     uint32_t curtime = timer_read_time();
     uint32_t min_next_time = curtime + s->step_pulse_ticks;
@@ -264,6 +432,9 @@ command_config_stepper_pwm(uint32_t *args)
     s->step_pin_num = args[1];
     set_record_axis_info(args[1]);
     #endif
+    #ifdef M_PWM_OUT_EN 
+    set_pwm_ctrl_data(0, 0);
+    #endif
     s->dir_pin = gpio_out_setup(args[2], 0);
     s->position = -POSITION_BIAS;
     s->step_pulse_ticks = args[4];
@@ -309,7 +480,11 @@ command_queue_step_pwm(uint32_t *args)
         shutdown("Invalid count parameter");
     m->add = args[3];
     m->flags = 0;
-
+#ifdef M_PWM_OUT_EN 
+    m->mode = args[4];
+    m->p_v1 = args[5];
+    m->p_v2 = args[6];     
+#endif
     irq_disable();
     uint8_t flags = s->flags;
     if (!!(flags & SF_LAST_DIR) != !!(flags & SF_NEXT_DIR)) {
@@ -329,8 +504,15 @@ command_queue_step_pwm(uint32_t *args)
     }
     irq_enable();
 }
+
+
+#ifdef M_PWM_OUT_EN 
+DECL_COMMAND(command_queue_step_pwm,
+             "queue_step_pwm oid=%c interval=%u count=%hu add=%hi pm=%c p1v=%u p2v=%u");   
+#else
 DECL_COMMAND(command_queue_step_pwm,
              "queue_step_pwm oid=%c interval=%u count=%hu add=%hi");
+#endif
 
 // Set the direction of the next queued step
 void
@@ -356,6 +538,9 @@ command_bind_pwm_oid_stepper_pwm(uint32_t *args)
     s->oid_pwm = args[1];
     s->oid_pwm_flag  = 1;
     irq_enable();
+    //#ifdef M_PWM_OUT_EN 
+    set_pwm_ctrl_data(s->oid_pwm_flag, s->oid_pwm);
+    //#endif
 
 }
 DECL_COMMAND(command_bind_pwm_oid_stepper_pwm, "bind_oid_pwm oid=%c pwmoid=%c");

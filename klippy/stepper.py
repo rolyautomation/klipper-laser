@@ -98,8 +98,10 @@ class MCU_stepper:
                                             invert_step, step_pulse_ticks))
                 self._mcu.add_config_cmd("reset_step_clock_pwm oid=%d clock=0"
                                         % (self._oid,), on_restart=True)
+                #step_cmd_tag = self._mcu.lookup_command(
+                #    "queue_step_pwm oid=%c interval=%u count=%hu add=%hi").get_command_tag()
                 step_cmd_tag = self._mcu.lookup_command(
-                    "queue_step_pwm oid=%c interval=%u count=%hu add=%hi").get_command_tag()
+                    "queue_step_pwm oid=%c interval=%u count=%hu add=%hi pm=%c p1v=%u p2v=%u").get_command_tag()
                 dir_cmd_tag = self._mcu.lookup_command(
                     "set_next_step_dir_pwm oid=%c dir=%c").get_command_tag()
                 self._reset_cmd_tag = self._mcu.lookup_command(

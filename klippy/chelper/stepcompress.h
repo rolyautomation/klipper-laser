@@ -22,6 +22,11 @@ uint32_t stepcompress_get_oid(struct stepcompress *sc);
 int stepcompress_get_step_dir(struct stepcompress *sc);
 int stepcompress_append(struct stepcompress *sc, int sdir
                         , double print_time, double step_time);
+
+void
+stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, 
+    uint32_t pwm_pv1, uint32_t pwm_pv2); 
+                            
 int stepcompress_commit(struct stepcompress *sc);
 int stepcompress_reset(struct stepcompress *sc, uint64_t last_step_clock);
 int stepcompress_set_last_position(struct stepcompress *sc, uint64_t clock
@@ -44,5 +49,8 @@ void steppersync_set_time(struct steppersync *ss, double time_offset
                           , double mcu_freq);
 int steppersync_flush(struct steppersync *ss, uint64_t move_clock
                       , uint64_t clear_history_clock);
+
+
+                     
 
 #endif // stepcompress.h
