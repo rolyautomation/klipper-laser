@@ -276,7 +276,8 @@ class GCodeMove:
 
         logging.info("\npwm: pwm_work_curpower_use=%s pwm_work_mode_use=%s move_e_axis_d=%s \n",
                 self.pwm_work_curpower_use, self.pwm_work_mode_use, move_e_axis_d)     
-        self.move_with_transform(self.last_position, self.speed)
+        #self.move_with_transform(self.last_position, self.speed)
+        self.move_with_transform(self.last_position, self.speed, self.pwm_work_mode_use, self.pwm_work_curpower_use)
 
     # G-Code coordinate manipulation
     def cmd_G20(self, gcmd):

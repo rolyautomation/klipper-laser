@@ -245,7 +245,7 @@ class PrinterExtruder:
                           0., 0., 0.,
                           1., can_pressure_advance, 0.,
                           0., 0., 0.,
-                          start_v, cruise_v, accel)
+                          start_v, cruise_v, accel, 0)
         self.last_position = move.end_pos[3]
     def find_past_position(self, print_time):
         if self.extruder_stepper is None:
@@ -603,6 +603,14 @@ class PrinterExtruderPWM:
         start_v = move.start_v * axis_r
         cruise_v = move.cruise_v * axis_r
         can_pressure_advance = False
+        #pwmmode = 1.0*move.pwmmode
+        #pwmvalue = 1.0*move.pwmvalue   
+        #pwmmode = 1.0*getattr(move, 'pwmmode', 0)
+        #pwmvalue = 1.0*getattr(move, 'pwmvalue', 0)
+        pwmmode = 1.0*(move.pwmmode or 0)
+        pwmvalue = 1.0*(move.pwmvalue or 0)
+        logging.info("\npwmE: pwm_work_curpower_use=%s pwm_work_mode_use=%s \n",
+                pwmvalue, pwmmode)          
         #if axis_r > 0. and (move.axes_d[0] or move.axes_d[1]):
             #can_pressure_advance = True
         # Queue movement (x is extruder movement, y is pressure advance flag)
@@ -611,8 +619,8 @@ class PrinterExtruderPWM:
                           move.start_pos[3+3], 0., 0.,
                           0., 0., 0.,
                           1., can_pressure_advance, 0.,
-                          0., 0., 0.,
-                          start_v, cruise_v, accel)
+                          pwmmode, pwmvalue, axis_r,
+                          start_v, cruise_v, accel, 1)
         self.last_position = move.end_pos[3+3]
     def find_past_position(self, print_time):
         if self.extruder_stepper is None:

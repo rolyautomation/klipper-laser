@@ -100,7 +100,7 @@ defs_trapq = """
         , double start_pos_a, double start_pos_b, double start_pos_c
         , double axes_r_x, double axes_r_y, double axes_r_z
         , double axes_r_a, double axes_r_b, double axes_r_c
-        , double start_v, double cruise_v, double accel);
+        , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en);
     void trapq_finalize_moves(struct trapq *tq, double print_time
         , double clear_history_time);
     void trapq_set_position(struct trapq *tq, double print_time
