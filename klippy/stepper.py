@@ -86,6 +86,7 @@ class MCU_stepper:
             self._step_pulse_duration = 0.
             invert_step = -1
         step_pulse_ticks = self._mcu.seconds_to_clock(self._step_pulse_duration)
+        step_ctag_typef = 0
 
         if (self._step_mvirtualmode > 0):
                 #eq 2, pwm
@@ -115,6 +116,7 @@ class MCU_stepper:
 
                 step_cmd_tag = self.convert_tag_to_signed(step_cmd_tag)
                 dir_cmd_tag = self.convert_tag_to_signed(dir_cmd_tag)
+                step_ctag_typef = 1
 
             else:
                 # eq 1,xy
@@ -158,7 +160,7 @@ class MCU_stepper:
 
         ffi_main, ffi_lib = chelper.get_ffi()
         ffi_lib.stepcompress_fill(self._stepqueue, max_error_ticks,
-                                  step_cmd_tag, dir_cmd_tag)
+                                  step_cmd_tag, dir_cmd_tag, step_ctag_typef)
 
 
     def convert_tag_to_signed(self,unsigned_tag):

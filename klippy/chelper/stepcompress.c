@@ -39,6 +39,7 @@ struct stepcompress {
     struct list_head msg_queue;
     uint32_t oid;
     int32_t queue_step_msgtag, set_next_step_dir_msgtag;
+    int32_t step_ctag_typef;
     int sdir, invert_sdir;
     // Step+dir+step filter
     uint64_t next_step_clock;
@@ -257,11 +258,12 @@ stepcompress_alloc(uint32_t oid)
 // Fill message id information
 void __visible
 stepcompress_fill(struct stepcompress *sc, uint32_t max_error
-                  , int32_t queue_step_msgtag, int32_t set_next_step_dir_msgtag)
+                  , int32_t queue_step_msgtag, int32_t set_next_step_dir_msgtag, int32_t step_ctag_typef)
 {
     sc->max_error = max_error;
     sc->queue_step_msgtag = queue_step_msgtag;
     sc->set_next_step_dir_msgtag = set_next_step_dir_msgtag;
+    sc->step_ctag_typef = step_ctag_typef;
 }
 
 // Set the inverted stepper direction flag
@@ -350,11 +352,29 @@ add_move(struct stepcompress *sc, uint64_t first_clock, struct step_move *move)
     uint32_t ticks = move->add*addfactor + move->interval*(move->count-1);
     uint64_t last_clock = first_clock + ticks;
 
-    // Create and queue a queue_step command
+    #if 1
+
+    uint32_t msg[5+3] = {
+        sc->queue_step_msgtag, sc->oid, move->interval, move->count, move->add, 0, 0, 0
+    };
+    int len = 5;
+    if ( sc->step_ctag_typef > 0 )
+    {
+        len = 5;
+
+    }
+    struct queue_message *qm = message_alloc_and_encode(msg, len);
+    
+
+    #else
+    // Create and queue a queue_step command old
     uint32_t msg[5] = {
         sc->queue_step_msgtag, sc->oid, move->interval, move->count, move->add
     };
     struct queue_message *qm = message_alloc_and_encode(msg, 5);
+    #endif
+
+
     qm->min_clock = qm->req_clock = sc->last_step_clock;
     if (move->count == 1 && first_clock >= sc->last_step_clock + CLOCK_DIFF_MAX)
         qm->req_clock = first_clock;

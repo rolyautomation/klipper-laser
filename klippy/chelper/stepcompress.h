@@ -14,7 +14,7 @@ struct pull_history_steps {
 struct stepcompress *stepcompress_alloc(uint32_t oid);
 void stepcompress_fill(struct stepcompress *sc, uint32_t max_error
                        , int32_t queue_step_msgtag
-                       , int32_t set_next_step_dir_msgtag);
+                       , int32_t set_next_step_dir_msgtag, int32_t step_ctag_typef);
 void stepcompress_set_invert_sdir(struct stepcompress *sc
                                   , uint32_t invert_sdir);
 void stepcompress_free(struct stepcompress *sc);
