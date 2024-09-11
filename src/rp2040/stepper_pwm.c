@@ -118,7 +118,7 @@ typedef struct pwm_ctrl_s_t pwm_ctrl_s_t;
 
 
 
-//PWM_MODE_IDLE = 0
+#define PWM_MODE_IDLE   (0)
 //#Continuous
 #define PWM_MODE_M3     (1)
 //#Dynamic
@@ -167,7 +167,7 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
                 cur_pwm_val = g_pwm_ctrl_data.p_v1;
                 flag = 1;
              } 
-             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
+             else if ((g_pwm_ctrl_data.mode == PWM_MODE_CLS) || (g_pwm_ctrl_data.mode == PWM_MODE_IDLE))
              {
                 if ( g_pwm_ctrl_data.last_pwm_val == 0)
                      g_pwm_ctrl_data.last_pwm_val= 1;  //force run one
@@ -186,7 +186,7 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
                 cur_pwm_val = g_pwm_ctrl_data.p_v1;
                 flag = 1;
              } 
-             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
+             else if ((g_pwm_ctrl_data.mode == PWM_MODE_CLS) || (g_pwm_ctrl_data.mode == PWM_MODE_IDLE))
              {
                 //g_pwm_ctrl_data.last_pwm_val = 1;  //force run one
                 cur_pwm_val = 0;
@@ -204,7 +204,7 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
                 //cur_pwm_val = g_pwm_ctrl_data.p_v1;
                 flag = 0;
              } 
-             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
+             else if ((g_pwm_ctrl_data.mode == PWM_MODE_CLS) || (g_pwm_ctrl_data.mode == PWM_MODE_IDLE))
              {
                 //g_pwm_ctrl_data.last_pwm_val = 1;  //force run one
                 cur_pwm_val = 0;
@@ -222,7 +222,7 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
                 cur_pwm_val = 0;
                 flag = 1;
              } 
-             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
+             else if ((g_pwm_ctrl_data.mode == PWM_MODE_CLS) || (g_pwm_ctrl_data.mode == PWM_MODE_IDLE))
              {
                 //g_pwm_ctrl_data.last_pwm_val = 1;  //force run one
                 cur_pwm_val = 0;
