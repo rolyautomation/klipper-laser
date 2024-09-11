@@ -610,7 +610,10 @@ class PrinterExtruderPWM:
         pwmmode = 1.0*(move.pwmmode or 0)
         pwmvalue = 1.0*(move.pwmvalue or 0)
         logging.info("\npwmE: pwm_work_curpower_use=%s pwm_work_mode_use=%s \n",
-                pwmvalue, pwmmode)          
+                pwmvalue, pwmmode)  
+
+        logging.info("\nS:%s V:%s E:%s M:%s\n", move.start_v, move.cruise_v, move.end_v, move.max_cruise_v2)   
+
         #if axis_r > 0. and (move.axes_d[0] or move.axes_d[1]):
             #can_pressure_advance = True
         # Queue movement (x is extruder movement, y is pressure advance flag)
