@@ -98,7 +98,10 @@ struct pwm_ctrl_s_t {
     uint8_t  mode;
     uint16_t p_v1;
     uint16_t p_v2; 
-    
+    int16_t  pwmadd;
+    uint16_t cur_p_var;
+    float    fpwmadd;
+   
     
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
     uint8_t  oid_pwm_flag;   
@@ -150,6 +153,18 @@ void  load_next_pwm_ctrl_data(uint32_t interval, int16_t  add, uint16_t count, u
     g_pwm_ctrl_data.mode = mode;
     g_pwm_ctrl_data.p_v1 = p_v1;
     g_pwm_ctrl_data.p_v2 = p_v2;
+    g_pwm_ctrl_data.pwmadd = 0;  //int16
+    int  a  =   p_v2;
+    int  b  =   p_v1;
+    int  diffval =  a - b;
+    //int  icount  =  count;
+    //int  result = 0;
+    //result =   diffval/icount;   
+    //g_pwm_ctrl_data.pwmadd  =  result;
+    g_pwm_ctrl_data.fpwmadd = count;
+    g_pwm_ctrl_data.fpwmadd = diffval*1.0/g_pwm_ctrl_data.fpwmadd;
+    //g_pwm_ctrl_data.cur_p_var = p_v1;
+
 
 }
 
@@ -157,6 +172,8 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
 {
     uint32_t cur_pwm_val=0;
     uint8_t  flag = 0;
+    //int  a = 0;
+    float  fa = 0;
 
     switch(runstep)
     {
@@ -169,6 +186,7 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
              else if (g_pwm_ctrl_data.mode == PWM_MODE_M4)
              {
                 cur_pwm_val = g_pwm_ctrl_data.p_v1;
+                g_pwm_ctrl_data.cur_p_var = g_pwm_ctrl_data.p_v1;
                 flag = 1;
              } 
              else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
@@ -187,19 +205,47 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
              } 
              else if (g_pwm_ctrl_data.mode == PWM_MODE_M4)
              {
-                cur_pwm_val = g_pwm_ctrl_data.p_v1;
+                //cur_pwm_val = g_pwm_ctrl_data.p_v1;
+                cur_pwm_val = g_pwm_ctrl_data.cur_p_var;
                 flag = 1;
                 if (g_pwm_ctrl_data.add > 0)
                 {
-                    ;//dacct
-                } else if (g_pwm_ctrl_data.add < 0)
+                    fa =  cur_pwm_val;
+                    fa =  fa + g_pwm_ctrl_data.fpwmadd;
+                    if (fa < 0)   
+                        fa = 0;
+                    cur_pwm_val = fa;  
+                    //cur_pwm_val = cur_pwm_val+g_pwm_ctrl_data.pwmadd;//dacct
+                } else if (g_pwm_ctrl_data.add == 0)
                 {
-                    ;//acct
+                    /*
+                    fa =  cur_pwm_val;
+                    fa =  fa + g_pwm_ctrl_data.fpwmadd;
+                    cur_pwm_val = fa;                          
+                    //cur_pwm_val = cur_pwm_val+g_pwm_ctrl_data.pwmadd;//acct
+                    if (cur_pwm_val > g_pwm_ctrl_data.p_v2 )
+                    {
+                        cur_pwm_val = g_pwm_ctrl_data.p_v2;
+                    }
+                    */
+                    cur_pwm_val = g_pwm_ctrl_data.p_v1;
+                    
                 }
                 else
                 {
-                    ;
+
+                    fa =  cur_pwm_val;
+                    fa =  fa + g_pwm_ctrl_data.fpwmadd;
+                    cur_pwm_val = fa;                          
+                    //cur_pwm_val = cur_pwm_val+g_pwm_ctrl_data.pwmadd;//acct
+                    if (cur_pwm_val > g_pwm_ctrl_data.p_v2 )
+                    {
+                        cur_pwm_val = g_pwm_ctrl_data.p_v2;
+                    }
+
+
                 }
+                g_pwm_ctrl_data.cur_p_var = cur_pwm_val;
 
 
              } 
@@ -241,8 +287,11 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
              } 
              else if (g_pwm_ctrl_data.mode == PWM_MODE_M4)
              {
-                cur_pwm_val = 0;
-                flag = 1;
+                if (g_pwm_ctrl_data.p_v2 < M_MIN_POWER_INIT)
+                {
+                    cur_pwm_val = 0;
+                    flag = 1;
+                }
              } 
              else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
              {
@@ -320,7 +369,7 @@ stepper_load_next_pwm(struct stepper_pwm *s)
     #endif   
     #ifdef M_PWM_OUT_EN
     //set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
-    load_next_pwm_ctrl_data(m->interval, m->add, s->count, m->mode, m->p_v1, m->p_v2);
+    load_next_pwm_ctrl_data(m->interval, s->add, s->count, m->mode, m->p_v1, m->p_v2);
     update_next_pwm_ctrl_data(M_PROCESS_PWM_START, s->count);    
     #endif      
 

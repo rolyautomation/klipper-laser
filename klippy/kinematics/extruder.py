@@ -630,7 +630,8 @@ class PrinterExtruderPWM:
         if(epwmv < MIN_PWM_ZERO_VAL):
             epwmv = 0               
 
-        logging.info("\nS:%s V:%s E:%s M:%s\n", move.start_v, move.cruise_v, move.end_v, max_cruise_v)  
+        logging.info("\npwm Sp:%s V:%s E:%s A:%s\n", move.start_v, move.cruise_v, move.end_v, move.accel)  
+        logging.info("\npwm time T:%s a:%s c:%s d:%s\n", print_time, move.accel_t, move.cruise_t,move.decel_t)  
         logging.info("\npwm S:%s V:%s E:%s M:%s\n", spwmv, cpwmv, epwmv, max_cruise_v)  
 
         #if axis_r > 0. and (move.axes_d[0] or move.axes_d[1]):
