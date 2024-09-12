@@ -41,7 +41,7 @@ itersolve_gen_steps_range(struct stepper_kinematics *sk, struct move *m
     if ( m->pwm_syncd.enf > 0 )
     {
         
-        stepcompress_set_pwm_data(sk->sc, m->pwm_syncd.pwmmode, m->pwm_syncd.pwmval, 0);        
+        stepcompress_set_pwm_data(sk->sc, m->pwm_syncd.pwmmode, m->pwm_syncd.pwmval1, m->pwm_syncd.pwmval2);        
       
     }
     struct timepos old_guess = {start, sk->commanded_pos}, guess = old_guess;

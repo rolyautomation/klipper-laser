@@ -98,7 +98,8 @@ struct pwm_ctrl_s_t {
     uint8_t  mode;
     uint16_t p_v1;
     uint16_t p_v2; 
-
+    
+    
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
     uint8_t  oid_pwm_flag;   
 
@@ -115,6 +116,9 @@ typedef struct pwm_ctrl_s_t pwm_ctrl_s_t;
 #define M_PROCESS_PWM_RUN    (2)
 #define M_PROCESS_PWM_NCHG   (3)
 #define M_PROCESS_PWM_NOCMD  (4)
+
+
+#define M_MIN_POWER_INIT     (1)
 
 
 
@@ -167,7 +171,7 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
                 cur_pwm_val = g_pwm_ctrl_data.p_v1;
                 flag = 1;
              } 
-             else if ((g_pwm_ctrl_data.mode == PWM_MODE_CLS) || (g_pwm_ctrl_data.mode == PWM_MODE_IDLE))
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
              {
                 if ( g_pwm_ctrl_data.last_pwm_val == 0)
                      g_pwm_ctrl_data.last_pwm_val= 1;  //force run one
@@ -185,8 +189,21 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
              {
                 cur_pwm_val = g_pwm_ctrl_data.p_v1;
                 flag = 1;
+                if (g_pwm_ctrl_data.add > 0)
+                {
+                    ;//dacct
+                } else if (g_pwm_ctrl_data.add < 0)
+                {
+                    ;//acct
+                }
+                else
+                {
+                    ;
+                }
+
+
              } 
-             else if ((g_pwm_ctrl_data.mode == PWM_MODE_CLS) || (g_pwm_ctrl_data.mode == PWM_MODE_IDLE))
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
              {
                 //g_pwm_ctrl_data.last_pwm_val = 1;  //force run one
                 cur_pwm_val = 0;
@@ -204,7 +221,7 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
                 //cur_pwm_val = g_pwm_ctrl_data.p_v1;
                 flag = 0;
              } 
-             else if ((g_pwm_ctrl_data.mode == PWM_MODE_CLS) || (g_pwm_ctrl_data.mode == PWM_MODE_IDLE))
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
              {
                 //g_pwm_ctrl_data.last_pwm_val = 1;  //force run one
                 cur_pwm_val = 0;
@@ -214,15 +231,20 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count)
         case M_PROCESS_PWM_NOCMD:
              if (g_pwm_ctrl_data.mode == PWM_MODE_M3)
              {
-                cur_pwm_val = 0;
-                flag = 1;
+                if (g_pwm_ctrl_data.p_v2 < M_MIN_POWER_INIT)
+                {
+                    cur_pwm_val = 0;
+                    flag = 1;
+                }
+                
+
              } 
              else if (g_pwm_ctrl_data.mode == PWM_MODE_M4)
              {
                 cur_pwm_val = 0;
                 flag = 1;
              } 
-             else if ((g_pwm_ctrl_data.mode == PWM_MODE_CLS) || (g_pwm_ctrl_data.mode == PWM_MODE_IDLE))
+             else if (g_pwm_ctrl_data.mode == PWM_MODE_CLS)
              {
                 //g_pwm_ctrl_data.last_pwm_val = 1;  //force run one
                 cur_pwm_val = 0;

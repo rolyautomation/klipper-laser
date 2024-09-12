@@ -13,6 +13,8 @@ PWM_MODE_IDLE = 0
 PWM_MODE_M3   = 1
 #Dynamic
 PWM_MODE_M4   = 2
+#close nouse
+PWM_MODE_M5   = 3
 
 
 
@@ -168,9 +170,11 @@ class GCodeMove:
         self.pwm_work_curpower = 0
         self.pwm_work_mode =  PWM_MODE_IDLE        
         self.pwm_work_mode_use = PWM_MODE_IDLE
+        # safe , close pwm by macro
 
     def cmd_G0_LASER(self, gcmd):
-        self.pwm_work_mode_use =  PWM_MODE_IDLE
+        #self.pwm_work_mode_use =  PWM_MODE_IDLE
+        self.pwm_work_mode_use =  self.pwm_work_mode
         params = gcmd.get_command_parameters()  
         if 'S' in params:             
             v = float(params['S'])
@@ -180,7 +184,9 @@ class GCodeMove:
                 v = 1000. 
             v = v/1000.0 * 255
             self.pwm_work_curpower = v        
-        self.pwm_work_curpower_use =  self.pwm_work_curpower
+        #self.pwm_work_curpower_use =  self.pwm_work_curpower
+        #next G1 use change power
+        self.pwm_work_curpower_use =  0
         self.cmd_G1_Prefun(gcmd)  
 
     # G-Code movement commands
@@ -264,10 +270,11 @@ class GCodeMove:
                 self.speed = gcode_speed * self.speed_factor
 
             move_e_axis_d = 0
-            if self.predict_move_distance_with_transform is not None:
-                move_e_axis_d = self.predict_move_distance_with_transform(self.last_position)
-                # value relative to position of last move
-                self.last_position[3+3] += move_e_axis_d
+            if (self.pwm_work_mode_use > 0):
+                if self.predict_move_distance_with_transform is not None:
+                    move_e_axis_d = self.predict_move_distance_with_transform(self.last_position)
+                    # value relative to position of last move
+                    self.last_position[3+3] += move_e_axis_d
 
 
         except ValueError as e:

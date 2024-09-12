@@ -133,8 +133,8 @@ trapq_append(struct trapq *tq, double print_time
     struct coord axes_r = { .x=axes_r_x, .y=axes_r_y, .z=axes_r_z 
                            ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
 
-    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .pwmmode=axes_r_a, .pwmval=axes_r_b 
-                            ,.axes_r_e=axes_r_c};                        
+    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .pwmmode=axes_r_a, .pwmval1=axes_r_b 
+                            ,.pwmval2=axes_r_c};                        
     if (accel_t) {
         struct move *m = move_alloc();
         m->print_time = print_time;
@@ -157,6 +157,7 @@ trapq_append(struct trapq *tq, double print_time
         m->half_accel = 0.;
         m->start_pos = start_pos;
         m->axes_r = axes_r;
+        pwm_syncd.pwmval1 = axes_r_c;
         m->pwm_syncd = pwm_syncd;
         trapq_add_move(tq, m);
 
@@ -171,6 +172,7 @@ trapq_append(struct trapq *tq, double print_time
         m->half_accel = -.5 * accel;
         m->start_pos = start_pos;
         m->axes_r = axes_r;
+        pwm_syncd.pwmval2 = axes_r_z;
         m->pwm_syncd = pwm_syncd;
         trapq_add_move(tq, m);
     }

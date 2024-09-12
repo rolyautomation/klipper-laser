@@ -16,8 +16,8 @@ struct coord {
 
 struct pwm_synci {
     unsigned char enf;
-    double pwmmode, pwmval;
-    double axes_r_e;
+    double pwmmode, pwmval1;
+    double pwmval2;
 };
 
 struct move {

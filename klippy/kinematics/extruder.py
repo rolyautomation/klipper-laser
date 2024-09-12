@@ -315,6 +315,7 @@ def add_printer_objects(config):
         printer.add_object(section, pe)
 ''' 
 
+MIN_PWM_ZERO_VAL  = 0.1
 
 
 class ExtruderStepperPWM:
@@ -602,6 +603,9 @@ class PrinterExtruderPWM:
         accel = move.accel * axis_r
         start_v = move.start_v * axis_r
         cruise_v = move.cruise_v * axis_r
+        max_cruise_v =  move.max_cruise_v2 ** 0.5
+        
+   
         can_pressure_advance = False
         #pwmmode = 1.0*move.pwmmode
         #pwmvalue = 1.0*move.pwmvalue   
@@ -612,7 +616,22 @@ class PrinterExtruderPWM:
         logging.info("\npwmE: pwm_work_curpower_use=%s pwm_work_mode_use=%s \n",
                 pwmvalue, pwmmode)  
 
-        logging.info("\nS:%s V:%s E:%s M:%s\n", move.start_v, move.cruise_v, move.end_v, move.max_cruise_v2)   
+        scf = (move.start_v/max_cruise_v)*pwmvalue
+        ccf = (move.cruise_v/max_cruise_v)*pwmvalue
+        ecf = (move.end_v/max_cruise_v)*pwmvalue
+        spwmv = pwmvalue     
+        cpwmv = pwmvalue   
+        epwmv = ecf     
+        if( pwmmode == 2 ):
+               spwmv = scf
+               cpwmv = ccf
+               epwmv = ecf   
+
+        if(epwmv < MIN_PWM_ZERO_VAL):
+            epwmv = 0               
+
+        logging.info("\nS:%s V:%s E:%s M:%s\n", move.start_v, move.cruise_v, move.end_v, max_cruise_v)  
+        logging.info("\npwm S:%s V:%s E:%s M:%s\n", spwmv, cpwmv, epwmv, max_cruise_v)  
 
         #if axis_r > 0. and (move.axes_d[0] or move.axes_d[1]):
             #can_pressure_advance = True
@@ -621,8 +640,8 @@ class PrinterExtruderPWM:
                           move.accel_t, move.cruise_t, move.decel_t,
                           move.start_pos[3+3], 0., 0.,
                           0., 0., 0.,
-                          1., can_pressure_advance, 0.,
-                          pwmmode, pwmvalue, axis_r,
+                          1., can_pressure_advance, epwmv,
+                          pwmmode, spwmv, cpwmv,
                           start_v, cruise_v, accel, 1)
         self.last_position = move.end_pos[3+3]
     def find_past_position(self, print_time):
