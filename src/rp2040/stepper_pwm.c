@@ -73,6 +73,10 @@ struct stepper_pwm {
     //uint16_t p_v1;
     //uint16_t p_v2;  
     ////uint16_t pwm_upper_val;
+    uint8_t  pwm_on_off;
+    uint8_t  mode;
+    uint16_t pwmval;
+    uint32_t speed_pulse_ticks;
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
     uint8_t  oid_pwm_flag;
     #endif
@@ -616,6 +620,34 @@ command_bind_pwm_oid_stepper_pwm(uint32_t *args)
 
 }
 DECL_COMMAND(command_bind_pwm_oid_stepper_pwm, "bind_oid_pwm oid=%c pwmoid=%c");
+
+
+
+void
+command_set_pwm_sw_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->pwm_on_off = args[1];
+    irq_enable();
+
+}
+DECL_COMMAND(command_set_pwm_sw_stepper_pwm, "set_pwm_onf oid=%c onf=%c");
+
+
+
+void
+command_set_pwm_modepower_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->mode = args[1];
+    s->pwmval = args[2];
+    s->speed_pulse_ticks = args[3];        
+    irq_enable();
+
+}
+DECL_COMMAND(command_set_pwm_modepower_stepper_pwm, "set_pwm_power oid=%c mod=%c pwmv=%hu pticks=%u");
 
 
 

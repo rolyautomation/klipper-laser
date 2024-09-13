@@ -87,8 +87,8 @@ class MCU_stepper:
             invert_step = -1
         step_pulse_ticks = self._mcu.seconds_to_clock(self._step_pulse_duration)
         step_ctag_typef = 0
-        set_pwm_sw_msgtag = 0
-        set_pwm_modepower_msgtag = 0        
+        set_pwm_sw_tag = 0
+        set_pwm_modepower_tag = 0        
 
         if (self._step_mvirtualmode > 0):
                 #eq 2, pwm
@@ -112,6 +112,13 @@ class MCU_stepper:
                     "stepper_get_position_pwm oid=%c",
                     "stepper_position_pwm oid=%c pos=%i", oid=self._oid) 
 
+
+                set_pwm_sw_tag = self._mcu.lookup_command(
+                    "set_pwm_onf oid=%c onf=%c").get_command_tag()
+
+                set_pwm_modepower_tag = self._mcu.lookup_command(
+                    "set_pwm_power oid=%c mod=%c pwmv=%hu pticks=%u").get_command_tag()                    
+
                 #self._bindpwm_cmd_tag = self._mcu.lookup_command(
                 #    "bind_oid_pwm oid=%c pwmoid=%c").get_command_tag()  
 
@@ -120,8 +127,8 @@ class MCU_stepper:
 
                 step_cmd_tag = self.convert_tag_to_signed(step_cmd_tag)
                 dir_cmd_tag = self.convert_tag_to_signed(dir_cmd_tag)
-                set_pwm_sw_msgtag = 0
-                set_pwm_modepower_msgtag = 0
+                set_pwm_sw_tag = self.convert_tag_to_signed(set_pwm_sw_tag)
+                set_pwm_modepower_tag = self.convert_tag_to_signed(set_pwm_modepower_tag)
                 step_ctag_typef = 1
 
             else:
@@ -167,7 +174,7 @@ class MCU_stepper:
         ffi_main, ffi_lib = chelper.get_ffi()
         ffi_lib.stepcompress_fill(self._stepqueue, max_error_ticks,
                                   step_cmd_tag, dir_cmd_tag, step_ctag_typef,
-                                  set_pwm_sw_msgtag,set_pwm_modepower_msgtag)
+                                  set_pwm_sw_tag,set_pwm_modepower_tag)
 
 
     def convert_tag_to_signed(self,unsigned_tag):
