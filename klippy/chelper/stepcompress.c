@@ -49,8 +49,10 @@ struct stepcompress {
     struct list_head history_list;
     // pwm mode
     uint16_t pwm_mode;  
-    uint32_t pwm_pv1;  
-    uint32_t pwm_pv2;
+    uint16_t on_off;    
+    uint32_t speed_pulse_ticks;    
+    uint32_t pwmval;  
+    //uint32_t pwm_pv2;
 
 };
 
@@ -328,7 +330,7 @@ stepcompress_get_step_dir(struct stepcompress *sc)
     return sc->next_step_dir;
 }
 
-
+/*
 void
 stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, 
     uint32_t pwm_pv1, uint32_t pwm_pv2)
@@ -337,7 +339,17 @@ stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode,
     p_sc_insk->pwm_pv1 = pwm_pv1;
     p_sc_insk->pwm_pv2 = pwm_pv2;
 }
+*/
+void
+stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uint16_t on_off,
+    uint32_t pwmval, uint32_t speed_pulse_ticks)
+{
+    p_sc_insk->pwm_mode = pwm_mode;
+    p_sc_insk->on_off = on_off;    
+    p_sc_insk->pwmval = pwmval;
+    p_sc_insk->speed_pulse_ticks = speed_pulse_ticks;
 
+}
 
 
 // Determine the "print time" of the last_step_clock
@@ -377,9 +389,9 @@ add_move(struct stepcompress *sc, uint64_t first_clock, struct step_move *move)
     int len = 5;
     if ( sc->step_ctag_typef > 0 )
     {
-        msg[5] = sc->pwm_mode;  
-        msg[6] = sc->pwm_pv1;  
-        msg[7] = sc->pwm_pv2;
+        //msg[5] = sc->pwm_mode;  
+        //msg[6] = sc->pwm_pv1;  
+        //msg[7] = sc->pwm_pv2;
         len = 5+3;
     }
     struct queue_message *qm = message_alloc_and_encode(msg, len);
@@ -527,6 +539,8 @@ queue_append(struct stepcompress *sc)
         if (ret)
             return ret;
     }
+    //todo
+
     if (unlikely(sc->next_step_clock >= sc->last_step_clock + CLOCK_DIFF_MAX))
         return queue_append_far(sc);
     if (unlikely(sc->queue_next >= sc->queue_end))

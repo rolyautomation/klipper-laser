@@ -24,8 +24,8 @@ int stepcompress_append(struct stepcompress *sc, int sdir
                         , double print_time, double step_time);
 
 void
-stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, 
-    uint32_t pwm_pv1, uint32_t pwm_pv2); 
+stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uint16_t on_off,
+    uint32_t pwmval, uint32_t speed_pulse_ticks);    
                             
 int stepcompress_commit(struct stepcompress *sc);
 int stepcompress_reset(struct stepcompress *sc, uint64_t last_step_clock);

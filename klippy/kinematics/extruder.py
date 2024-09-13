@@ -630,9 +630,14 @@ class PrinterExtruderPWM:
         if(epwmv < MIN_PWM_ZERO_VAL):
             epwmv = 0               
 
-        logging.info("\npwm Sp:%s V:%s E:%s A:%s\n", move.start_v, move.cruise_v, move.end_v, move.accel)  
-        logging.info("\npwm time T:%s a:%s c:%s d:%s\n", print_time, move.accel_t, move.cruise_t,move.decel_t)  
-        logging.info("\npwm S:%s V:%s E:%s M:%s\n", spwmv, cpwmv, epwmv, max_cruise_v)  
+        #logging.info("\npwm Sp:%s V:%s E:%s A:%s\n", move.start_v, move.cruise_v, move.end_v, move.accel)  
+        #logging.info("\npwm time T:%s a:%s c:%s d:%s\n", print_time, move.accel_t, move.cruise_t,move.decel_t)  
+        #logging.info("\npwm S:%s V:%s E:%s M:%s\n", spwmv, cpwmv, epwmv, max_cruise_v)  
+        #move.cruise_v
+        speed_pulse_ticks = 1500
+        #pwmvalue 
+        #pwmmode
+
 
         #if axis_r > 0. and (move.axes_d[0] or move.axes_d[1]):
             #can_pressure_advance = True
@@ -641,8 +646,8 @@ class PrinterExtruderPWM:
                           move.accel_t, move.cruise_t, move.decel_t,
                           move.start_pos[3+3], 0., 0.,
                           0., 0., 0.,
-                          1., can_pressure_advance, epwmv,
-                          pwmmode, spwmv, cpwmv,
+                          1., can_pressure_advance, 0,
+                          pwmmode, pwmvalue, speed_pulse_ticks,
                           start_v, cruise_v, accel, 1)
         self.last_position = move.end_pos[3+3]
     def find_past_position(self, print_time):

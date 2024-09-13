@@ -554,7 +554,8 @@ command_queue_step_pwm(uint32_t *args)
 #ifdef M_PWM_OUT_EN 
     m->mode = args[4];
     m->p_v1 = args[5];
-    m->p_v2 = args[6];     
+    m->p_v2 = args[6];   
+    output("val:[%c,%u,%hu,%hi,%c,%u,%u]",args[0],args[1],args[2],args[3],args[4],args[5],args[6]); 
 #endif
     irq_disable();
     uint8_t flags = s->flags;
