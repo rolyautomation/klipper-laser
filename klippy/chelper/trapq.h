@@ -20,6 +20,7 @@ struct pwm_synci {
     unsigned char on_off;
     double pwmmode, pwmval;
     double speed_pulse_ticks;
+    double restartcmd_flag;
 };
 
 struct move {

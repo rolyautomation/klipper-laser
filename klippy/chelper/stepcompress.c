@@ -47,12 +47,21 @@ struct stepcompress {
     // History tracking
     int64_t last_position;
     struct list_head history_list;
+
     // pwm mode
+    uint16_t restartcmd_flag;
     uint16_t pwm_mode;  
     uint16_t on_off;    
     uint32_t speed_pulse_ticks;    
     uint32_t pwmval;  
-    //uint32_t pwm_pv2;
+
+    uint16_t pre_pwm_mode;  
+    uint16_t pre_on_off;    
+    uint32_t pre_speed_pulse_ticks;    
+    uint32_t pre_pwmval;  
+    int32_t set_pwm_sw_msgtag, set_pwm_modepower_msgtag;
+
+
 
 };
 
@@ -265,12 +274,14 @@ stepcompress_alloc(uint32_t oid)
 // Fill message id information
 void __visible
 stepcompress_fill(struct stepcompress *sc, uint32_t max_error
-                  , int32_t queue_step_msgtag, int32_t set_next_step_dir_msgtag, int32_t step_ctag_typef)
+                  , int32_t queue_step_msgtag, int32_t set_next_step_dir_msgtag, int32_t step_ctag_typef, int32_t set_pwm_sw_msgtag, int32_t set_pwm_modepower_msgtag)
 {
     sc->max_error = max_error;
     sc->queue_step_msgtag = queue_step_msgtag;
     sc->set_next_step_dir_msgtag = set_next_step_dir_msgtag;
     sc->step_ctag_typef = step_ctag_typef;
+    sc->set_pwm_sw_msgtag = set_pwm_sw_msgtag;
+    sc->set_pwm_modepower_msgtag = set_pwm_modepower_msgtag;
 }
 
 // Set the inverted stepper direction flag
@@ -342,12 +353,13 @@ stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode,
 */
 void
 stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uint16_t on_off,
-    uint32_t pwmval, uint32_t speed_pulse_ticks)
+    uint32_t pwmval, uint32_t speed_pulse_ticks, uint16_t restartcmd_flag)
 {
     p_sc_insk->pwm_mode = pwm_mode;
     p_sc_insk->on_off = on_off;    
     p_sc_insk->pwmval = pwmval;
     p_sc_insk->speed_pulse_ticks = speed_pulse_ticks;
+    p_sc_insk->restartcmd_flag = restartcmd_flag;
 
 }
 
@@ -476,6 +488,114 @@ set_next_step_dir(struct stepcompress *sc, int sdir)
     list_add_tail(&qm->node, &sc->msg_queue);
     return 0;
 }
+
+
+
+static int 
+set_pwm_on_off_send(struct stepcompress *sc)
+{
+
+    int runflag = 0;
+    if ( sc->pre_on_off != sc->on_off )
+    {
+        sc->pre_on_off = sc->on_off;
+        runflag = 1;
+    }
+    if (runflag)
+    {
+
+        uint32_t msg[3] = {
+            sc->set_pwm_sw_msgtag, sc->oid, sc->on_off
+        };
+        struct queue_message *qm = message_alloc_and_encode(msg, 3);
+        qm->req_clock = sc->last_step_clock;
+        list_add_tail(&qm->node, &sc->msg_queue);
+        return 0;
+        
+    }
+    return 0;
+
+
+}
+
+
+static int 
+set_pwm_mode_power_send(struct stepcompress *sc)
+{
+    int runflag = 0;
+
+    if (( sc->pre_pwm_mode != sc->pwm_mode ) || (sc->pre_pwmval != sc->pwmval) || (sc->pre_speed_pulse_ticks != sc->speed_pulse_ticks))
+    {
+        sc->pre_pwm_mode = sc->pwm_mode;
+        sc->pre_pwmval = sc->pwmval;
+        sc->pre_speed_pulse_ticks = sc->speed_pulse_ticks;   
+        runflag = 1;
+    }
+    if (runflag)
+    {
+
+        uint32_t msg[5] = {
+            sc->set_pwm_modepower_msgtag, sc->oid, sc->pwm_mode, sc->pwmval, sc->speed_pulse_ticks
+        };
+        struct queue_message *qm = message_alloc_and_encode(msg, 5);
+        qm->req_clock = sc->last_step_clock;
+        list_add_tail(&qm->node, &sc->msg_queue);
+        return 0;
+        
+    }
+    return 0;
+
+}
+
+static int 
+check_syncdata_send(struct stepcompress *sc)
+{
+    int runflag = 0;
+    if (( sc->pre_pwm_mode != sc->pwm_mode ) || (sc->pre_pwmval != sc->pwmval) || (sc->pre_speed_pulse_ticks != sc->speed_pulse_ticks) || ( sc->pre_on_off != sc->on_off ))
+    {
+       runflag = 1;
+    }
+    return(runflag);
+
+}
+
+static int 
+reset_initdata_send(struct stepcompress *sc)
+{
+    if ( sc->restartcmd_flag > 0 )
+    {
+        sc->restartcmd_flag = 0;
+        // no use value
+        sc->pre_pwm_mode = 100;
+        sc->pre_pwmval = 500;
+        sc->pre_speed_pulse_ticks = 0;
+        sc->pre_on_off = 100;
+    }
+    return 0;
+
+}
+
+
+int send_pwm_sync_data(struct stepcompress *sc)
+{
+    if ( sc->step_ctag_typef > 0 )
+    {   
+        reset_initdata_send(sc);
+        if(0 == check_syncdata_send(sc))
+        {
+            return 0;
+        }
+        int ret = queue_flush(sc, UINT64_MAX);
+        if (ret)
+            return ret;
+
+        set_pwm_mode_power_send(sc);
+        set_pwm_on_off_send(sc);
+    }
+    return 0;
+
+}
+
 
 // Slow path for queue_append() - handle next step far in future
 static int

@@ -524,6 +524,7 @@ class PrinterExtruderPWM:
 
         self._extrdpwm_oid = None
         logging.info("PrinterExtruderPWM end") 
+        self._restartcmd_flag = False
 
     def update_move_time(self, flush_time, clear_history_time):
         logging.info("update_move_time extruderpwm") 
@@ -545,6 +546,9 @@ class PrinterExtruderPWM:
             #logging.info("rev bind pwm: %i", pwm_oid)
             pass
         #return self.name
+    def set_restart_pwmdcmd(self, val=False):   
+        self._restartcmd_flag = val
+
     def get_name(self):
         return self.name
     def get_heater(self):
@@ -635,10 +639,11 @@ class PrinterExtruderPWM:
         #logging.info("\npwm S:%s V:%s E:%s M:%s\n", spwmv, cpwmv, epwmv, max_cruise_v)  
         #move.cruise_v
         speed_pulse_ticks = 1500
+        restartcmd_flag  = not self._restartcmd_flag
+        self._restartcmd_flag = restartcmd_flag
+
         #pwmvalue 
         #pwmmode
-
-
         #if axis_r > 0. and (move.axes_d[0] or move.axes_d[1]):
             #can_pressure_advance = True
         # Queue movement (x is extruder movement, y is pressure advance flag)
@@ -646,7 +651,7 @@ class PrinterExtruderPWM:
                           move.accel_t, move.cruise_t, move.decel_t,
                           move.start_pos[3+3], 0., 0.,
                           0., 0., 0.,
-                          1., can_pressure_advance, 0,
+                          1., can_pressure_advance, restartcmd_flag,
                           pwmmode, pwmvalue, speed_pulse_ticks,
                           start_v, cruise_v, accel, 1)
         self.last_position = move.end_pos[3+3]

@@ -134,7 +134,7 @@ trapq_append(struct trapq *tq, double print_time
                            ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
 
     struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=0, .pwmmode=axes_r_a, .pwmval=axes_r_b 
-                            ,.speed_pulse_ticks=axes_r_c};   
+                            ,.speed_pulse_ticks=axes_r_c, .restartcmd_flag = axes_r_z};   
 
     pwm_syncd.on_off =  (axes_r_b > 0) ? 1: 0; 
                                               

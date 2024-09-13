@@ -14,7 +14,7 @@ struct pull_history_steps {
 struct stepcompress *stepcompress_alloc(uint32_t oid);
 void stepcompress_fill(struct stepcompress *sc, uint32_t max_error
                        , int32_t queue_step_msgtag
-                       , int32_t set_next_step_dir_msgtag, int32_t step_ctag_typef);
+                       , int32_t set_next_step_dir_msgtag, int32_t step_ctag_typef, int32_t set_pwm_sw_msgtag, int32_t set_pwm_modepower_msgtag);
 void stepcompress_set_invert_sdir(struct stepcompress *sc
                                   , uint32_t invert_sdir);
 void stepcompress_free(struct stepcompress *sc);
@@ -25,7 +25,9 @@ int stepcompress_append(struct stepcompress *sc, int sdir
 
 void
 stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uint16_t on_off,
-    uint32_t pwmval, uint32_t speed_pulse_ticks);    
+    uint32_t pwmval, uint32_t speed_pulse_ticks, uint16_t restartcmd_flag);    
+
+int send_pwm_sync_data(struct stepcompress *sc);    
                             
 int stepcompress_commit(struct stepcompress *sc);
 int stepcompress_reset(struct stepcompress *sc, uint64_t last_step_clock);
