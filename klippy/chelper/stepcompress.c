@@ -404,7 +404,7 @@ add_move(struct stepcompress *sc, uint64_t first_clock, struct step_move *move)
         //msg[5] = sc->pwm_mode;  
         //msg[6] = sc->pwm_pv1;  
         //msg[7] = sc->pwm_pv2;
-        len = 5+3;
+        //len = 5+3;
     }
     struct queue_message *qm = message_alloc_and_encode(msg, len);
 

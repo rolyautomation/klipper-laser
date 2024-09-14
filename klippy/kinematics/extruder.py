@@ -617,8 +617,9 @@ class PrinterExtruderPWM:
         #pwmvalue = 1.0*getattr(move, 'pwmvalue', 0)
         pwmmode = 1.0*(move.pwmmode or 0)
         pwmvalue = 1.0*(move.pwmvalue or 0)
-        logging.info("\npwmE: pwm_work_curpower_use=%s pwm_work_mode_use=%s \n",
-                pwmvalue, pwmmode)  
+        pwmsw    = 1.0*(move.pwmsw or 0)
+        logging.info("\npwmE: pwm_work_curpower_use=%s pwm_work_mode_use=%s pwmsw=%s\n",
+                pwmvalue, pwmmode, pwmsw)  
 
         scf = (move.start_v/max_cruise_v)*pwmvalue
         ccf = (move.cruise_v/max_cruise_v)*pwmvalue
@@ -650,7 +651,7 @@ class PrinterExtruderPWM:
         self.trapq_append(self.trapq, print_time,
                           move.accel_t, move.cruise_t, move.decel_t,
                           move.start_pos[3+3], 0., 0.,
-                          0., 0., 0.,
+                          0., 0., pwmsw,
                           1., can_pressure_advance, restartcmd_flag,
                           pwmmode, pwmvalue, speed_pulse_ticks,
                           start_v, cruise_v, accel, 1)

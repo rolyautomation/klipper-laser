@@ -12,9 +12,10 @@ import mcu, chelper, kinematics.extruder
 
 # Class to track each move request
 class Move:
-    def __init__(self, toolhead, start_pos, end_pos, speed, pwmmode=None, pwmvalue=None):
+    def __init__(self, toolhead, start_pos, end_pos, speed, pwmmode=None, pwmvalue=None, pwmsw=0):
         self.pwmmode =  pwmmode
         self.pwmvalue = pwmvalue
+        self.pwmsw = pwmsw
         self.toolhead = toolhead
         self.start_pos = tuple(start_pos)
         self.end_pos = tuple(end_pos)
@@ -490,8 +491,8 @@ class ToolHead:
         self.commanded_pos[:] = newpos
         self.kin.set_position(newpos, homing_axes)
         self.printer.send_event("toolhead:set_position")
-    def move(self, newpos, speed, pwmmode=None, pwmvalue=None):
-        move = Move(self, self.commanded_pos, newpos, speed, pwmmode, pwmvalue)
+    def move(self, newpos, speed, pwmmode=None, pwmvalue=None, pwmsw=0):
+        move = Move(self, self.commanded_pos, newpos, speed, pwmmode, pwmvalue, pwmsw)
         if not move.move_d:
             return
         if move.is_kinematic_move:

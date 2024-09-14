@@ -128,15 +128,23 @@ trapq_append(struct trapq *tq, double print_time
              , double axes_r_a, double axes_r_b, double axes_r_c             
              , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en)
 {
+
+    unsigned char on_off = 0;
+    if (pwm_sync_en > 0)
+    {
+        on_off = start_pos_c;
+        start_pos_c = 0;
+    }
     struct coord start_pos = { .x=start_pos_x, .y=start_pos_y, .z=start_pos_z 
                               ,.a=start_pos_a, .b=start_pos_b, .c=start_pos_c  };
     struct coord axes_r = { .x=axes_r_x, .y=axes_r_y, .z=axes_r_z 
                            ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
 
-    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=0, .pwmmode=axes_r_a, .pwmval=axes_r_b 
+    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pwmmode=axes_r_a, .pwmval=axes_r_b 
                             ,.speed_pulse_ticks=axes_r_c, .restartcmd_flag = axes_r_z};   
 
-    pwm_syncd.on_off =  (axes_r_b > 0) ? 1: 0; 
+    //pwm_syncd.on_off =  (axes_r_b > 0) ? 1: 0; 
+    //pwm_syncd.on_off =  on_off;
                                               
     if (accel_t) {
         struct move *m = move_alloc();

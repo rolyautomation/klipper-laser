@@ -41,7 +41,9 @@ itersolve_gen_steps_range(struct stepper_kinematics *sk, struct move *m
     {
 
         stepcompress_set_pwm_data(sk->sc, m->pwm_syncd.pwmmode, m->pwm_syncd.on_off,m->pwm_syncd.pwmval, m->pwm_syncd.speed_pulse_ticks, m->pwm_syncd.restartcmd_flag);    
-        send_pwm_sync_data(sk->sc);    
+        int iret = send_pwm_sync_data(sk->sc); 
+        if (iret)
+            return iret;   
       
     }
     else

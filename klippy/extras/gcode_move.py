@@ -65,6 +65,7 @@ class GCodeMove:
         self.pwm_work_curpower = 0
         self.pwm_work_mode_use = 0
         self.pwm_work_curpower_use = 0  
+        self.pwm_work_ponoff_use = 0
         gcode.register_command('G0', self.cmd_G0_LASER)   
         #gcode.register_command('M3', self.cmd_M3_LASER)  
         #gcode.register_command('M4', self.cmd_M4_LASER)  
@@ -170,6 +171,7 @@ class GCodeMove:
         self.pwm_work_curpower = 0
         self.pwm_work_mode =  PWM_MODE_IDLE        
         self.pwm_work_mode_use = PWM_MODE_IDLE
+        self.pwm_work_ponoff_use = 0
         # safe , close pwm by macro
 
     def cmd_G0_LASER(self, gcmd):
@@ -184,9 +186,10 @@ class GCodeMove:
                 v = 1000. 
             v = v/1000.0 * 255
             self.pwm_work_curpower = v        
-        #self.pwm_work_curpower_use =  self.pwm_work_curpower
+        self.pwm_work_curpower_use =  self.pwm_work_curpower
         #next G1 use change power
-        self.pwm_work_curpower_use =  0
+        #self.pwm_work_curpower_use =  0
+        self.pwm_work_ponoff_use = 0
         self.cmd_G1_Prefun(gcmd)  
 
     # G-Code movement commands
@@ -202,7 +205,8 @@ class GCodeMove:
                 v = 1000. 
             v = v/1000.0 * 255
             self.pwm_work_curpower = v  
-        self.pwm_work_curpower_use =  self.pwm_work_curpower                     
+        self.pwm_work_curpower_use =  self.pwm_work_curpower 
+        self.pwm_work_ponoff_use = 1                    
         self.cmd_G1_Prefun(gcmd)     
 
     # G-Code movement commands
@@ -281,10 +285,10 @@ class GCodeMove:
             raise gcmd.error("Unable to parse move '%s'"
                              % (gcmd.get_commandline(),))
 
-        logging.info("\npwm: pwm_work_curpower_use=%s pwm_work_mode_use=%s move_e_axis_d=%s \n",
-                self.pwm_work_curpower_use, self.pwm_work_mode_use, move_e_axis_d)     
+        logging.info("\npwm: pwm_work_curpower_use=%s pwm_work_mode_use=%s move_e_axis_d=%s ponoff=%s\n",
+                self.pwm_work_curpower_use, self.pwm_work_mode_use, move_e_axis_d, self.pwm_work_ponoff_use)     
         #self.move_with_transform(self.last_position, self.speed)
-        self.move_with_transform(self.last_position, self.speed, self.pwm_work_mode_use, self.pwm_work_curpower_use)
+        self.move_with_transform(self.last_position, self.speed, self.pwm_work_mode_use, self.pwm_work_curpower_use, self.pwm_work_ponoff_use)
 
     # G-Code coordinate manipulation
     def cmd_G20(self, gcmd):
