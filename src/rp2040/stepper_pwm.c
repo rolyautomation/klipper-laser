@@ -43,6 +43,9 @@ void  set_pwm_pulse_width(uint8_t flag,uint8_t pwd_oid, uint32_t val);
 #define  M_COUNT_MUL_TWO          (1)
 #define  M_PWM_OUT_EN             (1)
 
+#define  M_OUTINFO_EN             (1)  //1
+//#define  M_OUTINFO_EN             (0)  //0
+
 struct stepper_move_pwm {
     struct move_node node;
     uint32_t interval;
@@ -549,7 +552,9 @@ command_queue_step_pwm(uint32_t *args)
     //m->mode = args[4];
     //m->p_v1 = args[5];
     //m->p_v2 = args[6];   
+    #if M_OUTINFO_EN
     output("val:[%c,%u,%hu,%hi,:%c,%c,%u,%u]",args[0],args[1],args[2],args[3],m->pwm_on_off,m->mode,m->pwmval,m->speed_pulse_ticks); 
+    #endif
 #endif
     irq_disable();
     uint8_t flags = s->flags;

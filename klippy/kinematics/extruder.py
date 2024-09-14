@@ -338,6 +338,8 @@ class ExtruderStepperPWM:
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect)
 
+        self._step_dist_tick = None                                            
+
         '''                                    
         gcode = self.printer.lookup_object('gcode')
         if self.name == 'extruder':
@@ -393,7 +395,19 @@ class ExtruderStepperPWM:
             else:
                 #logging.info("set_extruder_stepper_pwm:%s %i fail: not same mcu", extstepper_name,extstepper_oid) 
                 raise self.printer.command_error("'%s' is not same mcu,please check."
-                                             % (extstepper_name,))               
+                                             % (extstepper_name,))  
+
+    def get_step_dist_val(self):
+        self._step_dist_tick  =  self.stepper.get_step_dist()
+
+    def cacl_step_dist_tick(self,curspeed=1):
+        self._step_dist_tick  =  self.stepper.get_step_dist()
+        _step_dist_time = self._step_dist_tick/curspeed
+        extstepper_mcu = self.stepper.get_mcu()
+        _mcu_tick_clock = extstepper_mcu.print_time_to_clock(1)
+        _mcu_tick_value =  _step_dist_time*_mcu_tick_clock
+        logging.info("step_dist:[%s,%s,%s,:%s,%s]", curspeed,self._step_dist_tick, _step_dist_time,_mcu_tick_clock,_mcu_tick_value)
+        return(_mcu_tick_value)
 
     def _set_pressure_advance(self, pressure_advance, smooth_time):
         old_smooth_time = self.pressure_advance_smooth_time
@@ -546,6 +560,11 @@ class PrinterExtruderPWM:
             #logging.info("rev bind pwm: %i", pwm_oid)
             pass
         #return self.name
+
+    def cacl_step_dist_tick(self,curspeed=1):
+        plus_inter_tick = self.extruder_stepper.cacl_step_dist_tick(curspeed)
+        return(plus_inter_tick)
+
     def set_restart_pwmdcmd(self, val=False):   
         self._restartcmd_flag = val
 
@@ -639,7 +658,9 @@ class PrinterExtruderPWM:
         #logging.info("\npwm time T:%s a:%s c:%s d:%s\n", print_time, move.accel_t, move.cruise_t,move.decel_t)  
         #logging.info("\npwm S:%s V:%s E:%s M:%s\n", spwmv, cpwmv, epwmv, max_cruise_v)  
         #move.cruise_v
-        speed_pulse_ticks = 1500
+        speed_pulse_ticks = self.cacl_step_dist_tick(max_cruise_v)
+        if (speed_pulse_ticks is None):
+            speed_pulse_ticks = 1500 
         restartcmd_flag  = not self._restartcmd_flag
         self._restartcmd_flag = restartcmd_flag
 
