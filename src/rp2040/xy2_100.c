@@ -405,7 +405,7 @@ void run_pio_isr_reg(void)
 }
 
 
-#else
+#else   //M_XY2_100_V02
 // ------------- //
 // xy2_100_clock //
 // ------------- //
@@ -647,6 +647,65 @@ xy2_100_init(void)
 DECL_INIT(xy2_100_init);
 
 
+#endif //M_XY2_100_V02
+
+
+
+#define M_GPIO_CTRL_EXTEND
+
+#ifdef M_GPIO_CTRL_EXTEND
+
+int set_agpio_out(unsigned int gpionum, uint8_t val)
+{
+    gpio_init(gpionum);
+    gpio_set_dir(gpionum, GPIO_OUT);
+    gpio_put(gpionum,val);
+    return 0;
+
+}
+
+
+int set_agpio_outstate(unsigned int gpionum, uint8_t val)
+{
+    gpio_put(gpionum,val);
+    return 0;
+}
+
+
+
+static void gpio_init_mask(uint gpio_mask) {
+
+    for(uint i=0;i<NUM_BANK0_GPIOS;i++) {
+        if (gpio_mask & 1) {
+            gpio_init(i);
+        }
+        gpio_mask >>= 1;
+    }
+
+}
+
+
+int set_manygpio_out(unsigned int gpio_startnum, unsigned int gpio_count, uint32_t val)
+{
+    uint32_t  gpio_mask =  ((1 << gpio_count) - 1) << gpio_startnum;
+    uint32_t  gpio_val  =  val << gpio_startnum;
+    gpio_init_mask(gpio_mask);
+    gpio_set_dir_out_masked(gpio_mask);
+    gpio_put_masked(gpio_mask,gpio_val);
+
+    return 0;
+
+}
+
+
+int set_manygpio_outstate(unsigned int gpio_startnum, unsigned int gpio_count, uint32_t val)
+{
+    uint32_t  gpio_mask =  ((1 << gpio_count) - 1) << gpio_startnum;
+    uint32_t  gpio_val  =  val << gpio_startnum;    
+    gpio_put_masked(gpio_mask,gpio_val);
+    return 0;
+
+}
+
+
 #endif
-
-
