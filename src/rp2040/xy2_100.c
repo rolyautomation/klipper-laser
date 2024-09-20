@@ -649,7 +649,8 @@ DECL_INIT(xy2_100_init);
 
 #endif //M_XY2_100_V02
 
-
+int set_agpio_in(unsigned int gpionum);
+int get_agpio_in(unsigned int gpionum);
 
 #define M_GPIO_CTRL_EXTEND
 
@@ -673,7 +674,22 @@ int set_agpio_outstate(unsigned int gpionum, uint8_t val)
 
 
 
-static void gpio_init_mask(uint gpio_mask) {
+int set_agpio_in(unsigned int gpionum)
+{
+    gpio_init(gpionum);
+    return 0;
+
+}
+
+int get_agpio_in(unsigned int gpionum)
+{
+    int iret = 0;
+    iret = gpio_get(gpionum);
+    return(iret);
+}
+
+
+static void gpio_init_mask_spec(uint gpio_mask) {
 
     for(uint i=0;i<NUM_BANK0_GPIOS;i++) {
         if (gpio_mask & 1) {
@@ -689,7 +705,7 @@ int set_manygpio_out(unsigned int gpio_startnum, unsigned int gpio_count, uint32
 {
     uint32_t  gpio_mask =  ((1 << gpio_count) - 1) << gpio_startnum;
     uint32_t  gpio_val  =  val << gpio_startnum;
-    gpio_init_mask(gpio_mask);
+    gpio_init_mask_spec(gpio_mask);
     gpio_set_dir_out_masked(gpio_mask);
     gpio_put_masked(gpio_mask,gpio_val);
 
@@ -704,6 +720,81 @@ int set_manygpio_outstate(unsigned int gpio_startnum, unsigned int gpio_count, u
     uint32_t  gpio_val  =  val << gpio_startnum;    
     gpio_put_masked(gpio_mask,gpio_val);
     return 0;
+
+}
+
+
+
+
+#define pwm_wrap_target 0
+#define pwm_wrap 6
+
+
+static const uint16_t pwm_program_instructions[] = {
+            //     .wrap_target
+    0x9080, //  0: pull   noblock         side 0     
+    0xa027, //  1: mov    x, osr                     
+    0xa046, //  2: mov    y, isr                     
+    0x00a5, //  3: jmp    x != y, 5                  
+    0x1806, //  4: jmp    6               side 1     
+    0xa042, //  5: nop                               
+    0x0083, //  6: jmp    y--, 3                     
+            //     .wrap
+};
+
+
+
+
+static const struct pio_program pwm_program = {
+    .instructions = pwm_program_instructions,
+    .length = 7,
+    .origin = -1,
+};
+
+static inline pio_sm_config pwm_program_get_default_config(uint offset) {
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_wrap(&c, offset + pwm_wrap_target, offset + pwm_wrap);
+    sm_config_set_sideset(&c, 2, true, false);
+    return c;
+}
+
+static inline void pwm_program_init(PIO pio, uint sm, uint offset, uint pin) {
+   pio_gpio_init(pio, pin);
+   pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+   pio_sm_config c = pwm_program_get_default_config(offset);
+   sm_config_set_sideset_pins(&c, pin);
+   pio_sm_init(pio, sm, offset, &c);
+}
+
+
+
+// Write `period` to the input shift register
+void pio_pwm_set_period(PIO pio, uint sm, uint32_t period) {
+    pio_sm_set_enabled(pio, sm, false);
+    pio_sm_put_blocking(pio, sm, period);
+    pio_sm_exec(pio, sm, pio_encode_pull(false, false));
+    pio_sm_exec(pio, sm, pio_encode_out(pio_isr, 32));
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+// Write `level` to TX FIFO. State machine will copy this into X.
+void pio_pwm_set_level(PIO pio, uint sm, uint32_t level) {
+    pio_sm_put_blocking(pio, sm, level);
+}
+
+
+
+int  setup_pio_pwm(uint pin, uint32_t period,uint32_t level)
+{
+    int iret = 0;
+
+    PIO pio = pio1;
+    int sm = 0;
+    uint offset = pio_add_program(pio, &pwm_program);
+    pwm_program_init(pio, sm, offset, pin);
+    pio_pwm_set_period(pio, sm, period);
+    pio_pwm_set_level(pio, sm, level);
+    return(iret);
 
 }
 
