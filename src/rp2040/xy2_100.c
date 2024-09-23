@@ -658,6 +658,7 @@ int get_agpio_in(unsigned int gpionum);
 
 int set_agpio_out(unsigned int gpionum, uint8_t val)
 {
+    
     gpio_init(gpionum);
     gpio_set_dir(gpionum, GPIO_OUT);
     gpio_put(gpionum,val);
@@ -798,7 +799,12 @@ int  setup_pio_pwm(uint pin, uint32_t period,uint32_t level)
     //PIO pio = pio1;
     //int sm = 0;
     PIO pio = M_SEL_PIO_PSYNC;
-    int sm = M_SEL_SM_PSYNC;    
+    int sm = M_SEL_SM_PSYNC;   
+
+#ifdef   M_NO_SDK_ONWIN
+    open_piomodulclk();
+#endif	
+
     uint offset = pio_add_program(pio, &pwm_program);
     pwm_program_init(pio, sm, offset, pin);
     pio_pwm_set_period(pio, sm, period);

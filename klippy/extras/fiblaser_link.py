@@ -3,6 +3,7 @@
 # Copyright (C) 2024-2028  jinqiang <jinqiang@ecomedge.io>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
+import logging
 
 
 class FiberLaserLink:
@@ -47,12 +48,15 @@ class FiberLaserLink:
                                desc=self.cmd_QUERY_FIBER_LASER_help)
                                                           
                      
+        self._last_clock = 0
 
 
     def _build_config(self):
         # Setup config
-        self._mcu.add_config_cmd("config_stepper_fiber oid=%c start_pin=%c sta_ee_em=%u sta_em_ee=%u psyncpwm=%u type=%c"
-                                 % (self._oid, self._start_pin, self._sta_ee_em, self._sta_em_ee, self._psyncpwm, self._fiber_type))                                     
+        #self._mcu.add_config_cmd("config_stepper_fiber oid=%c start_pin=%c sta_ee_em=%u sta_em_ee=%u psyncpwm=%u type=%c"
+        #                        % (self._oid, self._start_pin, self._sta_ee_em, self._sta_em_ee, self._psyncpwm, self._fiber_type))  
+        self._mcu.add_config_cmd("config_stepper_fiber oid=%d start_pin=%s sta_ee_em=%u sta_em_ee=%u psyncpwm=%u type=%u"
+                                 % (self._oid, self._start_pin, self._sta_ee_em, self._sta_em_ee, self._psyncpwm, self._fiber_type))                                                                     
 
         self._cmd_queue = self._mcu.alloc_command_queue()
 
@@ -83,9 +87,9 @@ class FiberLaserLink:
         v = v/1000.0 * 255   
 
         self._runmode = rcmd_mode
-        self._pwm_sval = v    
+        self._pwm_sval = int(round(v))    
 
-        #logging.info("SET_POS_GALVO X=%d,Y=%d", x, y)
+        logging.info("RCMD_FIBER_LASER M=%d,S=%d", self._runmode, self._pwm_sval)
         # Obtain print_time and apply requested settings
         toolhead = self.printer.lookup_object('toolhead')
         toolhead.register_lookahead_callback(
