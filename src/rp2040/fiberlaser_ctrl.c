@@ -38,6 +38,7 @@ enum {
 };
 
 //10s: from power on to normal
+//pin1-8 (D0-D7)
 #define  M_POWER_IO_TOTAL           (8)
 //pin9
 #define  M_GPIO_LATCH_NUM           (8)
@@ -52,7 +53,9 @@ enum {
 //pin23
 #define  M_GPIO_EMERGENCYOFF_NUM    (13)
 
+//pin16
 #define  M_GPIO_IN_ALARM16_NUM       (14)
+//pin21
 #define  M_GPIO_IN_ALARM21_NUM       (15)
 
 
@@ -101,7 +104,8 @@ struct stepper_fiber {
     uint32_t workflag;
 
     uint32_t period;
-    uint32_t level;    
+    uint32_t level;  
+    uint8_t  fibertype;  
 
     struct move_queue_head mq;
     struct trsync_signal stop_signal;
@@ -378,6 +382,7 @@ command_config_stepper_fiber(uint32_t *args)
     s->PLATCH_AFTER_TIME_us = 2;  //2us  
     s->PLATCH_CHG_INTERTIME_us = 4; //4us 
     s->period  = args[4];
+    s->fibertype = args[5];
 
     s->level = s->period/2;
     move_queue_setup(&s->mq, sizeof(struct stepper_move_fiber));
@@ -386,7 +391,7 @@ command_config_stepper_fiber(uint32_t *args)
 
 }
 DECL_COMMAND(command_config_stepper_fiber, "config_stepper_fiber oid=%c start_pin=%c"
-             " sta_ee_em=%u sta_em_ee=%u period=%u");
+             " sta_ee_em=%u sta_em_ee=%u psyncpwm=%u type=%c");
 
 // Return the 'struct stepper' for a given stepper oid
 static struct stepper_fiber *
@@ -417,7 +422,6 @@ command_queue_step_fiber(uint32_t *args)
              //"queue_step_fiber oid=%c cmdmod=%c onf=%c pwmv=%hu");
 DECL_COMMAND(command_queue_step_fiber,
              "queue_step_fiber oid=%c cmdmod=%c pwmv=%hu");            
-
 
 
 int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in)

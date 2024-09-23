@@ -725,6 +725,9 @@ int set_manygpio_outstate(unsigned int gpio_startnum, unsigned int gpio_count, u
 
 
 
+#define M_SEL_PIO_PSYNC  (pio1)
+#define M_SEL_SM_PSYNC   (0)
+
 
 #define pwm_wrap_target 0
 #define pwm_wrap 6
@@ -782,14 +785,20 @@ void pio_pwm_set_level(PIO pio, uint sm, uint32_t level) {
     pio_sm_put_blocking(pio, sm, level);
 }
 
+void change_pwm_duty(uint32_t level){
 
+     pio_pwm_set_level(M_SEL_PIO_PSYNC, M_SEL_SM_PSYNC, level);       
+
+}
 
 int  setup_pio_pwm(uint pin, uint32_t period,uint32_t level)
 {
     int iret = 0;
 
-    PIO pio = pio1;
-    int sm = 0;
+    //PIO pio = pio1;
+    //int sm = 0;
+    PIO pio = M_SEL_PIO_PSYNC;
+    int sm = M_SEL_SM_PSYNC;    
     uint offset = pio_add_program(pio, &pwm_program);
     pwm_program_init(pio, sm, offset, pin);
     pio_pwm_set_period(pio, sm, period);

@@ -15,5 +15,6 @@ int set_manygpio_outstate(unsigned int gpio_startnum, unsigned int gpio_count, u
 
 int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in);
 int  setup_pio_pwm(unsigned int  pin, uint32_t period,uint32_t level);
+void change_pwm_duty(uint32_t level);
 
 #endif // fiberlaser_ctrl.h
