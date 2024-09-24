@@ -95,6 +95,15 @@ enum {
 
 #define  M_MIN_US_SYSTEM     (4)
 
+//255*0.97
+#define  M_MAX_FIBER_POWER_VAL    (247)
+//255*0.1
+#define  M_MIN_FIBER_POWER_VAL    (25)
+//255*0.2
+#define  M_P20_FIBER_POWER_VAL    (51)
+
+#define  M_LASER_ON_CMD       (1)
+#define  M_LASER_OFF_CMD      (2)
 
 //#define  M_DEBUG_INFO_EN       (1)
 #define  M_DEBUG_INFO_EN       (0)
@@ -406,7 +415,9 @@ stepper_event_fiber(struct timer *t)
 
 //pin20
 //#define  M_GPIO_PRRSYNC_NUM         (11)
-#define M_DEFAULT_POWER_VAL           (0)
+//#define M_DEFAULT_POWER_VAL         (0)
+#define M_DEFAULT_POWER_VAL           M_MIN_FIBER_POWER_VAL
+
 
 
 int fiber_laser_init(struct stepper_fiber *s)
@@ -477,9 +488,22 @@ command_queue_step_fiber(uint32_t *args)
     uint8_t recmode = 0;
     //uint8_t reconf = 0;
     uint8_t recpower = 0;  
+    uint8_t laser_on_off = 0;  
+
     recmode = args[1];
     recpower = args[2];
-    handle_rec_command(recoid, recmode, recpower);
+    if (recpower > 0)
+    {
+        recpower = chg_power_val(args[2]);
+        laser_on_off = M_LASER_ON_CMD;
+    }
+    else
+    {
+        recpower = M_MIN_FIBER_POWER_VAL;
+        laser_on_off = M_LASER_OFF_CMD;
+        
+    }
+    handle_rec_command(recoid, recmode, recpower, laser_on_off);
 
  
 }
@@ -489,7 +513,7 @@ DECL_COMMAND(command_queue_step_fiber,
              "queue_step_fiber oid=%c cmdmod=%c pwmv=%hu");            
 
 
-int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in)
+int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, uint8_t  laser_on_off)
 {
     int iret = 0;
     struct stepper_fiber *s = stepper_oid_lookup_fiber(foid);
@@ -548,6 +572,23 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in)
         case M_WK_CHGPOWER_MODE : 
             runflag = 1;
             m->workstep =  M_WK_CHGPOWER_STEP;
+            if(laser_on_off == M_LASER_ON_CMD)
+            {
+                if ((s->workflag & M_LASER_EM_FLAG) == 0 )
+                {
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO);
+                    s->workflag = s->workflag | M_LASER_EM_FLAG;     
+                }
+           
+
+            }else if (laser_on_off == M_LASER_OFF_CMD)
+            {
+                if ((s->workflag & M_LASER_EM_FLAG) > 0 )
+                {
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO);
+                    s->workflag = s->workflag & (~M_LASER_EM_FLAG);
+                }
+            }
         break;  
         case M_WK_IDLE_MODE : 
              runflag = 0;
@@ -598,6 +639,35 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in)
 }
 
 
+
+
+
+uint8_t  chg_power_val(uint32_t val)
+{
+
+    uint8_t  power_val = 0;
+    if (val > M_MAX_FIBER_POWER_VAL)
+    {
+        power_val = M_MAX_FIBER_POWER_VAL;
+        return(power_val);
+    }
+    if (val < M_P20_FIBER_POWER_VAL)
+    {
+        val = val/2 + M_MIN_FIBER_POWER_VAL;
+        power_val = val & 0xFF;
+
+    }
+    else
+    {
+        power_val = val & 0xFF;
+    }
+    return(power_val);
+
+
+}
+
+
+
 void 
 direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val)
 {
@@ -608,13 +678,25 @@ direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val)
     uint8_t recpower = 0;  
     recpower = val & 0xFF;
     recmode =  M_WK_CHGPOWER_MODE;
+    uint8_t laser_on_off = 0;  
     //todo 
-    handle_rec_command(recoid, recmode, recpower);
+
+    if (recpower > 0)
+    {
+        recpower = chg_power_val(val);
+        laser_on_off = M_LASER_ON_CMD;
+    }
+    else
+    {
+        recpower = M_MIN_FIBER_POWER_VAL;
+        laser_on_off = M_LASER_OFF_CMD;
+        
+    }
+    handle_rec_command(recoid, recmode, recpower,laser_on_off);
+
+
    
-
 }
-
-
 
 
 // Set an absolute time that the next step will be relative to
