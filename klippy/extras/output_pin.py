@@ -75,7 +75,8 @@ class PrinterOutputPin:
             pwm_oid =  self.mcu_pin.get_mcu_pwm_oid()
             mcu_pwm =   self.mcu_pin.get_mcu()
             #pwm_oid = 0
-            extruderpwm.set_extrdpwm_oid(pwm_oid,mcu_pwm)
+            laser_type = 0
+            extruderpwm.set_extrdpwm_oid(pwm_oid,mcu_pwm,laser_type)
             #logging.info("bind pwm: %s %s %i", mcu_pwm, self._epwm_name, pwm_oid)   
 
 

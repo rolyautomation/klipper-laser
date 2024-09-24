@@ -384,13 +384,13 @@ class ExtruderStepperPWM:
         self.stepper.set_trapq(extruder.get_trapq())
         self.motion_queue = extruder_name
 
-    def set_extruder_stepper_pwm(self, pwm_oid,mcu_id):
+    def set_extruder_stepper_pwm(self, pwm_oid,mcu_id,laser_type=0):
         if (self.stepper is not None):
             extstepper_oid = self.stepper.get_oid()
             extstepper_mcu = self.stepper.get_mcu()
             extstepper_name = self.stepper.get_name()
             if(extstepper_mcu is mcu_id ):
-                self.stepper.bind_stepper_pwm(pwm_oid)
+                self.stepper.bind_stepper_pwm(pwm_oid,laser_type)
                 logging.info("set_extruder_stepper_pwm:%s %i", extstepper_name,extstepper_oid)
             else:
                 #logging.info("set_extruder_stepper_pwm:%s %i fail: not same mcu", extstepper_name,extstepper_oid) 
@@ -553,10 +553,10 @@ class PrinterExtruderPWM:
         #sts['extpwm'] = 'no info'
         return sts
     #   return 0
-    def set_extrdpwm_oid(self, pwm_oid=None, mcu_id=None):
+    def set_extrdpwm_oid(self, pwm_oid=None, mcu_id=None,laser_type=0):
         self._extrdpwm_oid = pwm_oid
         if (self._extrdpwm_oid is not None):
-            self.extruder_stepper.set_extruder_stepper_pwm(pwm_oid,mcu_id)
+            self.extruder_stepper.set_extruder_stepper_pwm(pwm_oid,mcu_id,laser_type)
             #logging.info("rev bind pwm: %i", pwm_oid)
             pass
         #return self.name
