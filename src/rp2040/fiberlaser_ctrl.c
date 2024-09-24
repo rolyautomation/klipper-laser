@@ -92,7 +92,8 @@ enum {
 #define  M_LOW_IO     (0)
 #define  M_MIN_DEDAYTIME_US    (1)
 
-
+#define  M_LATCH_BEFORE_WAIT_TM  (1)
+#define  M_LATCH_AFTER_WAIT_TM   (2)
 #define  M_MIN_US_SYSTEM     (4)
 
 //255*0.97
@@ -134,6 +135,20 @@ struct stepper_fiber {
     // gcc (pre v6) does better optimization when uint8_t are bitfields
     uint8_t flags : 8;
 };
+
+
+struct latch_time_s_t {
+    uint32_t step1_time;
+    uint32_t step2_time;
+    uint32_t step2_waittm;
+    uint8_t  gpio_base_pin;
+
+};
+
+typedef struct latch_time_s_t latch_time_s_t;
+
+latch_time_s_t   g_latch_time_d;
+
 
 int handle_fiber_timeseq(struct stepper_fiber *s)
 {
@@ -334,6 +349,35 @@ int handle_fiber_timeseq(struct stepper_fiber *s)
     return(iret);
 
 }
+
+
+static struct task_wake power_latch_wake;
+
+
+void
+fiberlaser_shorttime_task(void)
+{
+    uint32_t end =  0;
+    if (!sched_check_wake(&power_latch_wake))
+    {
+        return;
+    }
+    end  =   g_latch_time_d.step1_time;  
+    while (timer_is_before(timer_read_time(), end))
+        ;
+    set_agpio_outstate(g_latch_time_d.gpio_base_pin+M_GPIO_LATCH_NUM, M_HIGH_IO);
+    //end  = timer_read_time() + g_latch_time_d.step2_waittm; 
+    end  = timer_read_time() + timer_from_us(M_LATCH_AFTER_WAIT_TM);
+    while (timer_is_before(timer_read_time(), end))
+        ;    
+    set_agpio_outstate(g_latch_time_d.gpio_base_pin+M_GPIO_LATCH_NUM, M_LOW_IO);
+
+	
+}
+DECL_TASK(fiberlaser_shorttime_task);
+
+
+
 // Setup a stepper for the next move in its queue
 static uint_fast8_t
 stepper_load_next_fiber(struct stepper_fiber *s)
@@ -612,6 +656,21 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
 
         }
          
+    }
+    //if ((runflag) && (recmode == M_WK_CHGPOWER_MODE))
+    if ((1) && (recmode == M_WK_CHGPOWER_MODE))
+    {
+        
+          sched_wake_task(&power_latch_wake);
+          set_manygpio_outstate(s->gpio_base_pin, M_POWER_IO_TOTAL, recpower);
+          //g_latch_time_d.step1_time =  timer_read_time() +  timer_from_us(s->PLATCH_BEFORE_TIME_us);
+          g_latch_time_d.step1_time =  timer_read_time() +  timer_from_us(M_LATCH_BEFORE_WAIT_TM);
+          g_latch_time_d.step2_time =  timer_read_time() +  timer_from_us(s->PLATCH_AFTER_TIME_us);
+          g_latch_time_d.step2_waittm = timer_from_us(s->PLATCH_AFTER_TIME_us);
+          g_latch_time_d.gpio_base_pin  = s->gpio_base_pin;
+          runflag = 0;
+
+           
     }
     irq_disable();
     if (runflag)
