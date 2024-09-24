@@ -19,4 +19,6 @@ uint8_t  chg_power_val(uint32_t val);
 int  setup_pio_pwm(unsigned int  pin, uint32_t period,uint32_t level);
 void change_pwm_duty(uint32_t level);
 
+void  direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val);
+
 #endif // fiberlaser_ctrl.h

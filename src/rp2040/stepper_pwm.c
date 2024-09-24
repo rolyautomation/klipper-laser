@@ -19,6 +19,9 @@
 
 extern void direct_set_pwm_pulse_width(uint8_t pwd_oid, uint32_t val);
 void  set_pwm_pulse_width(uint8_t flag,uint8_t pwd_oid, uint32_t val);
+extern void  direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val);
+void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val);
+
 
 #if CONFIG_INLINE_STEPPER_HACK && CONFIG_HAVE_STEPPER_BOTH_EDGE
  #define HAVE_SINGLE_SCHEDULE 1
@@ -79,6 +82,7 @@ struct stepper_pwm {
     uint32_t speed_pulse_ticks;
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
     uint8_t  oid_pwm_flag;
+    uint8_t  laser_type; 
     #endif
     uint32_t position;
     struct move_queue_head mq;
@@ -107,7 +111,8 @@ struct pwm_ctrl_s_t {
 
     
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
-    uint8_t  oid_pwm_flag;   
+    uint8_t  oid_pwm_flag;  
+    uint8_t  laser_type; 
 
     //uint32_t cur_pwm_val;
     uint32_t last_pwm_val;
@@ -139,12 +144,13 @@ typedef struct pwm_ctrl_s_t pwm_ctrl_s_t;
 
 pwm_ctrl_s_t  g_pwm_ctrl_data;
 
-void  set_pwm_ctrl_data(uint8_t oid_pwm_flag, uint8_t  oid_pwm)
+void  set_pwm_ctrl_data(uint8_t oid_pwm_flag, uint8_t  oid_pwm, uint8_t  laser_type)
 {
     if(oid_pwm_flag > 0)
         g_pwm_ctrl_data.last_pwm_val = 0;   
     g_pwm_ctrl_data.oid_pwm_flag = oid_pwm_flag;
     g_pwm_ctrl_data.oid_pwm  = oid_pwm;
+    g_pwm_ctrl_data.laser_type = laser_type;
 
 }
 
@@ -300,7 +306,15 @@ runpwmout:
     if ( (flag) && (cur_pwm_val != g_pwm_ctrl_data.last_pwm_val))
     {
         g_pwm_ctrl_data.last_pwm_val = cur_pwm_val;
-        set_pwm_pulse_width(g_pwm_ctrl_data.oid_pwm_flag ,g_pwm_ctrl_data.oid_pwm, cur_pwm_val);
+        if (g_pwm_ctrl_data.laser_type == 0)
+        {
+            set_pwm_pulse_width(g_pwm_ctrl_data.oid_pwm_flag ,g_pwm_ctrl_data.oid_pwm, cur_pwm_val);
+        }
+        else
+        {
+            set_pwm_pulse_width_fiberlaser(g_pwm_ctrl_data.oid_pwm_flag ,g_pwm_ctrl_data.oid_pwm, cur_pwm_val);
+        }
+        
     }
 
 
@@ -497,7 +511,7 @@ command_config_stepper_pwm(uint32_t *args)
     set_record_axis_info(args[1]);
     #endif
     #ifdef M_PWM_OUT_EN 
-    set_pwm_ctrl_data(0, 0);
+    set_pwm_ctrl_data(0, 0, 0);
     #endif
     s->dir_pin = gpio_out_setup(args[2], 0);
     s->position = -POSITION_BIAS;
@@ -611,14 +625,15 @@ command_bind_pwm_oid_stepper_pwm(uint32_t *args)
     irq_disable();
     s->oid_pwm = args[1];
     s->oid_pwm_flag  = 1;
+    s->laser_type = args[2];
     irq_enable();
     //#ifdef M_PWM_OUT_EN 
-    set_pwm_ctrl_data(s->oid_pwm_flag, s->oid_pwm);
+    set_pwm_ctrl_data(s->oid_pwm_flag, s->oid_pwm, s->laser_type);
     //#endif
 
 }
-DECL_COMMAND(command_bind_pwm_oid_stepper_pwm, "bind_oid_pwm oid=%c pwmoid=%c");
-
+//DECL_COMMAND(command_bind_pwm_oid_stepper_pwm, "bind_oid_pwm oid=%c pwmoid=%c");
+DECL_COMMAND(command_bind_pwm_oid_stepper_pwm, "bind_oid_pwm oid=%c pwmoid=%c ltype=%c");
 
 
 void
@@ -656,6 +671,18 @@ set_pwm_pulse_width(uint8_t flag,uint8_t pwd_oid, uint32_t val)
     if (flag)
     {
         direct_set_pwm_pulse_width(pwd_oid, val);
+
+    }
+
+}
+
+
+void 
+set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val)
+{
+    if (flag)
+    {
+        direct_set_pwm_pulse_width_fibertype(pwd_oid, val);
 
     }
 
