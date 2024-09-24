@@ -18,6 +18,7 @@
 #include "trsync.h" // trsync_add_signal
 
 
+int init_ring_buff_setup(void);
 
 #define M_FIBERLASER_CTRL_FUN   (1)
 #ifdef M_FIBERLASER_CTRL_FUN
@@ -94,6 +95,7 @@ enum {
 
 #define  M_LATCH_BEFORE_WAIT_TM  (1)
 #define  M_LATCH_AFTER_WAIT_TM   (2)
+#define  M_LATCH_INTER_WAIT_TM   (2)
 #define  M_MIN_US_SYSTEM     (4)
 
 //255*0.97
@@ -137,7 +139,30 @@ struct stepper_fiber {
 };
 
 
+
+typedef uint8_t ring_data_t;
+typedef uint8_t  ring_len_t;
+
+
+struct powerring_buffer_t {
+  /** Buffer memory.  X,Y value */
+  ring_data_t *buffer;   
+  /** Buffer mask. */
+  ring_len_t buffer_mask;
+  /** Index of tail. */
+  ring_len_t tail_index;
+  /** Index of head. */
+  ring_len_t head_index;
+};
+
+
+typedef struct powerring_buffer_t  ring_buffer_t;
+
+#define M_PRING_BUFF_SIZE  (16)
+
 struct latch_time_s_t {
+    ring_buffer_t  power_buff;
+    ring_data_t  buf_arr[M_PRING_BUFF_SIZE];
     uint32_t step1_time;
     uint32_t step2_time;
     uint32_t step2_waittm;
@@ -148,6 +173,76 @@ struct latch_time_s_t {
 typedef struct latch_time_s_t latch_time_s_t;
 
 latch_time_s_t   g_latch_time_d;
+
+/*
+void ring_buffer_init_p(ring_buffer_t *buffer, ring_data_t *buf, size_t buf_size);
+uint8_t  ring_buffer_queue_p(ring_buffer_t *buffer, ring_data_t data);
+uint8_t ring_buffer_dequeue_p(ring_buffer_t *buffer, ring_data_t *data);
+*/
+
+#define  RING_BUFFER_MASK(rb) (rb->buffer_mask)
+
+void ring_buffer_init_p(ring_buffer_t *buffer, ring_data_t *buf, size_t buf_size) {
+  buffer->buffer = buf;
+  buffer->buffer_mask = buf_size - 1;
+  buffer->tail_index = 0;
+  buffer->head_index = 0;
+
+}
+
+int init_ring_buff_setup(void)
+{
+    int ret = 0;
+    ring_buffer_init_p(&g_latch_time_d.power_buff, &g_latch_time_d.buf_arr[0], M_PRING_BUFF_SIZE);
+    return(ret);
+
+}
+
+
+inline uint8_t ring_buffer_is_empty(ring_buffer_t *buffer) {
+  return (buffer->head_index == buffer->tail_index);
+}
+
+
+inline uint8_t ring_buffer_is_full(ring_buffer_t *buffer) {
+  return ((buffer->head_index - buffer->tail_index) & RING_BUFFER_MASK(buffer)) == RING_BUFFER_MASK(buffer);
+}
+
+
+
+uint8_t  ring_buffer_queue_p(ring_buffer_t *buffer, ring_data_t data) {
+  uint8_t ret  = 0;    
+  /* Is buffer full? */
+  if(ring_buffer_is_full(buffer)) {
+    /* Is going to overwrite the oldest byte */
+    /* Increase tail index */
+    buffer->tail_index = ((buffer->tail_index + 1) & RING_BUFFER_MASK(buffer));
+  }
+  else
+  {
+    ret = 1;
+  }
+
+  /* Place data in buffer */
+  buffer->buffer[buffer->head_index] = data;
+  buffer->head_index = ((buffer->head_index + 1) & RING_BUFFER_MASK(buffer));
+  return (ret);
+  
+}
+
+
+
+uint8_t ring_buffer_dequeue_p(ring_buffer_t *buffer, ring_data_t *data) {
+  if(ring_buffer_is_empty(buffer)) {
+    /* No items */
+    return 0;
+  }
+  
+  *data = buffer->buffer[buffer->tail_index];
+  buffer->tail_index = ((buffer->tail_index + 1) & RING_BUFFER_MASK(buffer));
+  return 1;
+}
+
 
 
 int handle_fiber_timeseq(struct stepper_fiber *s)
@@ -358,21 +453,43 @@ void
 fiberlaser_shorttime_task(void)
 {
     uint32_t end =  0;
+    uint8_t  recpower = 0;
+    uint8_t  ret = 0;
+    uint8_t  sendflag = 0;
     if (!sched_check_wake(&power_latch_wake))
     {
         return;
     }
-    end  =   g_latch_time_d.step1_time;  
-    while (timer_is_before(timer_read_time(), end))
-        ;
-    set_agpio_outstate(g_latch_time_d.gpio_base_pin+M_GPIO_LATCH_NUM, M_HIGH_IO);
-    //end  = timer_read_time() + g_latch_time_d.step2_waittm; 
-    end  = timer_read_time() + timer_from_us(M_LATCH_AFTER_WAIT_TM);
-    while (timer_is_before(timer_read_time(), end))
-        ;    
-    set_agpio_outstate(g_latch_time_d.gpio_base_pin+M_GPIO_LATCH_NUM, M_LOW_IO);
+    sendflag = 0;
+    while(1)
+    {
+        ret = ring_buffer_dequeue_p(&g_latch_time_d.power_buff, &recpower);
+        if (ret == 0)
+        {
+            break;
+        }
+        sendflag = 1;
 
-	
+    }
+    
+    if (sendflag)
+    {
+        set_manygpio_outstate(g_latch_time_d.gpio_base_pin, M_POWER_IO_TOTAL, recpower);
+        end  =   timer_read_time() +  timer_from_us(M_LATCH_BEFORE_WAIT_TM);;  
+        while (timer_is_before(timer_read_time(), end))
+            ;
+        set_agpio_outstate(g_latch_time_d.gpio_base_pin+M_GPIO_LATCH_NUM, M_HIGH_IO);
+        //end  = timer_read_time() + g_latch_time_d.step2_waittm; 
+        end  = timer_read_time() + timer_from_us(M_LATCH_AFTER_WAIT_TM);
+        while (timer_is_before(timer_read_time(), end))
+            ;    
+        set_agpio_outstate(g_latch_time_d.gpio_base_pin+M_GPIO_LATCH_NUM, M_LOW_IO);
+        end  = timer_read_time() + timer_from_us(M_LATCH_INTER_WAIT_TM);
+        while (timer_is_before(timer_read_time(), end))
+            ;  
+
+    }
+    	
 }
 DECL_TASK(fiberlaser_shorttime_task);
 
@@ -466,6 +583,8 @@ stepper_event_fiber(struct timer *t)
 
 int fiber_laser_init(struct stepper_fiber *s)
 {
+    init_ring_buff_setup();
+    g_latch_time_d.gpio_base_pin = s->gpio_base_pin;
 
     set_manygpio_out(s->gpio_base_pin, M_POWER_IO_TOTAL, M_DEFAULT_POWER_VAL);
     set_agpio_out(s->gpio_base_pin+M_GPIO_LATCH_NUM, 0);
@@ -660,14 +779,15 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
     //if ((runflag) && (recmode == M_WK_CHGPOWER_MODE))
     if ((1) && (recmode == M_WK_CHGPOWER_MODE))
     {
-        
+
           sched_wake_task(&power_latch_wake);
-          set_manygpio_outstate(s->gpio_base_pin, M_POWER_IO_TOTAL, recpower);
+          ring_buffer_queue_p(&g_latch_time_d.power_buff, recpower);
+          //set_manygpio_outstate(s->gpio_base_pin, M_POWER_IO_TOTAL, recpower);
           //g_latch_time_d.step1_time =  timer_read_time() +  timer_from_us(s->PLATCH_BEFORE_TIME_us);
-          g_latch_time_d.step1_time =  timer_read_time() +  timer_from_us(M_LATCH_BEFORE_WAIT_TM);
-          g_latch_time_d.step2_time =  timer_read_time() +  timer_from_us(s->PLATCH_AFTER_TIME_us);
-          g_latch_time_d.step2_waittm = timer_from_us(s->PLATCH_AFTER_TIME_us);
-          g_latch_time_d.gpio_base_pin  = s->gpio_base_pin;
+          //g_latch_time_d.step1_time =  timer_read_time() +  timer_from_us(M_LATCH_BEFORE_WAIT_TM);
+          //g_latch_time_d.step2_time =  timer_read_time() +  timer_from_us(s->PLATCH_AFTER_TIME_us);
+          //g_latch_time_d.step2_waittm = timer_from_us(s->PLATCH_AFTER_TIME_us);
+          //g_latch_time_d.gpio_base_pin  = s->gpio_base_pin;
           runflag = 0;
 
            
