@@ -285,8 +285,8 @@ class GCodeMove:
             raise gcmd.error("Unable to parse move '%s'"
                              % (gcmd.get_commandline(),))
 
-        logging.info("\npwm: pwm_work_curpower_use=%s pwm_work_mode_use=%s move_e_axis_d=%s ponoff=%s\n",
-                self.pwm_work_curpower_use, self.pwm_work_mode_use, move_e_axis_d, self.pwm_work_ponoff_use)     
+        #close#logging.info("\npwm: pwm_work_curpower_use=%s pwm_work_mode_use=%s move_e_axis_d=%s ponoff=%s\n",
+                #self.pwm_work_curpower_use, self.pwm_work_mode_use, move_e_axis_d, self.pwm_work_ponoff_use)     
         #self.move_with_transform(self.last_position, self.speed)
         self.move_with_transform(self.last_position, self.speed, self.pwm_work_mode_use, self.pwm_work_curpower_use, self.pwm_work_ponoff_use)
 

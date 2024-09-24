@@ -406,7 +406,7 @@ class ExtruderStepperPWM:
         extstepper_mcu = self.stepper.get_mcu()
         _mcu_tick_clock = extstepper_mcu.print_time_to_clock(1)
         _mcu_tick_value =  _step_dist_time*_mcu_tick_clock
-        logging.info("step_dist:[%s,%s,%s,:%s,%s]", curspeed,self._step_dist_tick, _step_dist_time,_mcu_tick_clock,_mcu_tick_value)
+        #close#logging.info("step_dist:[%s,%s,%s,:%s,%s]", curspeed,self._step_dist_tick, _step_dist_time,_mcu_tick_clock,_mcu_tick_value)
         return(_mcu_tick_value)
 
     def _set_pressure_advance(self, pressure_advance, smooth_time):
@@ -539,9 +539,10 @@ class PrinterExtruderPWM:
         self._extrdpwm_oid = None
         logging.info("PrinterExtruderPWM end") 
         self._restartcmd_flag = False
+        self._laser_type = 0
 
     def update_move_time(self, flush_time, clear_history_time):
-        logging.info("update_move_time extruderpwm") 
+        #close#logging.info("update_move_time extruderpwm") 
         self.trapq_finalize_moves(self.trapq, flush_time, clear_history_time)
     def get_status(self, eventtime):
         #logging.info("get_status extruderpwm") 
@@ -554,12 +555,18 @@ class PrinterExtruderPWM:
         return sts
     #   return 0
     def set_extrdpwm_oid(self, pwm_oid=None, mcu_id=None,laser_type=0):
-        self._extrdpwm_oid = pwm_oid
-        if (self._extrdpwm_oid is not None):
-            self.extruder_stepper.set_extruder_stepper_pwm(pwm_oid,mcu_id,laser_type)
-            #logging.info("rev bind pwm: %i", pwm_oid)
+        if (self._extrdpwm_oid is None):
+            if ( pwm_oid is not None):
+                self.extruder_stepper.set_extruder_stepper_pwm(pwm_oid,mcu_id,laser_type)
+                self._extrdpwm_oid = pwm_oid
+                self._laser_type =  laser_type
+                #logging.info("rev bind pwm: %i", pwm_oid)
+                pass
+        else:
+            logging.info("laser type : %i", self._laser_type)
             pass
-        #return self.name
+
+
 
     def cacl_step_dist_tick(self,curspeed=1):
         plus_inter_tick = self.extruder_stepper.cacl_step_dist_tick(curspeed)
@@ -637,8 +644,8 @@ class PrinterExtruderPWM:
         pwmmode = 1.0*(move.pwmmode or 0)
         pwmvalue = 1.0*(move.pwmvalue or 0)
         pwmsw    = 1.0*(move.pwmsw or 0)
-        logging.info("\npwmE: pwm_work_curpower_use=%s pwm_work_mode_use=%s pwmsw=%s\n",
-                pwmvalue, pwmmode, pwmsw)  
+        #close#logging.info("\npwmE: pwm_work_curpower_use=%s pwm_work_mode_use=%s pwmsw=%s\n",
+                #pwmvalue, pwmmode, pwmsw)  
 
         scf = (move.start_v/max_cruise_v)*pwmvalue
         ccf = (move.cruise_v/max_cruise_v)*pwmvalue
