@@ -851,7 +851,8 @@ static inline void fiber_set_power_program_init(PIO pio, uint sm, uint offset, u
     sm_config_set_out_pins(&c, data_pin, 8);
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
     sm_config_set_clkdiv(&c, clk_div);
-    sm_config_set_out_shift(&c, false, true, 8);
+    //sm_config_set_out_shift(&c, false, true, 8);
+    sm_config_set_out_shift(&c, true, false, 0);
 
     pio_sm_init(pio, sm, offset, &c);
     //pio_sm_set_enabled(pio, sm, true);
@@ -905,7 +906,9 @@ int  setup_pio_pwm_old(uint pin, uint32_t period,uint32_t level)
 }
 
 
-#define LATCH_CLK_DIV 16.f
+//#define LATCH_CLK_DIV 20.f
+//#define LATCH_CLK_DIV   (62.5f)   //1us
+#define LATCH_CLK_DIV   (125.f)   //2us
 
 
 int  setup_pio_pwm(uint pwmpin, uint32_t period,uint32_t level, uint pin_start, uint pin_latch)

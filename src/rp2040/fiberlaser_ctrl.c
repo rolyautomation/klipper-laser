@@ -72,6 +72,10 @@ enum {
 #define  M_WK_REDLEDOFF_MODE     (7)
 #define  M_WK_ESTOPON_MODE       (8)
 #define  M_WK_ESTOPOFF_MODE      (9)
+#define  M_WK_POWERMODE_T_MODE      (10)
+#define  M_WK_POWERMODE_U_MODE      (11)
+
+
 
 
 
@@ -85,6 +89,8 @@ enum {
 #define  M_LASER_RLED_FLAG        (0x0004)
 #define  M_LASER_STOP_FLAG        (0x0008)
 #define  M_LASER_SETPOWER_FLAG    (0x0010)
+
+#define  M_LASER_POWERMODE_FLAG   (0x0020)
 
 #define  M_ST_PIN16_BIT           (0x4000)
 #define  M_ST_PIN21_BIT           (0x8000)
@@ -131,6 +137,7 @@ struct stepper_fiber {
     uint32_t period;
     uint32_t level;  
     uint8_t  fibertype;  
+    uint8_t  powerchgmode;
 
     struct move_queue_head mq;
     struct trsync_signal stop_signal;
@@ -454,13 +461,15 @@ fiberlaser_shorttime_task(void)
 {
     uint32_t end =  0;
     uint8_t  recpower = 0;
-    uint8_t  ret = 0;
     uint8_t  sendflag = 0;
     if (!sched_check_wake(&power_latch_wake))
     {
         return;
     }
     sendflag = 0;
+
+    #if 0
+    uint8_t  ret = 0;
     while(1)
     {
         ret = ring_buffer_dequeue_p(&g_latch_time_d.power_buff, &recpower);
@@ -471,7 +480,7 @@ fiberlaser_shorttime_task(void)
         sendflag = 1;
 
     }
-    
+    #endif
     if (sendflag)
     {
         set_manygpio_outstate(g_latch_time_d.gpio_base_pin, M_POWER_IO_TOTAL, recpower);
@@ -600,6 +609,7 @@ int fiber_laser_init(struct stepper_fiber *s)
     setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level, s->gpio_base_pin, s->gpio_base_pin+M_GPIO_LATCH_NUM);
     set_power_value(M_DEFAULT_POWER_VAL);
 
+
     return(0);
 
 }
@@ -659,12 +669,12 @@ command_queue_step_fiber(uint32_t *args)
     recpower = args[2];
     if (recpower > 0)
     {
-        recpower = chg_power_val(args[2]);
+        //recpower = chg_power_val(args[2]);
         laser_on_off = M_LASER_ON_CMD;
     }
     else
     {
-        recpower = M_MIN_FIBER_POWER_VAL;
+        //recpower = M_MIN_FIBER_POWER_VAL;
         laser_on_off = M_LASER_OFF_CMD;
         
     }
@@ -733,13 +743,26 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
         break;
         case M_WK_ESTOPOFF_MODE : 
             runflag = 1;
-        break;                  
+        break; 
+
+        case M_WK_POWERMODE_T_MODE : 
+            runflag = 0;
+            s->powerchgmode = 1;
+            s->workflag = s->workflag | M_LASER_POWERMODE_FLAG;
+        break;
+
+        case M_WK_POWERMODE_U_MODE : 
+            runflag = 0;
+            s->workflag = s->workflag & (~M_LASER_POWERMODE_FLAG);
+            s->powerchgmode = 0;
+        break; 
+
         case M_WK_CHGPOWER_MODE : 
             runflag = 1;
             m->workstep =  M_WK_CHGPOWER_STEP;
             if(laser_on_off == M_LASER_ON_CMD)
             {
-                if ((s->workflag & M_LASER_EM_FLAG) == 0 )
+                if (((s->workflag & M_LASER_EM_FLAG) == 0 ) && (s->workflag & M_LASER_EE_FLAG))
                 {
                     set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO);
                     s->workflag = s->workflag | M_LASER_EM_FLAG;     
@@ -748,11 +771,13 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
 
             }else if (laser_on_off == M_LASER_OFF_CMD)
             {
-                if ((s->workflag & M_LASER_EM_FLAG) > 0 )
+                if (((s->workflag & M_LASER_EM_FLAG) > 0 ) && (s->workflag & M_LASER_EE_FLAG))
                 {
                     set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO);
                     s->workflag = s->workflag & (~M_LASER_EM_FLAG);
+
                 }
+
             }
         break;  
         case M_WK_IDLE_MODE : 
@@ -781,8 +806,21 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
     //if ((runflag) && (recmode == M_WK_CHGPOWER_MODE))
     if ((1) && (recmode == M_WK_CHGPOWER_MODE))
     {
+          if (s->powerchgmode == 0) 
+          {
 
-            set_power_value(recpower);
+                if (recpower > 0)
+                {
+                    recpower = chg_power_val(recpower);
+                    
+                }
+                else
+                {
+                    recpower = M_MIN_FIBER_POWER_VAL;
+                }
+
+          }            
+          set_power_value(recpower);
           //sched_wake_task(&power_latch_wake);
           //ring_buffer_queue_p(&g_latch_time_d.power_buff, recpower);
           //set_manygpio_outstate(s->gpio_base_pin, M_POWER_IO_TOTAL, recpower);
@@ -866,17 +904,17 @@ direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val)
 
     if (recpower > 0)
     {
-        recpower = chg_power_val(val);
+        //recpower = chg_power_val(val);
         laser_on_off = M_LASER_ON_CMD;
     }
     else
     {
-        recpower = M_MIN_FIBER_POWER_VAL;
+        //recpower = M_MIN_FIBER_POWER_VAL;
         laser_on_off = M_LASER_OFF_CMD;
+
         
     }
     handle_rec_command(recoid, recmode, recpower,laser_on_off);
-
 
    
 }
