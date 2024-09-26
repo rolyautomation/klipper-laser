@@ -596,7 +596,9 @@ int fiber_laser_init(struct stepper_fiber *s)
     set_agpio_in(s->gpio_base_pin+M_GPIO_IN_ALARM16_NUM);
     set_agpio_in(s->gpio_base_pin+M_GPIO_IN_ALARM21_NUM);    
     //PRR
-    setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level);
+    //setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level);
+    setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level, s->gpio_base_pin, s->gpio_base_pin+M_GPIO_LATCH_NUM);
+    set_power_value(M_DEFAULT_POWER_VAL);
 
     return(0);
 
@@ -780,8 +782,9 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
     if ((1) && (recmode == M_WK_CHGPOWER_MODE))
     {
 
-          sched_wake_task(&power_latch_wake);
-          ring_buffer_queue_p(&g_latch_time_d.power_buff, recpower);
+            set_power_value(recpower);
+          //sched_wake_task(&power_latch_wake);
+          //ring_buffer_queue_p(&g_latch_time_d.power_buff, recpower);
           //set_manygpio_outstate(s->gpio_base_pin, M_POWER_IO_TOTAL, recpower);
           //g_latch_time_d.step1_time =  timer_read_time() +  timer_from_us(s->PLATCH_BEFORE_TIME_us);
           //g_latch_time_d.step1_time =  timer_read_time() +  timer_from_us(M_LATCH_BEFORE_WAIT_TM);
@@ -789,6 +792,7 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
           //g_latch_time_d.step2_waittm = timer_from_us(s->PLATCH_AFTER_TIME_us);
           //g_latch_time_d.gpio_base_pin  = s->gpio_base_pin;
           runflag = 0;
+
 
            
     }

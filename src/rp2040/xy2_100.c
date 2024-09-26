@@ -726,8 +726,9 @@ int set_manygpio_outstate(unsigned int gpio_startnum, unsigned int gpio_count, u
 
 
 
-#define M_SEL_PIO_PSYNC  (pio1)
-#define M_SEL_SM_PSYNC   (0)
+#define M_SEL_PIO_PSYNC   (pio1)
+#define M_SEL_SM_PSYNC      (0)
+#define M_SEL_SM_SETPOWER   (1)
 
 
 #define pwm_wrap_target 0
@@ -762,6 +763,45 @@ static inline pio_sm_config pwm_program_get_default_config(uint offset) {
     return c;
 }
 
+
+
+// --------------- //
+// fiber_set_power //
+// --------------- //
+
+#define fiber_set_power_wrap_target 0
+#define fiber_set_power_wrap 6
+
+static const uint16_t fiber_set_power_program_instructions[] = {
+            //     .wrap_target
+    0x80a0, //  0: pull   block           side 0     
+    0x6008, //  1: out    pins, 8         side 0     
+    0xa042, //  2: nop                    side 0     
+    0xb042, //  3: nop                    side 1     
+    0xb042, //  4: nop                    side 1     
+    0xa042, //  5: nop                    side 0     
+    0xa042, //  6: nop                    side 0     
+            //     .wrap
+};
+
+
+static const struct pio_program fiber_set_power_program = {
+    .instructions = fiber_set_power_program_instructions,
+    .length = 7,
+    .origin = -1,
+};
+
+static inline pio_sm_config fiber_set_power_program_get_default_config(uint offset) {
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_wrap(&c, offset + fiber_set_power_wrap_target, offset + fiber_set_power_wrap);
+    sm_config_set_sideset(&c, 1, false, false);
+    return c;
+}
+
+
+
+
+
 static inline void pwm_program_init(PIO pio, uint sm, uint offset, uint pin) {
    pio_gpio_init(pio, pin);
    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
@@ -792,7 +832,58 @@ void change_pwm_duty(uint32_t level){
 
 }
 
-int  setup_pio_pwm(uint pin, uint32_t period,uint32_t level)
+
+
+static inline void fiber_set_power_program_init(PIO pio, uint sm, uint offset, uint data_pin, uint clk_pin, float clk_div) {
+
+    int i = 0;
+    for(i=0;i < 8; i++)
+    {
+       pio_gpio_init(pio, data_pin+i); 
+    }
+    pio_gpio_init(pio, clk_pin);
+
+    pio_sm_set_consecutive_pindirs(pio, sm, data_pin, 8, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, clk_pin, 1, true);
+    pio_sm_config c = fiber_set_power_program_get_default_config(offset);
+
+    sm_config_set_sideset_pins(&c, clk_pin);
+    sm_config_set_out_pins(&c, data_pin, 8);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    sm_config_set_clkdiv(&c, clk_div);
+    sm_config_set_out_shift(&c, false, true, 8);
+
+    pio_sm_init(pio, sm, offset, &c);
+    //pio_sm_set_enabled(pio, sm, true);
+}
+
+
+
+static inline int  fiber_set_power_put(PIO pio, uint sm, uint8_t x) {
+    //while (pio_sm_is_tx_fifo_full(pio, sm))
+    //;
+    if(pio_sm_is_tx_fifo_full(pio, sm) > 0)
+    {
+        return 0;
+    }
+    else
+    {
+        *(volatile uint8_t*)&pio->txf[sm] = x;
+        return 1;
+    }
+    
+}
+
+int  set_power_value(uint8_t x)
+{
+     int iret = 0;
+     iret = fiber_set_power_put(M_SEL_PIO_PSYNC, M_SEL_SM_SETPOWER, x);
+     return(iret);
+
+}
+
+
+int  setup_pio_pwm_old(uint pin, uint32_t period,uint32_t level)
 {
     int iret = 0;
 
@@ -812,6 +903,45 @@ int  setup_pio_pwm(uint pin, uint32_t period,uint32_t level)
     return(iret);
 
 }
+
+
+#define LATCH_CLK_DIV 16.f
+
+
+int  setup_pio_pwm(uint pwmpin, uint32_t period,uint32_t level, uint pin_start, uint pin_latch)
+{
+
+    int iret = 0;
+
+    //PIO pio = pio1;
+    //int sm = 0;
+    PIO pio = M_SEL_PIO_PSYNC;
+    int sm = M_SEL_SM_PSYNC;   
+    int sm_latch = M_SEL_SM_SETPOWER;
+
+#ifdef   M_NO_SDK_ONWIN
+    open_piomodulclk();
+#endif	
+
+    uint offset = pio_add_program(pio, &pwm_program);
+    uint offset_latch = pio_add_program(pio, &fiber_set_power_program);
+
+
+    pwm_program_init(pio, sm, offset, pwmpin);
+    fiber_set_power_program_init(pio, sm_latch, offset_latch, pin_start, pin_latch, LATCH_CLK_DIV);
+
+    pio_pwm_set_period(pio, sm, period);
+    pio_pwm_set_level(pio, sm, level);
+
+
+    pio_sm_set_enabled(pio, sm_latch, true);
+
+
+    return(iret);
+
+
+}
+
 
 
 #endif
