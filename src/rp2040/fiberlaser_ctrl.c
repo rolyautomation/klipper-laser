@@ -114,6 +114,8 @@ enum {
 #define  M_LASER_ON_CMD       (1)
 #define  M_LASER_OFF_CMD      (2)
 
+#define  M_GCODEF_INFTERF     (1)
+
 //#define  M_DEBUG_INFO_EN       (1)
 #define  M_DEBUG_INFO_EN       (0)
 
@@ -663,7 +665,8 @@ command_queue_step_fiber(uint32_t *args)
     uint8_t recmode = 0;
     //uint8_t reconf = 0;
     uint8_t recpower = 0;  
-    uint8_t laser_on_off = 0;  
+    uint8_t laser_on_off = 0; 
+    uint8_t interfmd = 0; 
 
     recmode = args[1];
     recpower = args[2];
@@ -678,7 +681,7 @@ command_queue_step_fiber(uint32_t *args)
         laser_on_off = M_LASER_OFF_CMD;
         
     }
-    handle_rec_command(recoid, recmode, recpower, laser_on_off);
+    handle_rec_command(recoid, recmode, recpower, laser_on_off, interfmd);
 
  
 }
@@ -688,7 +691,7 @@ DECL_COMMAND(command_queue_step_fiber,
              "queue_step_fiber oid=%c cmdmod=%c pwmv=%hu");            
 
 
-int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, uint8_t  laser_on_off)
+int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, uint8_t  laser_on_off, uint8_t  interfmd)
 {
     int iret = 0;
     struct stepper_fiber *s = stepper_oid_lookup_fiber(foid);
@@ -819,8 +822,24 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
                     recpower = M_MIN_FIBER_POWER_VAL;
                 }
 
-          }            
-          set_power_value(recpower);
+          }   
+          if (interfmd == M_GCODEF_INFTERF)   
+          {
+              if(laser_on_off == M_LASER_ON_CMD)
+              {
+                 set_power_value(recpower);   
+
+              }
+              else
+              {
+                  ;
+              }  //???
+
+          } 
+          else
+          {
+            set_power_value(recpower);
+          }   
           //sched_wake_task(&power_latch_wake);
           //ring_buffer_queue_p(&g_latch_time_d.power_buff, recpower);
           //set_manygpio_outstate(s->gpio_base_pin, M_POWER_IO_TOTAL, recpower);
@@ -904,7 +923,9 @@ direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val, uint8_t  pwm
     recmode =  M_WK_CHGPOWER_MODE;
     uint8_t laser_on_off = 0;  
     //todo 
+    uint8_t interfmd = M_GCODEF_INFTERF; 
 
+    /*
     if (recpower > 0)
     {
         //recpower = chg_power_val(val);
@@ -917,10 +938,17 @@ direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val, uint8_t  pwm
 
         
     }
+    */
+
+    laser_on_off = M_LASER_OFF_CMD;
+    if (pwm_on_off != 0)
+    {
+        laser_on_off = M_LASER_ON_CMD;
+    }
     #if M_OUTINFO_EN
     output("fibertypev:[%c,%u,%hu]",pwd_oid,val,recpower); 
     #endif    
-    handle_rec_command(recoid, recmode, recpower,laser_on_off);
+    handle_rec_command(recoid, recmode, recpower,laser_on_off,interfmd);
 
    
 }
