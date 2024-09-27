@@ -19,8 +19,8 @@
 
 extern void direct_set_pwm_pulse_width(uint8_t pwd_oid, uint32_t val);
 void  set_pwm_pulse_width(uint8_t flag,uint8_t pwd_oid, uint32_t val);
-extern void  direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val);
-void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val);
+extern void  direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val, uint8_t  pwm_on_off);
+void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val, uint8_t  pwm_on_off);
 
 
 #if CONFIG_INLINE_STEPPER_HACK && CONFIG_HAVE_STEPPER_BOTH_EDGE
@@ -312,7 +312,7 @@ runpwmout:
         }
         else
         {
-            set_pwm_pulse_width_fiberlaser(g_pwm_ctrl_data.oid_pwm_flag ,g_pwm_ctrl_data.oid_pwm, cur_pwm_val);
+            set_pwm_pulse_width_fiberlaser(g_pwm_ctrl_data.oid_pwm_flag ,g_pwm_ctrl_data.oid_pwm, cur_pwm_val, g_pwm_ctrl_data.pwm_on_off);
         }
         
     }
@@ -678,11 +678,11 @@ set_pwm_pulse_width(uint8_t flag,uint8_t pwd_oid, uint32_t val)
 
 
 void 
-set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val)
+set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val, uint8_t  pwm_on_off)
 {
     if (flag)
     {
-        direct_set_pwm_pulse_width_fibertype(pwd_oid, val);
+        direct_set_pwm_pulse_width_fibertype(pwd_oid, val, pwm_on_off);
 
     }
 

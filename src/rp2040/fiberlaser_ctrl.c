@@ -893,7 +893,7 @@ uint8_t  chg_power_val(uint32_t val)
 
 
 void 
-direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val)
+direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val, uint8_t  pwm_on_off)
 {
     
     uint8_t recoid = pwd_oid;

@@ -909,6 +909,8 @@ int  setup_pio_pwm_old(uint pin, uint32_t period,uint32_t level)
 //#define LATCH_CLK_DIV 20.f
 //#define LATCH_CLK_DIV   (62.5f)   //1us
 #define LATCH_CLK_DIV   (125.f)   //2us
+//test 
+//#define LATCH_CLK_DIV   (250.f)   //4us
 
 
 int  setup_pio_pwm(uint pwmpin, uint32_t period,uint32_t level, uint pin_start, uint pin_latch)

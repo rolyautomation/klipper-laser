@@ -23,6 +23,6 @@ int  setup_pio_pwm(unsigned int pwmpin, uint32_t period,uint32_t level, unsigned
 
 void change_pwm_duty(uint32_t level);
 
-void  direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val);
+void  direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val, uint8_t  pwm_on_off);
 
 #endif // fiberlaser_ctrl.h
