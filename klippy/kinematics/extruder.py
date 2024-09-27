@@ -560,7 +560,7 @@ class PrinterExtruderPWM:
                 self.extruder_stepper.set_extruder_stepper_pwm(pwm_oid,mcu_id,laser_type)
                 self._extrdpwm_oid = pwm_oid
                 self._laser_type =  laser_type
-                #logging.info("rev bind pwm: %i", pwm_oid)
+                logging.info("rev bind pwm: %i,%s", pwm_oid,self._laser_type)
                 pass
         else:
             logging.info("laser type : %i", self._laser_type)

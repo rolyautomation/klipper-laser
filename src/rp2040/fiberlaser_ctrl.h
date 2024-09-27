@@ -25,5 +25,4 @@ void change_pwm_duty(uint32_t level);
 
 void  direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val);
 
-
 #endif // fiberlaser_ctrl.h

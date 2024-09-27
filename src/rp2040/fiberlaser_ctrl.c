@@ -887,6 +887,9 @@ uint8_t  chg_power_val(uint32_t val)
 
 }
 
+//#define M_OUTINFO_EN  (1)
+#define M_OUTINFO_EN  (0)
+
 
 
 void 
@@ -914,10 +917,14 @@ direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val)
 
         
     }
+    #if M_OUTINFO_EN
+    output("fibertypev:[%c,%u,%hu]",pwd_oid,val,recpower); 
+    #endif    
     handle_rec_command(recoid, recmode, recpower,laser_on_off);
 
    
 }
+
 
 
 // Set an absolute time that the next step will be relative to
