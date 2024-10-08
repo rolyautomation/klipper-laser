@@ -947,8 +947,17 @@ direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val, uint8_t  pwm
     }
     #if M_OUTINFO_EN
     output("fibertypev:[%c,%u,%hu]",pwd_oid,val,recpower); 
-    #endif    
+    #endif 
+    if (recpower > 0)   
+    {
+        ;
+    }
+    else
+    {
+        laser_on_off = M_LASER_OFF_CMD;
+    }
     handle_rec_command(recoid, recmode, recpower,laser_on_off,interfmd);
+    
 
    
 }
