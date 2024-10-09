@@ -136,6 +136,8 @@ struct stepper_fiber {
     uint8_t  recvpower;
     uint32_t workflag;
 
+    uint8_t  poweron_mode;
+
     uint32_t period;
     uint32_t level;  
     uint8_t  fibertype;  
@@ -277,12 +279,24 @@ int handle_fiber_timeseq(struct stepper_fiber *s)
 
                 } else if ((M_WK_POWERON_STEP-1) == workstep)  
                 {
-                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO);
+                    if (s->poweron_mode > 0)
+                    {
+                        set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO);
+                        s->workflag = s->workflag | M_LASER_EM_FLAG;
+
+                    }
+                    else
+                    {
+                        set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO);
+                        s->workflag = s->workflag &  (~M_LASER_EM_FLAG);  
+
+                    }
                     s->workstep = 0;
-                    s->workflag = s->workflag | M_LASER_EM_FLAG;
                     s->workmode = M_WK_IDLE_MODE;
                     s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);
                     iret = 1;
+
+
                 }
 
             }
@@ -712,6 +726,7 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
         case M_WK_POWERON_MODE : 
             runflag = 1;
             m->workstep =  M_WK_POWERON_STEP;
+            s->poweron_mode = recpower_in;
             if (s->workflag & M_LASER_EE_FLAG)
             {
                 runflag = 0;
@@ -832,7 +847,8 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
               }
               else
               {
-                  ;
+                 //set_power_value(recpower); 
+                 ;
               }  //???
 
           } 
