@@ -120,6 +120,11 @@ struct pwm_ctrl_s_t {
 
 };
 
+
+uint32_t sts_speed_pulse_ticks;  
+uint32_t sts_speed_pulse_ticks_max; 
+
+
 typedef struct pwm_ctrl_s_t pwm_ctrl_s_t;
 
 
@@ -181,19 +186,54 @@ uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
     {
         return(result_value);
     }
+    //sts
+    if (sts_speed_pulse_ticks > 0)
+    {
+        if(sts_speed_pulse_ticks > inter_pulse_ticks)
+        {
+            sts_speed_pulse_ticks = inter_pulse_ticks;
+        }
+    }
+    else
+    {
+        sts_speed_pulse_ticks = inter_pulse_ticks;
+
+    }
+
+    if (sts_speed_pulse_ticks_max > 0)
+    {
+        if(sts_speed_pulse_ticks_max < inter_pulse_ticks)
+        {
+            sts_speed_pulse_ticks_max = inter_pulse_ticks;
+        }
+    }
+    else
+    {
+        sts_speed_pulse_ticks_max = inter_pulse_ticks;
+
+    }
+
     fa =  inter_pulse_ticks;
     fb =  g_pwm_ctrl_data.speed_pulse_ticks;
     fb =  fb/fa;
+    //new add
+    if (fb > 1.0 )
+    {
+        fb = 1.0;
+    }
     fc =  g_pwm_ctrl_data.pwmval;
     fc = fb*fc;
     result_value = fc;
     result_value =  result_value & 0xFF;
     return(result_value);
 
-
 }
 
-
+//sts
+void report_speed_stauts_ontest(void)
+{
+     output("speed_value:[d%u:%u,%u]",sts_speed_pulse_ticks,sts_speed_pulse_ticks_max,g_pwm_ctrl_data.speed_pulse_ticks); 
+}
 
 
 void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count, uint32_t inter_pulse_ticks)
@@ -535,6 +575,9 @@ command_config_stepper_pwm(uint32_t *args)
     } else if (!CONFIG_INLINE_STEPPER_HACK) {
         s->time.func = stepper_event_full_pwm;
     }
+    //sts
+    sts_speed_pulse_ticks = 0;
+    sts_speed_pulse_ticks_max = 0;
 }
 DECL_COMMAND(command_config_stepper_pwm, "config_stepper_pwm oid=%c step_pin=%c"
              " dir_pin=%c invert_step=%c step_pulse_ticks=%u");

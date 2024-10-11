@@ -704,6 +704,8 @@ command_queue_step_fiber(uint32_t *args)
 DECL_COMMAND(command_queue_step_fiber,
              "queue_step_fiber oid=%c cmdmod=%c pwmv=%hu");            
 
+//sts
+void report_speed_stauts_ontest(void);
 
 int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, uint8_t  laser_on_off, uint8_t  interfmd)
 {
@@ -767,6 +769,8 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
             runflag = 0;
             s->powerchgmode = 1;
             s->workflag = s->workflag | M_LASER_POWERMODE_FLAG;
+            //sts
+            report_speed_stauts_ontest();
         break;
 
         case M_WK_POWERMODE_U_MODE : 

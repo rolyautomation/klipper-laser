@@ -1051,12 +1051,15 @@ command_xy2_stepper_get_position(uint32_t *args)
 DECL_COMMAND(command_xy2_stepper_get_position, "xy2_stepper_get_position oid=%c");
 
 
-
+//void report_speed_stauts_ontest(void);
 
 void
 command_xy2_vir_get_position(uint32_t *args)
 {
     uint8_t oid = args[0];
+    //sts 
+    //report_speed_stauts_ontest();
+    
     //struct xy2_stepper *s = xy2_stepper_oid_lookup(oid);
     irq_disable();
     //uint32_t position = stepper_get_position(s);
@@ -1064,6 +1067,7 @@ command_xy2_vir_get_position(uint32_t *args)
     uint32_t y_pos_vir = g_sync_pio_data[1].position;    
     irq_enable();
     sendf("xy2_vir_position oid=%c xvpos=%u yvpos=%u", oid, x_pos_vir,y_pos_vir);
+
 }
 
 DECL_COMMAND(command_xy2_vir_get_position, "xy2_vir_get_position oid=%c");

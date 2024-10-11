@@ -404,9 +404,13 @@ class ExtruderStepperPWM:
         self._step_dist_tick  =  self.stepper.get_step_dist()
         _step_dist_time = self._step_dist_tick/curspeed
         extstepper_mcu = self.stepper.get_mcu()
-        _mcu_tick_clock = extstepper_mcu.print_time_to_clock(1)
+        _mcu_tick_clock = extstepper_mcu.print_time_to_clock(1.0)
         _mcu_tick_value =  _step_dist_time*_mcu_tick_clock
         #close#logging.info("step_dist:[%s,%s,%s,:%s,%s]", curspeed,self._step_dist_tick, _step_dist_time,_mcu_tick_clock,_mcu_tick_value)
+        #logging.info("step_dist1:[%d]", _mcu_tick_clock)
+        if (_mcu_tick_clock > 13000000):
+            raise self.printer.command_error("'%d' clock freq is error,please check."
+                                             % (_mcu_tick_clock,))  
         return(_mcu_tick_value)
 
     def _set_pressure_advance(self, pressure_advance, smooth_time):

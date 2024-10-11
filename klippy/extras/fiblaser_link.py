@@ -99,8 +99,11 @@ class FiberLaserLink:
         v = v/1000.0 * 255   
 
         self._runmode = rcmd_mode
-        self._pwm_sval = int(round(v))    
+        self._pwm_sval = int(round(v)) 
 
+        #time_clock = self._mcu.print_time_to_clock(1.0)   
+        #logging.info("RCMD_FIBER_LASER M=%d,S=%d,tk=%d", self._runmode, self._pwm_sval, time_clock)
+        
         logging.info("RCMD_FIBER_LASER M=%d,S=%d", self._runmode, self._pwm_sval)
         # Obtain print_time and apply requested settings
         toolhead = self.printer.lookup_object('toolhead')
