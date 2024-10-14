@@ -236,9 +236,11 @@ class GCodeMove:
                 if axis in params:
                     v = float(params[axis])
                     cur_absolute_coord = self.absolute_coord
+                    offset_absolute_pos = 0
                     if self.galvo_coord_confactor is not None and pos > 0 :
-                        v = v +  self.galvo_coord_confactor
-                        cur_absolute_coord = True
+                        offset_absolute_pos = self.galvo_coord_confactor
+                        #v = v +  self.galvo_coord_confactor
+                        #cur_absolute_coord = True
 
                     #if not self.absolute_coord:
                     if not cur_absolute_coord:                    
@@ -246,7 +248,8 @@ class GCodeMove:
                         self.last_position[pos+3] += v
                     else:
                         # value relative to base coordinate position
-                        self.last_position[pos+3] = v + self.base_position[pos+3]
+                        #self.last_position[pos+3] = v + self.base_position[pos+3]
+                        self.last_position[pos+3] = v + self.base_position[pos+3] + offset_absolute_pos
                         
 
             if 'E' in params:
