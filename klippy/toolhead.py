@@ -224,6 +224,10 @@ class ToolHead:
         self.lookahead = LookAheadQueue(self)
         self.lookahead.set_flush_time(BUFFER_TIME_HIGH)
         self.commanded_pos = [0., 0., 0., 0., 0., 0., 0.]
+
+        self.powervary_mode = config.getint('powervary_mode', 0, minval=0)
+        self.powervary_factor = config.getfloat('powervary_factor', 0.5, above=0.2,maxval=1.)
+
         # Velocity and acceleration control
         self.max_velocity = config.getfloat('max_velocity', above=0.)
         self.max_accel = config.getfloat('max_accel', above=0.)
@@ -465,7 +469,7 @@ class ToolHead:
             self.printer.invoke_shutdown("Exception in flush_handler")
         return self.reactor.NEVER
     # Movement commands
-    def predict_move_distance(self,newpos):
+    def predict_move_distance_old(self,newpos):
         start_pos_in = self.commanded_pos
         end_pos_in   = newpos
         start_pos_use = tuple(start_pos_in)
@@ -475,8 +479,38 @@ class ToolHead:
         if move_d < .000000001:
             move_d = 0.01
         else:  
-            move_d =  move_d/2
+            #move_d =  move_d/2  #test is ok
+            #move_d =  move_d/4
+            #move_d =  move_d
+            move_d =  self.powervary_factor*move_d
         return(move_d)
+
+    def predict_move_distance_max(self,newpos):
+        start_pos_in = self.commanded_pos
+        end_pos_in   = newpos
+        start_pos_use = tuple(start_pos_in)
+        end_pos_use  = tuple(end_pos_in)
+        axes_d = [abs(end_pos_use[i] - start_pos_use[i]) for i in (0, 1, 2, 3, 4, 5, 6)]
+        move_d = max(axes_d)
+        if move_d < .000000001:
+            move_d = 0.01
+        else:  
+            #move_d =  move_d/2  #test is ok
+            #move_d =  move_d/4
+            #move_d =  move_d
+            move_d =  self.powervary_factor*move_d
+        return(move_d)    
+
+    def predict_move_distance(self,newpos):
+        resd = 0.01
+        if self.powervary_mode > 0 :
+            resd = self.predict_move_distance_max(newpos)    
+        else:
+            resd = self.predict_move_distance_old(newpos)
+        #resd = self.predict_move_distance_old(newpos)    
+        #resd = self.predict_move_distance_max(newpos)
+        return(resd)
+        
         
     def soft_homing_BC_AXIS(self):
         self.kin.soft_homing_BC_AXIS()
