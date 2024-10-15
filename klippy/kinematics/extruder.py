@@ -397,6 +397,11 @@ class ExtruderStepperPWM:
                 raise self.printer.command_error("'%s' is not same mcu,please check."
                                              % (extstepper_name,))  
 
+
+    def set_pauseresumeflag_pwm(self, pwm_prf=0):
+        if (self.stepper is not None):
+            self.stepper.pauseresumep_stepper_pwm(pwm_prf)
+
     def get_step_dist_val(self):
         self._step_dist_tick  =  self.stepper.get_step_dist()
 
@@ -536,6 +541,7 @@ class PrinterExtruderPWM:
             toolhead.set_extruder(self, 0.)
             gcode.register_command("M104", self.cmd_M104)
             gcode.register_command("M109", self.cmd_M109)
+            gcode.register_command("TPSW", self.cmd_TPWMSW)
         gcode.register_mux_command("ACTIVATE_EXTRUDER", "EXTRUDER",
                                    self.name, self.cmd_ACTIVATE_EXTRUDER,
                                    desc=self.cmd_ACTIVATE_EXTRUDER_help)
@@ -554,7 +560,11 @@ class PrinterExtruderPWM:
         #sts['can_extrude'] = self.heater.can_extrude
         #if self.extruder_stepper is not None:
         #    sts.update(self.extruder_stepper.get_status(eventtime))
-        sts = {'extpwm': 'no info'}
+        sts = {
+               'laser_type': self._laser_type,
+               'extpwm': 'no info'
+               }
+        #printer[printer.toolhead.extruder].laser_type       
         #sts['extpwm'] = 'no info'
         return sts
     #   return 0
@@ -570,7 +580,8 @@ class PrinterExtruderPWM:
             logging.info("laser type : %i", self._laser_type)
             pass
 
-
+    def set_pauseresume_pwm(self,pwm_prf=0):
+        self.extruder_stepper.set_pauseresumeflag_pwm(pwm_prf)
 
     def cacl_step_dist_tick(self,curspeed=1):
         plus_inter_tick = self.extruder_stepper.cacl_step_dist_tick(curspeed)
@@ -692,6 +703,11 @@ class PrinterExtruderPWM:
         if self.extruder_stepper is None:
             return 0.
         return self.extruder_stepper.find_past_position(print_time)
+
+    def cmd_TPWMSW(self, gcmd):
+        pwm_prf = gcmd.get_int('S', 0, minval=0, maxval=1)
+        self.set_pauseresume_pwm(pwm_prf)
+
     def cmd_M104(self, gcmd, wait=False):
         # Set Extruder Temperature
         temp = gcmd.get_float('S', 0.)

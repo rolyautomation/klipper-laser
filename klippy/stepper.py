@@ -43,6 +43,7 @@ class MCU_stepper:
         self._reset_cmd_tag = self._get_position_cmd = None
         #self._bindpwm_cmd_tag = None
         self._bindpwm_cmd  = None
+        self._pauseresumepwm_cmd = None
         self._active_callbacks = []
         ffi_main, ffi_lib = chelper.get_ffi()
         self._stepqueue = ffi_main.gc(ffi_lib.stepcompress_alloc(oid),
@@ -126,7 +127,10 @@ class MCU_stepper:
                 #    "bind_oid_pwm oid=%c pwmoid=%c")
 
                 self._bindpwm_cmd =  self._mcu.lookup_command(
-                    "bind_oid_pwm oid=%c pwmoid=%c ltype=%c")                    
+                    "bind_oid_pwm oid=%c pwmoid=%c ltype=%c")    
+
+                self._pauseresumepwm_cmd =  self._mcu.lookup_command(
+                    "pauseresume_pwm oid=%c sw=%c")                                     
 
                 step_cmd_tag = self.convert_tag_to_signed(step_cmd_tag)
                 dir_cmd_tag = self.convert_tag_to_signed(dir_cmd_tag)
@@ -273,6 +277,10 @@ class MCU_stepper:
         if (self._bindpwm_cmd is not None):
             self._bindpwm_cmd.send([self._oid,pwm_oid,laser_type])  
             #logging.info("bind_stepper_pwm:%i %i is ok", self._oid,pwm_oid)  
+
+    def pauseresumep_stepper_pwm(self, pwm_prf=0):
+        if (self._pauseresumepwm_cmd is not None):
+            self._pauseresumepwm_cmd.send([self._oid,pwm_prf])  
 
     def _query_mcu_position(self):
         if self._mcu.is_fileoutput():

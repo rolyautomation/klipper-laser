@@ -83,6 +83,7 @@ struct stepper_pwm {
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
     uint8_t  oid_pwm_flag;
     uint8_t  laser_type; 
+    uint8_t  pauseresume_sw;
     #endif
     uint32_t position;
     struct move_queue_head mq;
@@ -116,6 +117,8 @@ struct pwm_ctrl_s_t {
 
     //uint32_t cur_pwm_val;
     uint32_t last_pwm_val;
+
+    uint8_t  pauseresume_sw;
 
 
 };
@@ -156,6 +159,12 @@ void  set_pwm_ctrl_data(uint8_t oid_pwm_flag, uint8_t  oid_pwm, uint8_t  laser_t
     g_pwm_ctrl_data.oid_pwm_flag = oid_pwm_flag;
     g_pwm_ctrl_data.oid_pwm  = oid_pwm;
     g_pwm_ctrl_data.laser_type = laser_type;
+
+}
+
+void set_pwm_pause_resume_flag(uint8_t pauseresume_sw)
+{
+    g_pwm_ctrl_data.pauseresume_sw =  pauseresume_sw;
 
 }
 
@@ -240,9 +249,20 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count, uint32_t inter_p
 {
     uint32_t cur_pwm_val=0;
     uint8_t  flag = 0;
+    uint8_t  pwm_on_off_transfer = 0; 
     //int  a = 0;
     //float  fa = 0;
 
+    //pause_resume 
+    pwm_on_off_transfer = g_pwm_ctrl_data.pwm_on_off;
+    if (g_pwm_ctrl_data.pauseresume_sw > 0 )
+    {
+        cur_pwm_val = 0;
+        flag = 1;
+        pwm_on_off_transfer = 0;
+        goto  runpwmout;
+
+    }
 
     if (g_pwm_ctrl_data.pwm_on_off == 0)
     {
@@ -352,7 +372,9 @@ runpwmout:
         }
         else
         {
-            set_pwm_pulse_width_fiberlaser(g_pwm_ctrl_data.oid_pwm_flag ,g_pwm_ctrl_data.oid_pwm, cur_pwm_val, g_pwm_ctrl_data.pwm_on_off);
+            //set_pwm_pulse_width_fiberlaser(g_pwm_ctrl_data.oid_pwm_flag ,g_pwm_ctrl_data.oid_pwm, cur_pwm_val, g_pwm_ctrl_data.pwm_on_off);
+            set_pwm_pulse_width_fiberlaser(g_pwm_ctrl_data.oid_pwm_flag ,g_pwm_ctrl_data.oid_pwm, cur_pwm_val, pwm_on_off_transfer);
+            
         }
         
     }
@@ -552,6 +574,7 @@ command_config_stepper_pwm(uint32_t *args)
     #endif
     #ifdef M_PWM_OUT_EN 
     set_pwm_ctrl_data(0, 0, 0);
+    set_pwm_pause_resume_flag(0);
     #endif
     s->dir_pin = gpio_out_setup(args[2], 0);
     s->position = -POSITION_BIAS;
@@ -677,6 +700,26 @@ command_bind_pwm_oid_stepper_pwm(uint32_t *args)
 }
 //DECL_COMMAND(command_bind_pwm_oid_stepper_pwm, "bind_oid_pwm oid=%c pwmoid=%c");
 DECL_COMMAND(command_bind_pwm_oid_stepper_pwm, "bind_oid_pwm oid=%c pwmoid=%c ltype=%c");
+
+
+void
+command_pauseresume_oid_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+
+    irq_disable();
+    s->pauseresume_sw = args[1];
+    //irq_disable();
+    //s->oid_pwm = args[1];
+    //s->oid_pwm_flag  = 1;
+    //s->laser_type = args[2];
+    irq_enable();
+    //#ifdef M_PWM_OUT_EN 
+    set_pwm_pause_resume_flag(s->pauseresume_sw);
+    //#endif
+
+}
+DECL_COMMAND(command_pauseresume_oid_stepper_pwm, "pauseresume_pwm oid=%c sw=%c");
 
 
 void
