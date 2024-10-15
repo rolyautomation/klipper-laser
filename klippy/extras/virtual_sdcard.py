@@ -5,13 +5,15 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import os, sys, logging, io
 
-VALID_GCODE_EXTS = ['gcode', 'g', 'gco']
+#VALID_GCODE_EXTS = ['gcode', 'g', 'gco']
+VALID_GCODE_EXTS = ['gcode', 'g', 'gco', 'gc']
 
 DEFAULT_ERROR_GCODE = """
 {% if 'heaters' in printer %}
    TURN_OFF_HEATERS
 {% endif %}
 """
+
 
 class VirtualSD:
     def __init__(self, config):
