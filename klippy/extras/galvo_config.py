@@ -34,6 +34,7 @@ class GalvoConfigCtrl:
         self._x_pos = config.getint('x_pos', 0, minval=0, maxval=65535)
         self._y_pos = config.getint('y_pos', 0, minval=0, maxval=65535)   
         self._coord_factor = config.getint('coord_factor', 1, minval=1)   
+        self._mirror_type = config.getint('mirror_type', 0, minval=0, maxval=3)          
         #self._mode = config.getint('mode', 0)   
 
         self._oid = self._mcu.create_oid()
@@ -72,8 +73,11 @@ class GalvoConfigCtrl:
                                 # % (self._oid, self._clock_pin, self._data_pin,self._x_pos,self._y_pos))   
         #self._mcu.add_config_cmd("config_xy2_stepper oid=%d clkb_pin=%s xb_pin=%s x_pos=%u y_pos=%u"
                                 # % (self._oid, self._clock_pin, self._data_pin,self._x_pos,self._y_pos))  
-        self._mcu.add_config_cmd("config_xy2_stepper oid=%d clkb_pin=%s xb_pin=%s x_pos=%u y_pos=%u coord_factor=%u"
-                                 % (self._oid, self._clock_pin, self._data_pin,self._x_pos,self._y_pos,self._coord_factor))                                     
+        #self._mcu.add_config_cmd("config_xy2_stepper oid=%d clkb_pin=%s xb_pin=%s x_pos=%u y_pos=%u coord_factor=%u"
+                                # % (self._oid, self._clock_pin, self._data_pin,self._x_pos,self._y_pos,self._coord_factor))    
+
+        self._mcu.add_config_cmd("config_xy2_stepper oid=%d clkb_pin=%s xb_pin=%s x_pos=%u y_pos=%u coord_factor=%u mtype=%u"
+                                 % (self._oid, self._clock_pin, self._data_pin,self._x_pos,self._y_pos,self._coord_factor,self._mirror_type))                                                                   
 
         self._cmd_queue = self._mcu.alloc_command_queue()
 

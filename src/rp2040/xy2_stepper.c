@@ -651,6 +651,7 @@ struct ring_pio_t {
   uint32_t     last_send_ar[2];
   mvirxy_sync_pio_t  * p_sync_pio;
   uint32_t     coord_factor;
+  uint8_t      mirror_type;
 };
 
 
@@ -739,6 +740,7 @@ int  update_vir_postion_info(uint8_t  gpio_step_num, uint32_t position, uint16_t
      int todoflag = 1;
      uint32_t realposition = 0; 
      unsigned char  bitv = gp_ring_pio_mang->coord_factor;
+     uint8_t mirror_type = gp_ring_pio_mang->mirror_type;
      for(i=0; i < 2; i++)
      {
 
@@ -787,7 +789,22 @@ int  update_vir_postion_info(uint8_t  gpio_step_num, uint32_t position, uint16_t
      if (  (posX_32 >> 16)   > 0)
             posX = 0xFFFF;
      if (  (posY_32 >> 16)   > 0)
-            posY = 0xFFFF;        
+            posY = 0xFFFF;    
+     // mirror transfer
+     if (mirror_type == 1)  
+     {
+            posX =  posX^0xFFFF;
+
+     } else if (mirror_type == 2)  
+     {
+            posY =  posY^0xFFFF;
+
+     } else if (mirror_type == 3)  
+     {
+            posX =  posX^0xFFFF;
+            posY =  posY^0xFFFF;            
+     }
+
      upadte_new_onedata(posX, posY);
      return(iret);
 
@@ -1002,6 +1019,7 @@ command_config_xy2_stepper(uint32_t *args)
         ring_buffer_init( &(gp_ring_pio_mang->ring_data), buff, M_BUF_SIZE_LEN);
     gp_ring_pio_mang->p_sync_pio = g_sync_pio_data;
     gp_ring_pio_mang->coord_factor = args[5];
+    gp_ring_pio_mang->mirror_type  = args[6];
 
     //move_queue_setup(&s->mq, sizeof(struct xy2_stepper_move));
     s->time.func = xy2_stepper_event_tm;
@@ -1019,9 +1037,13 @@ command_config_xy2_stepper(uint32_t *args)
 
 }
 
+/*
 DECL_COMMAND(command_config_xy2_stepper, "config_xy2_stepper oid=%c clkb_pin=%c"
              " xb_pin=%c x_pos=%hu y_pos=%hu coord_factor=%u");
+*/
 
+DECL_COMMAND(command_config_xy2_stepper, "config_xy2_stepper oid=%c clkb_pin=%c"
+             " xb_pin=%c x_pos=%hu y_pos=%hu coord_factor=%u mtype=%c");
 
 
 
