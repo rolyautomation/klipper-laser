@@ -80,10 +80,14 @@ class PrinterStepperEnable:
         # Register M18/M84 commands
         gcode = self.printer.lookup_object('gcode')
         gcode.register_command("M18", self.cmd_M18)
+        gcode.register_command("M19", self.cmd_M19)        
         gcode.register_command("M84", self.cmd_M18)
         gcode.register_command("SET_STEPPER_ENABLE",
                                self.cmd_SET_STEPPER_ENABLE,
                                desc=self.cmd_SET_STEPPER_ENABLE_help)
+        gcode.register_command("LOOK_STEPPER_ENABLE",
+                               self.cmd_LOOK_STEPPER_ENABLE,
+                               desc=self.cmd_LOOK_STEPPER_ENABLE_help)                               
     def register_stepper(self, config, mcu_stepper):
         name = mcu_stepper.get_name()
         enable = setup_enable_pin(self.printer, config.get('enable_pin', None))
@@ -96,6 +100,14 @@ class PrinterStepperEnable:
             el.motor_disable(print_time)
         self.printer.send_event("stepper_enable:motor_off", print_time)
         toolhead.dwell(DISABLE_STALL_TIME)
+    def motoroff_shominginfo(self):
+        toolhead = self.printer.lookup_object('toolhead')
+        toolhead.dwell(DISABLE_STALL_TIME)
+        print_time = toolhead.get_last_move_time()
+        for el in self.enable_lines.values():
+            el.motor_disable(print_time)
+        #self.printer.send_event("stepper_enable:motor_off", print_time)
+        toolhead.dwell(DISABLE_STALL_TIME)        
     def motor_debug_enable(self, stepper, enable):
         toolhead = self.printer.lookup_object('toolhead')
         toolhead.dwell(DISABLE_STALL_TIME)
@@ -117,6 +129,9 @@ class PrinterStepperEnable:
     def cmd_M18(self, gcmd):
         # Turn off motors
         self.motor_off()
+    def cmd_M19(self, gcmd):
+        # Turn off motors but save homing information
+        self.motoroff_shominginfo()        
     cmd_SET_STEPPER_ENABLE_help = "Enable/disable individual stepper by name"
     def cmd_SET_STEPPER_ENABLE(self, gcmd):
         stepper_name = gcmd.get('STEPPER', None)
@@ -126,6 +141,18 @@ class PrinterStepperEnable:
             return
         stepper_enable = gcmd.get_int('ENABLE', 1)
         self.motor_debug_enable(stepper_name, stepper_enable)
+    cmd_LOOK_STEPPER_ENABLE_help = "LOOK Enable/disable Status"
+    def cmd_LOOK_STEPPER_ENABLE(self, gcmd):
+        dstauts = "ST:"
+        for stepper_name, el in self.enable_lines.items():
+            dstauts=dstauts + stepper_name
+            st = el.is_motor_enabled()
+            if st:
+                dstauts = dstauts + "_v1,"
+            else:
+                dstauts = dstauts + "_v0," 
+        gcmd.respond_info('RES "%s"' % (dstauts,))           
+   
     def lookup_enable(self, name):
         if name not in self.enable_lines:
             raise self.printer.config_error("Unknown stepper '%s'" % (name,))

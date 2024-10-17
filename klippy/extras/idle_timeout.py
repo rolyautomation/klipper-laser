@@ -51,6 +51,12 @@ class IdleTimeout:
             self.state = "Ready"
             return eventtime + 1.
         print_time = self.toolhead.get_last_move_time()
+        '''
+        logging.info("\ntrans_idlest: print_time=%s"
+                            "eventtime=%s \n",
+                            print_time,
+                            eventtime)
+        '''
         self.state = "Idle"
         self.printer.send_event("idle_timeout:idle", print_time)
         return self.reactor.NEVER
@@ -59,6 +65,12 @@ class IdleTimeout:
         print_time, est_print_time, lookahead_empty = self.toolhead.check_busy(
             eventtime)
         idle_time = est_print_time - print_time
+        '''
+        logging.info("\nidle_cktm: idletm=%s print_time=%s"
+                            " est_print_time=%s eventtime=%s \n",
+                            idle_time, print_time,
+                            est_print_time, eventtime)
+        '''
         if not lookahead_empty or idle_time < 1.:
             # Toolhead is busy
             return eventtime + self.idle_timeout
@@ -88,6 +100,12 @@ class IdleTimeout:
         if self.gcode.get_mutex().test():
             # Gcode class busy
             return eventtime + READY_TIMEOUT
+        '''
+        logging.info("\nidle_tm: idletm=%s print_time=%s"
+                            " est_print_time=%s eventtime=%s \n",
+                            self.idle_timeout, print_time,
+                            est_print_time, eventtime)
+        '''
         # Transition to "ready" state
         self.state = "Ready"
         self.printer.send_event("idle_timeout:ready",
@@ -103,6 +121,12 @@ class IdleTimeout:
         self.reactor.update_timer(self.timeout_timer, curtime + check_time)
         self.printer.send_event("idle_timeout:printing",
                                 est_print_time + PIN_MIN_TIME)
+        '''
+        logging.info("\nidle_pt: curtime=%s print_time=%s"
+                            " est_print_time=%s check_time=%s \n",
+                            curtime, print_time,
+                            est_print_time, check_time)
+        '''
     cmd_SET_IDLE_TIMEOUT_help = "Set the idle timeout in seconds"
     def cmd_SET_IDLE_TIMEOUT(self, gcmd):
         timeout = gcmd.get_float('TIMEOUT', self.idle_timeout, above=0.)
