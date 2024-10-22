@@ -1,6 +1,6 @@
-# Support for executing gcode when a hardware button is pressed or released.
+# Support door action
 #
-# Copyright (C) 2019 Alec Plumb <alec@etherwalker.com>
+# Copyright (C) 2024-2028  jinqiang <jinqiang@ecomedge.io>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging

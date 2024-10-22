@@ -1,11 +1,12 @@
-# Support for executing gcode when a hardware button is pressed or released.
+# Support z axis move by key  
 #
-# Copyright (C) 2019 Alec Plumb <alec@etherwalker.com>
+# Copyright (C) 2024-2028  jinqiang <jinqiang@ecomedge.io>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 
 LONG_PRESS_DURATION = 0.400
+#LONG_PRESS_DURATION = 1.800
 
 class ZctrlPanel:
     def __init__(self, config):
@@ -143,18 +144,32 @@ class ZctrlPanel:
 
     cmd_QUERY_ZCTRL_help = "Report on the state of a zctrl"
     def cmd_QUERY_ZCTRL(self, gcmd):
-        gcmd.respond_info(self.name + ": " + self.get_status()['state'])
+        resst = self.get_status()
+        gcmd.respond_info(self.name + ": U" + resst['stateu'] + ",D" + resst['stated'])
 
     def get_status(self, eventtime=None):
         if self.up_state and self.down_state:
-            return {'state': "UPRESSED,DPRESSED"}
+            return {
+                     'stateu': "PRESSED",
+                     'stated': "PRESSED"
+                    }
         elif self.up_state or self.down_state:  
             if self.up_state:
-                return {'state': "UPRESSED,DRELEASED"}
+                return {
+                     'stateu': "PRESSED",
+                     'stated': "RELEASED"
+                    }
             else:
-                return {'state': "URELEASED,DPRESSED"}              
-        return {'state': "URELEASED,DRELEASED"}
+                return {
+                     'stateu': "RELEASED",
+                     'stated': "PRESSED"
+                    }
 
+        return {
+                  'stateu': "RELEASED",
+                  'stated': "RELEASED"
+               }
+        
 
 def load_config_prefix(config):
     return ZctrlPanel(config)
