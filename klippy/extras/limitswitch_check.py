@@ -17,7 +17,8 @@ class LimitSwitchCheck:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.name = config.get_name().split(' ')[-1]
-        self.switch_enalbe = [1, 1, 1, 1, 1, 1]
+        #self.switch_enalbe = [1, 1, 1, 1, 1, 1]
+        self.switch_enalbe = [0, 0, 0, 0, 0, 0]
         self.last_state = [0, 0, 0, 0, 0, 0]
         self.inside_handlegcode = False
         buttons = self.printer.load_object(config, "buttons")
@@ -36,6 +37,23 @@ class LimitSwitchCheck:
         self.register_switchbutton(config, 'y_max_pin', self.y_max_callback)
         self.register_switchbutton(config, 'z_min_pin', self.z_min_callback)
         self.register_switchbutton(config, 'z_max_pin', self.z_max_callback)  
+
+        self.printer.register_event_handler("homing:home_rails_begin",
+                                            self._handle_home_rails_begin)
+        self.printer.register_event_handler("homing:home_rails_end",
+                                            self._handle_home_rails_end)
+
+                                      
+    def _handle_home_rails_begin(self, homing_state, rails):
+        self.switch_enalbe[X_MIN_IND] = 0
+        self.switch_enalbe[Y_MIN_IND] = 0
+        self.switch_enalbe[Z_MIN_IND] = 0   
+
+    def _handle_home_rails_end(self, homing_state, rails):
+        self.switch_enalbe[X_MIN_IND] = 1
+        self.switch_enalbe[Y_MIN_IND] = 1
+        self.switch_enalbe[Z_MIN_IND] = 1       
+        
         
     def set_limitswitch_enable(self, ind, val):
         self.switch_enalbe[ind] = val

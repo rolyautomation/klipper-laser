@@ -79,8 +79,15 @@ class DoorAction:
 
     def get_status(self, eventtime=None):
         if self.last_state:
-            return {'state': "CLOSE"}
-        return {'state': "OPEN"}
+            return {
+                   'state': "CLOSE",
+                   'isclose': self.last_state
+                   }
+                   
+        return {
+                'state': "OPEN",
+                'isclose': self.last_state                
+                }
 
 def load_config_prefix(config):
     return DoorAction(config)
