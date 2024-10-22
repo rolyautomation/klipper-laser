@@ -67,12 +67,20 @@ class CoreXYGalvoKinematics:
             'max_z_velocity', max_velocity, above=0., maxval=max_velocity)
         self.max_z_accel = config.getfloat(
             'max_z_accel', max_accel, above=0., maxval=max_accel)
-
+        '''
         self.max_g_velocity = config.getfloat(
             'max_g_velocity', None, above=0.)
         self.max_g_accel = config.getfloat(
             'max_g_accel', None, above=0.)  
-                      
+        '''  
+        self.mech_enable_alone = config.getfloat(
+            'mech_enable_alone', 0, above=0.)
+
+        self.max_m_velocity = config.getfloat(
+            'max_m_velocity', max_velocity, above=0., maxval=max_velocity)
+        self.max_m_accel = config.getfloat(
+            'max_m_accel', max_accel, above=0., maxval=max_accel)
+
         self.limits = [(1.0, -1.0)] * (3+3)
         ranges = [r.get_range() for r in self.rails]
         self.axes_min = toolhead.Coord(*[r[0] for r in ranges], e=0.)
@@ -165,10 +173,17 @@ class CoreXYGalvoKinematics:
         #if  not move.axes_d[0] and not move.axes_d[1]:  
         #XY is not move
         # todo bc
+        '''
         if  not move.axes_d[0] and not move.axes_d[1] and not move.axes_d[2] and not move.axes_d[3]: 
-            if move.axes_d[4] > 0 or move.axes_d[5] > 0 :
+            #if move.axes_d[4] > 0 or move.axes_d[5] > 0 :
+            if move.axes_d[4] or move.axes_d[5] :    
                 if self.max_g_velocity is not None and self.max_g_accel is not None:
                     move.limit_speed(self.max_g_velocity, self.max_g_accel)
+        ''' 
+        #if self.mech_enable_alone is not None and self.mech_enable_alone > 0:
+        if self.mech_enable_alone > 0:
+            if  move.axes_d[0] or  move.axes_d[1] or move.axes_d[2] or move.axes_d[3]: 
+                move.limit_speed(self.max_m_velocity, self.max_m_accel)                   
 
         if not move.axes_d[2]:
             # Normal XY move - use defaults
