@@ -15,7 +15,7 @@ class DoorAction:
         self.inside_handlegcode = False
         buttons = self.printer.load_object(config, "buttons")
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
-        self.opendoor_template = gcode_macro.load_template(config, 'opendoor_gcode')
+        self.opendoor_template = gcode_macro.load_template(config, 'opendoor_gcode', '')
         self.closedoor_template = gcode_macro.load_template(config,
                                                           'closedoor_gcode', '')
         self.gcode = self.printer.lookup_object('gcode')
