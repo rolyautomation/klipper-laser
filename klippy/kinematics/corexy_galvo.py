@@ -67,6 +67,12 @@ class CoreXYGalvoKinematics:
             'max_z_velocity', max_velocity, above=0., maxval=max_velocity)
         self.max_z_accel = config.getfloat(
             'max_z_accel', max_accel, above=0., maxval=max_accel)
+
+        self.max_g_velocity = config.getfloat(
+            'max_g_velocity', None, above=0.)
+        self.max_g_accel = config.getfloat(
+            'max_g_accel', None, above=0.)  
+                      
         self.limits = [(1.0, -1.0)] * (3+3)
         ranges = [r.get_range() for r in self.rails]
         self.axes_min = toolhead.Coord(*[r[0] for r in ranges], e=0.)
@@ -130,6 +136,8 @@ class CoreXYGalvoKinematics:
                 if self.limits[i][0] > self.limits[i][1]:
                     raise move.move_error("Must home axis XYZ first")
                 raise move.move_error()
+
+
         for i in (3, 4, 5):
             if (i == 3) :
                 continue
@@ -152,7 +160,15 @@ class CoreXYGalvoKinematics:
         bpos, cpos = move.end_pos[4:6]
         if (bpos < limits[0+4][0] or bpos > limits[0+4][1]
             or cpos < limits[1+4][0] or cpos > limits[1+4][1]):
-            self._check_endstops(move)         
+            self._check_endstops(move)   
+
+        #if  not move.axes_d[0] and not move.axes_d[1]:  
+        #XY is not move
+        # todo bc
+        if  not move.axes_d[0] and not move.axes_d[1] and not move.axes_d[2] and not move.axes_d[3]: 
+            if move.axes_d[4] > 0 or move.axes_d[5] > 0 :
+                if self.max_g_velocity is not None and self.max_g_accel is not None:
+                    move.limit_speed(self.max_g_velocity, self.max_g_accel)
 
         if not move.axes_d[2]:
             # Normal XY move - use defaults
