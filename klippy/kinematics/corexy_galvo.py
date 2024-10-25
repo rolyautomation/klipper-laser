@@ -80,7 +80,11 @@ class CoreXYGalvoKinematics:
             'max_m_velocity', max_velocity, above=0., maxval=max_velocity)
         self.max_m_accel = config.getfloat(
             'max_m_accel', max_accel, above=0., maxval=max_accel)
-
+        
+        #xyz
+        #self.endstop_hit = [(0, 0)] * 3
+        
+        
         self.limits = [(1.0, -1.0)] * (3+3)
         ranges = [r.get_range() for r in self.rails]
         self.axes_min = toolhead.Coord(*[r[0] for r in ranges], e=0.)

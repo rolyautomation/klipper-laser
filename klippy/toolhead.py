@@ -545,6 +545,16 @@ class ToolHead:
                 curpos[i] = coord[i]
         self.move(curpos, speed)
         self.printer.send_event("toolhead:manual_move")
+
+    def manual_move_zaxis(self, zpos, speed):
+        curpos = list(self.commanded_pos)
+        curpos[2] = zpos
+        #for i in range(len(coord)):
+            #if coord[i] is not None:
+                #curpos[i] = coord[i]
+        self.move(curpos, speed, 0, 0, 0)
+        self.printer.send_event("toolhead:manual_move")
+
     def dwell(self, delay):
         next_print_time = self.get_last_move_time() + max(0., delay)
         self._advance_move_time(next_print_time)

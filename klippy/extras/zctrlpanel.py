@@ -7,6 +7,12 @@ import logging
 
 LONG_PRESS_DURATION = 0.400
 #LONG_PRESS_DURATION = 1.800
+UP_DIR_VAL  = 0
+DOWN_DIR_VAL  = 1
+#1mm
+GAP_NEED_VAL  = 1
+MAX_Z_SOFT_VAL = 100
+TM_INTER_VAL = 0.5
 
 class ZctrlPanel:
     def __init__(self, config):
@@ -15,7 +21,28 @@ class ZctrlPanel:
         self.name = config.get_name().split(' ')[-1]
         self.up_state = 0
         self.down_state = 0
+        self.upkey_usef = False
+        self.downkey_usef = False   
+        self.upkey_longmode = 0
+        self.downkey_longmode = 0          
+        #self.z_soft_high_val = MAX_Z_SOFT_VAL  
         self.inside_handlegcode = False
+        self.isidle_mode = False
+        self.isidle_mode = True
+
+        self.z_soft_high_val = config.getfloat(
+            'max_z_safe_d', MAX_Z_SOFT_VAL, above=50, maxval=120)
+        self.pshort_e_dist = config.getfloat(
+            'short_d_unit', 1, above=0., maxval=10)
+        self.plong_e_dist = config.getfloat(
+             'long_d_unit', 2, above=0., maxval=10)   
+
+        self.pshort_speed = config.getfloat(
+            'pshort_speed', 5, above=0., maxval=10)
+        self.plong_speed = config.getfloat(
+             'plong_speed', 10, above=0., maxval=30)               
+
+
         buttons = self.printer.load_object(config, "buttons")
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
         self.abnormal_template = gcode_macro.load_template(config, 'abnormal_gcode', '')
@@ -51,6 +78,18 @@ class ZctrlPanel:
         self.register_zbutton(config, 'down_pin', self.down_callback)
 
 
+
+    def check_isprinting(self,eventtime):
+        print_stats= self.printer.lookup_object('print_stats')
+        #eventtime = self.reactor.monotonic()
+        state = print_stats.get_status(eventtime)['state']
+        self.isidle_mode = True
+        if state ==  "printing":
+            self.isidle_mode = False
+        elif state ==  "paused":
+            self.isidle_mode = False
+
+
     def key_event_handle(self, key, eventtime):
 
         if not self.inside_handlegcode :
@@ -78,50 +117,157 @@ class ZctrlPanel:
                 logging.exception("Script running error key event handle")
             self.inside_handlegcode = False            
         else:
-            logging.exception("Script running repeat, check zctrl")    
+            logging.exception("Script running repeat, check zctrl")
+
+
+    def checkz_allow_run(self, rdir, rdist, rspeed):
+        toolhead = self.printer.lookup_object('toolhead')
+        z_min_st = 0
+        z_max_st = 0
+        #limitswitch_check = self.printer.lookup_object('limitswitch_check')
+        limitswitch_check = self.printer.lookup_object('limitswitch_check lswcheck')
+        
+        if limitswitch_check is not None:
+            z_min_st, z_max_st = limitswitch_check.get_zlsw()
+        pos = toolhead.get_position()  
+        zpos = pos[2]
+        rzpos = pos[2]
+        
+        if rdir == DOWN_DIR_VAL:
+            allow_val = rdist
+            exp_zpos = zpos + rdist
+            rzpos = exp_zpos
+            if  exp_zpos > self.z_soft_high_val: 
+                allow_val = self.z_soft_high_val - zpos
+                rzpos = self.z_soft_high_val
+            if  z_max_st:
+                allow_val = 0 
+
+        else:
+            rdist = -rdist
+            allow_val = rdist
+            exp_zpos = zpos + rdist
+            rzpos = exp_zpos
+            if  exp_zpos < GAP_NEED_VAL:
+                allow_val = GAP_NEED_VAL - exp_zpos
+                rzpos = GAP_NEED_VAL  
+            if  z_min_st:
+                allow_val = 0  
+
+        if  allow_val : 
+            toolhead.manual_move_zaxis(rzpos, rspeed)
+        return allow_val
+
+    def stop_now_run(self):
+        flag = 0
+        if self.upkey_longmode  > 0 :
+            self.reactor.update_timer(self.upclick_timer, self.reactor.NEVER) 
+            self.upkey_longmode = 0  
+            flag = 1    
+        if self.downkey_longmode  > 0 :
+            self.reactor.update_timer(self.downclick_timer, self.reactor.NEVER)
+            self.downkey_longmode = 0
+            falg = 1
+        if flag :
+            toolhead = self.printer.lookup_object('toolhead')
+            toolhead.dwell(0.001) 
+            #toolhead.flush_step_generation()
 
     def long_upclick_event(self, eventtime):
-        self.is_short_upclick = False
-        self.is_long_upclick = True
-        self.key_event_handle('uplngp', eventtime)
-        return self.reactor.NEVER
+        if (self.upkey_longmode > 0):
+            self.upkey_longmode = 2 
+            self.check_isprinting(eventtime)
+            if self.isidle_mode:
+                self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
+            self.key_event_handle('uplngp', eventtime)
+        else:
+            self.upkey_longmode = 1        
+            self.is_short_upclick = False
+            self.is_long_upclick = True
+            self.check_isprinting(eventtime)
+            if self.isidle_mode:            
+                self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
+            self.key_event_handle('uplngp', eventtime)
+        return eventtime+TM_INTER_VAL   
+        #return self.reactor.NEVER
 
     def long_downclick_event(self, eventtime):
-        self.is_short_downclick = False
-        self.is_long_downclick = True
-        self.key_event_handle('downlngp', eventtime)
-        return self.reactor.NEVER        
+        if self.downkey_longmode  > 0 :
+           self.downkey_longmode = 2
+           self.check_isprinting(eventtime)
+           if self.isidle_mode:           
+                self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
+           self.key_event_handle('downlngp', eventtime)
+        else:
+            self.downkey_longmode = 1                 
+            self.is_short_downclick = False
+            self.is_long_downclick = True
+            self.check_isprinting(eventtime)
+            if self.isidle_mode:             
+                self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
+            self.key_event_handle('downlngp', eventtime)
+        return eventtime+TM_INTER_VAL   
+        #return self.reactor.NEVER        
 
 
     def up_callback(self, eventtime, state):
         self.up_state = state
         if state:
-            self.is_short_upclick = True
-            self.is_long_upclick = False
-            self.reactor.update_timer(self.upclick_timer,
-                                      eventtime + LONG_PRESS_DURATION)
+            if self.downkey_usef:
+                self.upkey_usef = False
+            else:
+                self.upkey_usef = True
+            
+            if self.upkey_usef:
+                self.is_short_upclick = True
+                self.is_long_upclick = False
+                self.upkey_longmode = 0 
+                self.reactor.update_timer(self.upclick_timer,
+                                        eventtime + LONG_PRESS_DURATION)
         elif self.is_short_upclick:
-            self.reactor.update_timer(self.upclick_timer, self.reactor.NEVER)
-            self.key_event_handle('uppress', eventtime)
+            if self.upkey_usef:            
+                self.upkey_usef = False
+                self.reactor.update_timer(self.upclick_timer, self.reactor.NEVER)
+                self.check_isprinting(eventtime)
+                if self.isidle_mode:                 
+                    self.checkz_allow_run(UP_DIR_VAL, self.pshort_e_dist, self.pshort_speed)
+                self.key_event_handle('uppress', eventtime)
         #else:             
-        elif self.is_long_upclick:    
-             self.key_event_handle('uplngr', eventtime)
+        elif self.is_long_upclick:
+            if self.upkey_usef:
+                self.upkey_usef = False  
+                self.stop_now_run()     
+                self.key_event_handle('uplngr', eventtime)
 
-        
+
     def down_callback(self, eventtime, state):
         self.down_state = state
         if state:
-            self.is_short_downclick = True
-            self.is_long_downclick = False
-            self.reactor.update_timer(self.downclick_timer,
-                                      eventtime + LONG_PRESS_DURATION)
+            if self.upkey_usef:
+                self.downkey_usef = False
+            else:
+                self.downkey_usef = True
+            if self.downkey_usef:
+                self.is_short_downclick = True
+                self.is_long_downclick = False
+                self.reactor.update_timer(self.downclick_timer,
+                                        eventtime + LONG_PRESS_DURATION)
         elif self.is_short_downclick:
-            self.reactor.update_timer(self.downclick_timer, self.reactor.NEVER)
-            self.key_event_handle('downpress', eventtime)
-        #else:    
-        elif self.is_long_downclick:    
-             self.key_event_handle('downlngr', eventtime)
+            if self.downkey_usef:
+                self.reactor.update_timer(self.downclick_timer, self.reactor.NEVER)
+                self.check_isprinting(eventtime)
+                if self.isidle_mode:                  
+                    self.checkz_allow_run(DOWN_DIR_VAL, self.pshort_e_dist, self.pshort_speed)
+                self.key_event_handle('downpress', eventtime)
+                self.downkey_usef = False
 
+        #else:    
+        elif self.is_long_downclick: 
+            if self.downkey_usef:
+                self.stop_now_run()            
+                self.key_event_handle('downlngr', eventtime)
+                self.downkey_usef = False  
+           
 
     def register_zbutton(self, config, name, callback, push_only=False):
         pin = config.get(name, None)

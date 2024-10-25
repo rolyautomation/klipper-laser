@@ -38,12 +38,45 @@ class LimitSwitchCheck:
         self.register_switchbutton(config, 'z_min_pin', self.z_min_callback)
         self.register_switchbutton(config, 'z_max_pin', self.z_max_callback)  
 
+        '''
         self.printer.register_event_handler("homing:home_rails_begin",
                                             self._handle_home_rails_begin)
         self.printer.register_event_handler("homing:home_rails_end",
                                             self._handle_home_rails_end)
+        '''                                    
 
-                                      
+        self.gcode.register_command("OPEN_LSWCHECK", self.cmd_OPEN_LSWCHECK)                                            
+
+    def cmd_OPEN_LSWCHECK(self, gcmd):
+        en_flag  =  gcmd.get_int('E', 1, minval=0, maxval=10)
+        if (en_flag > 0):
+            if  (en_flag > 3):
+                self.switch_enalbe[X_MIN_IND] = 1
+                self.switch_enalbe[Y_MIN_IND] = 1
+                self.switch_enalbe[Z_MIN_IND] = 0 
+                self.switch_enalbe[X_MAX_IND] = 1
+                self.switch_enalbe[Y_MAX_IND] = 1
+                self.switch_enalbe[Z_MAX_IND] = 0                 
+            else:    
+                self.switch_enalbe[X_MIN_IND] = 1
+                self.switch_enalbe[Y_MIN_IND] = 1
+                self.switch_enalbe[Z_MIN_IND] = 1 
+                self.switch_enalbe[X_MAX_IND] = 1
+                self.switch_enalbe[Y_MAX_IND] = 1
+                self.switch_enalbe[Z_MAX_IND] = 1   
+        else:
+            self.switch_enalbe[X_MIN_IND] = 0
+            self.switch_enalbe[Y_MIN_IND] = 0
+            self.switch_enalbe[Z_MIN_IND] = 0 
+            self.switch_enalbe[X_MAX_IND] = 0
+            self.switch_enalbe[Y_MAX_IND] = 0
+            self.switch_enalbe[Z_MAX_IND] = 0
+
+    def get_zlsw(self):
+        return self.last_state[Z_MIN_IND], self.last_state[Z_MAX_IND]
+       
+
+    '''                          
     def _handle_home_rails_begin(self, homing_state, rails):
         self.switch_enalbe[X_MIN_IND] = 0
         self.switch_enalbe[Y_MIN_IND] = 0
@@ -53,8 +86,8 @@ class LimitSwitchCheck:
         self.switch_enalbe[X_MIN_IND] = 1
         self.switch_enalbe[Y_MIN_IND] = 1
         self.switch_enalbe[Z_MIN_IND] = 1       
-        
-        
+    '''    
+
     def set_limitswitch_enable(self, ind, val):
         self.switch_enalbe[ind] = val
 
