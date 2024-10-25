@@ -148,9 +148,14 @@ class ZctrlPanel:
             allow_val = rdist
             exp_zpos = zpos + rdist
             rzpos = exp_zpos
-            if  exp_zpos < GAP_NEED_VAL:
-                allow_val = GAP_NEED_VAL - exp_zpos
-                rzpos = GAP_NEED_VAL  
+            if zpos < GAP_NEED_VAL:
+                allow_val = 0  
+                rzpos = zpos
+            else:                
+                if  exp_zpos < GAP_NEED_VAL:
+                    allow_val = GAP_NEED_VAL - exp_zpos
+                    rzpos = GAP_NEED_VAL  
+
             if  z_min_st:
                 allow_val = 0  
 
