@@ -550,6 +550,7 @@ class PrinterExtruderPWM:
         logging.info("PrinterExtruderPWM end") 
         self._restartcmd_flag = False
         self._laser_type = 0
+        self._pwm_prf = 0
 
     def update_move_time(self, flush_time, clear_history_time):
         #close#logging.info("update_move_time extruderpwm") 
@@ -581,7 +582,9 @@ class PrinterExtruderPWM:
             pass
 
     def set_pauseresume_pwm(self,pwm_prf=0):
-        self.extruder_stepper.set_pauseresumeflag_pwm(pwm_prf)
+        if (self._pwm_prf != pwm_prf):
+            self.extruder_stepper.set_pauseresumeflag_pwm(pwm_prf)
+            self._pwm_prf = pwm_prf
 
     def cacl_step_dist_tick(self,curspeed=1):
         plus_inter_tick = self.extruder_stepper.cacl_step_dist_tick(curspeed)

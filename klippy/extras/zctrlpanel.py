@@ -31,7 +31,7 @@ class ZctrlPanel:
         self.isidle_mode = True
 
         self.z_soft_high_val = config.getfloat(
-            'max_z_safe_d', MAX_Z_SOFT_VAL, above=50, maxval=120)
+            'max_z_safe_d', MAX_Z_SOFT_VAL, above=40, maxval=120)
         self.pshort_e_dist = config.getfloat(
             'short_d_unit', 1, above=0., maxval=10)
         self.plong_e_dist = config.getfloat(
@@ -40,7 +40,10 @@ class ZctrlPanel:
         self.pshort_speed = config.getfloat(
             'pshort_speed', 5, above=0., maxval=10)
         self.plong_speed = config.getfloat(
-             'plong_speed', 10, above=0., maxval=30)               
+             'plong_speed', 10, above=0., maxval=30)  
+
+        self.ptime_interval = config.getfloat(
+            'time_interval', 0.1, above=0., maxval=1)                          
 
 
         buttons = self.printer.load_object(config, "buttons")
@@ -148,7 +151,8 @@ class ZctrlPanel:
             allow_val = rdist
             exp_zpos = zpos + rdist
             rzpos = exp_zpos
-            if zpos < GAP_NEED_VAL:
+            #if zpos < GAP_NEED_VAL:
+            if zpos <= GAP_NEED_VAL: #important               
                 allow_val = 0  
                 rzpos = zpos
             else:                
@@ -179,11 +183,12 @@ class ZctrlPanel:
             #toolhead.flush_step_generation()
 
     def long_upclick_event(self, eventtime):
+        allow_continue = 0
         if (self.upkey_longmode > 0):
             self.upkey_longmode = 2 
             self.check_isprinting(eventtime)
             if self.isidle_mode:
-                self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
+                allow_continue = self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
             self.key_event_handle('uplngp', eventtime)
         else:
             self.upkey_longmode = 1        
@@ -191,17 +196,21 @@ class ZctrlPanel:
             self.is_long_upclick = True
             self.check_isprinting(eventtime)
             if self.isidle_mode:            
-                self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
+                allow_continue = self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
             self.key_event_handle('uplngp', eventtime)
-        return eventtime+TM_INTER_VAL   
-        #return self.reactor.NEVER
+        #return eventtime+TM_INTER_VAL  
+        if (allow_continue != 0):
+            return eventtime + self.ptime_interval
+        else:    
+            return self.reactor.NEVER
 
     def long_downclick_event(self, eventtime):
+        allow_continue = 0        
         if self.downkey_longmode  > 0 :
            self.downkey_longmode = 2
            self.check_isprinting(eventtime)
            if self.isidle_mode:           
-                self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
+                allow_continue = self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
            self.key_event_handle('downlngp', eventtime)
         else:
             self.downkey_longmode = 1                 
@@ -209,11 +218,14 @@ class ZctrlPanel:
             self.is_long_downclick = True
             self.check_isprinting(eventtime)
             if self.isidle_mode:             
-                self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
+                allow_continue = self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
             self.key_event_handle('downlngp', eventtime)
-        return eventtime+TM_INTER_VAL   
+        #return eventtime+TM_INTER_VAL 
+        if (allow_continue != 0):
+            return eventtime + self.ptime_interval
+        else:    
+            return self.reactor.NEVER 
         #return self.reactor.NEVER        
-
 
     def up_callback(self, eventtime, state):
         self.up_state = state
