@@ -47,12 +47,91 @@ STATUS_MD = 1 << 5
 STATUS_ML = 1 << 4
 STATUS_MH = 1 << 3
 
+#cw_pin:
+#ccw_pin:
+#counterclockwise
+
+CCW_EN = 1
+CW_EN  = 1
+CCW_DIS = 0
+CW_DIS  = 0
+
+DC_MIN_TIME = 0.001
+STOP_WAIT_TIME = 0.001
+#10ms
+RUN_UNIT_SEC = 1.010
+
+class AngDCMotor:
+    def __init__(self, config):
+        self.printer = config.get_printer()
+        self.name = config.get_name()
+        self.reactor = self.printer.get_reactor()
+
+        ppins = self.printer.lookup_object('pins')
+
+        #self.cw_last_value = CW_DIS
+        self.cw_last_value = 0
+        self.cw_pin = None
+        cw_pin = config.get('cw_pin', None)
+        if cw_pin is not None:
+            self.cw_pin = ppins.setup_pin('digital_out', cw_pin)
+            self.cw_pin.setup_max_duration(0.)
+            self.cw_pin.setup_start_value(self.cw_last_value, 0)
+
+        #self.ccw_last_value = CCW_DIS
+        self.ccw_last_value =  0
+        self.ccw_pin = None
+        ccw_pin = config.get('ccw_pin', None)
+        if ccw_pin is not None:
+            self.ccw_pin = ppins.setup_pin('digital_out', ccw_pin)
+            self.ccw_pin.setup_max_duration(0.)
+            self.ccw_pin.setup_start_value(self.ccw_last_value, 0)
+
+        self.mcu = self.ccw_pin.get_mcu()
+        cwpin_mcu = self.cw_pin.get_mcu()
+        if self.mcu is not cwpin_mcu:
+            raise config.error("cw_pin ccw_pin must be on same mcu")
+        self.last_run_time = 0
+
+    def cw_move_time(self,tm_sec):
+        print_time =  self.reactor.monotonic()+3
+        print_time = max(self.last_run_time + DC_MIN_TIME, print_time)
+        self.ccw_pin.set_digital(print_time, 0)
+        self.cw_pin.set_digital(print_time,  1)
+        print_time = print_time+tm_sec
+        self.ccw_pin.set_digital(print_time, 1)
+        self.cw_pin.set_digital(print_time,  1)
+        print_time = print_time+STOP_WAIT_TIME
+        self.ccw_pin.set_digital(print_time, 0)
+        self.cw_pin.set_digital(print_time,  0)
+        self.last_run_time = print_time
+
+    def ccw_move_time(self,tm_sec):
+        print_time =  self.reactor.monotonic()+3
+        print_time = max(self.last_run_time + DC_MIN_TIME, print_time)
+        self.ccw_pin.set_digital(print_time, 1)
+        self.cw_pin.set_digital(print_time,  0)
+        print_time = print_time+tm_sec
+        self.ccw_pin.set_digital(print_time, 1)
+        self.cw_pin.set_digital(print_time,  1)
+        print_time = print_time+STOP_WAIT_TIME
+        self.ccw_pin.set_digital(print_time, 0)
+        self.cw_pin.set_digital(print_time,  0)   
+        self.last_run_time = print_time
+        #self.reactor.pause(self.reactor.monotonic() + 0.0001)  
+
+
+
+    def _set_pin(self, print_time, value):
+        self.cw_pin.set_digital(print_time,  value)
+        self.ccw_pin.set_digital(print_time, value)
 
 class Angledcmove:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.name = config.get_name().split(' ')[-1]
         self.reactor = self.printer.get_reactor()
+        self.dcmotor = AngDCMotor(config)
         self.i2c = bus.MCU_I2C_from_config(
             config, default_addr=AS5600_CHIP_ADDR, default_speed=100000)
         self.mcu = self.i2c.get_mcu()
@@ -61,11 +140,15 @@ class Angledcmove:
         self.magnet_status = 'nom'
         self.magnet_flag = 0
         self.gcode = self.printer.lookup_object('gcode')
-        self.gcode.register_mux_command("ANGLE_AS5600_INIT", "ANGLE", self.name,
+        self.gcode.register_mux_command("ANGLE_AS_F", "ANGID", self.name,
                                         self.cmd_AS5600_INIT,
                                         desc=self.cmd_AS5600_INIT_help)
 
         self.gcode.register_command("ANGLE_LAST_VAL", self.cmd_ANGLE_LAST_VAL)  
+
+        self.gcode.register_command("TEST_DCM", self.cmd_TEST_DCM)  
+
+        self.gcode.register_command("TEST_PINOUT", self.cmd_TEST_PINOUT)          
 
 
     cmd_AS5600_INIT_help = "Report on the state of as5600"
@@ -85,7 +168,34 @@ class Angledcmove:
         gcmd.respond_info(msg)
         #logging.info("\n %s\n" ,msg)
         pass
- 
+
+    def cmd_TEST_DCM(self, gcmd):
+        sum = 0
+        #self.dcmotor.cw_move_time(RUN_UNIT_SEC)
+        #self.dcmotor.ccw_move_time(RUN_UNIT_SEC)
+
+        for i in range(1):
+            self.dcmotor.cw_move_time(RUN_UNIT_SEC)
+            self.reactor.pause(self.reactor.monotonic() +RUN_UNIT_SEC)  
+            self.reactor.pause(self.reactor.monotonic() +RUN_UNIT_SEC) 
+            sum = sum + i
+        msg = "test=%d" % (sum) 
+        gcmd.respond_info(msg)    
+        pass
+
+    def cmd_TEST_PINOUT(self, gcmd):
+
+        value = gcmd.get_int('VALUE',1, minval=0, maxval=2)
+        #toolhead = self.printer.lookup_object('toolhead')
+        #toolhead.register_lookahead_callback(
+            #lambda print_time: self.dcmotor._set_pin(print_time, value))
+        print_time =  self.reactor.monotonic()+5
+        self.dcmotor._set_pin(print_time, value)    
+
+        msg = "output=%s" % (print_time) 
+        gcmd.respond_info(msg)   
+
+
     def read_register(self, reg_name, read_len):
         # read a single register
         regs = [self.chip_registers[reg_name]]
@@ -105,11 +215,11 @@ class Angledcmove:
 
 
     def read_register_D8(self, reg_name):
-        params = self.read_register(self, reg_name, 1)
+        params = self.read_register(reg_name, 1)
         return params[0]
 
     def read_register_D16(self, reg_name):
-        params = self.read_register(self, reg_name, 1)
+        params = self.read_register(reg_name, 2)
         return ((params[0] << 8) | params[1])
 
     def check_magnet_status(self):        
