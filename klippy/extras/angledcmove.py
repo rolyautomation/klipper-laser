@@ -10,7 +10,6 @@ REPORT_TIME = .8
 AS5600_CHIP_ADDR = 0x36
 
 
-
 '''
 #define REG_ZMCO        _u(0x00)
 #define REG_ZPOS        _u(0x01)
@@ -36,6 +35,7 @@ AS5600_CHIP_ADDR = 0x36
 '''
 
 
+
 AS5600_REGS = {
     'REG_ZMCO': 0x00, 'REG_ZPOS': 0x01, 'REG_MPOS': 0x03, 'REG_MANG': 0x05,
     'REG_CONF': 0x07, 'REG_RAW_ANGLE': 0x0C, 'REG_ANGLE': 0x0E,
@@ -47,14 +47,19 @@ STATUS_MD = 1 << 5
 STATUS_ML = 1 << 4
 STATUS_MH = 1 << 3
 
-#cw_pin:
-#ccw_pin:
-#counterclockwise
+#cw_pin:A
+#ccw_pin:B
+#INA=H，INB=L   CW
+#INA=L，INB=H   CCW
+#PWMA mode, pwm  normal
+#PWMB mode, pwm  1 - pwmval
 
+#counterclockwise
 CCW_EN = 1
 CW_EN  = 1
 CCW_DIS = 0
 CW_DIS  = 0
+
 
 
 INTER_CMD_TIME = 0.101
@@ -90,6 +95,7 @@ class AngDCMotor:
 
             self.ccw_pin = ppins.setup_pin('pwm', config.get('ccw_pin'))
             self.ccw_pin.setup_cycle_time(cycle_time, hardware_pwm)
+            self.pwmmodeb = config.getboolean('pwm_mb', False)
         
         else:    
             #self.cw_last_value = CW_DIS
@@ -129,71 +135,61 @@ class AngDCMotor:
         print_time = toolhead.get_last_move_time()
         print_time = print_time + waittmsec
         if self.is_pwm:
-            #self.ccw_pin.set_digital(print_time, 1)
-            #self.cw_pin.set_digital(print_time,  1)
-            self.set_digital_host(self.ccw_pin, print_time, 1)
-            self.set_digital_host(self.cw_pin, print_time, 1)              
-            print_time = print_time + waittmsec
-            #self.ccw_pin.set_digital(print_time, 0)
-            #self.cw_pin.set_digital(print_time,  pval) 
-            self.set_digital_host(self.ccw_pin, print_time, 0)
-            self.set_digital_host(self.cw_pin, print_time, pval)                        
+            if self.pwmmodeb:
+                self.set_digital_host(self.ccw_pin, print_time, 1)
+                self.set_digital_host(self.cw_pin, print_time, 1)              
+                print_time = print_time + waittmsec
+                #PWMB MODE 1-pval
+                self.set_digital_host(self.ccw_pin, print_time, pval)
+                self.set_digital_host(self.cw_pin, print_time, 1)  
+            else:
+                #PWMA MODE
+                self.set_digital_host(self.ccw_pin, print_time, 0)
+                self.set_digital_host(self.cw_pin, print_time, pval)                 
+
+
         else:
-            #self.ccw_pin.set_digital(print_time, 0)
-            #self.cw_pin.set_digital(print_time,  1) 
             self.set_digital_host(self.ccw_pin, print_time, 0)
             self.set_digital_host(self.cw_pin, print_time, 1)                            
         #logging.info("\n n:%s old:%s \n" ,print_time,print_time_old)
-        #toolhead.dwell(tm_sec)
-        #print_time = toolhead.get_last_move_time()
         print_time = print_time+tm_sec
         self.set_digital_host(self.ccw_pin, print_time, 1)
         self.set_digital_host(self.cw_pin, print_time, 1)         
-        #self.ccw_pin.set_digital(print_time, 1)
-        #self.cw_pin.set_digital(print_time,  1)
-        #toolhead.dwell(STOP_WAIT_TIME)
-        #print_time = toolhead.get_last_move_time()
         #print_time = print_time+STOP_WAIT_TIME
         print_time = print_time + waittmsec
         self.set_digital_host(self.ccw_pin, print_time, 0)
         self.set_digital_host(self.cw_pin, print_time, 0)        
-        #self.ccw_pin.set_digital(print_time, 0)
-        #self.cw_pin.set_digital(print_time,  0)
         self.last_run_time = print_time
         toolhead.dwell(0.001)
         toolhead.wait_moves()
         
-
     def ccw_move_time(self,tm_sec, waittmsec = INTER_WAIT_TIME, pval=1):
         toolhead = self.printer.lookup_object('toolhead')
         print_time = toolhead.get_last_move_time()
         print_time = print_time + waittmsec
         if self.is_pwm:
-            #self.ccw_pin.set_digital(print_time, 1)
-            #self.cw_pin.set_digital(print_time,  1)
-            self.set_digital_host(self.ccw_pin, print_time, 1)
-            self.set_digital_host(self.cw_pin, print_time, 1)             
-            print_time = print_time + waittmsec
-            #self.ccw_pin.set_digital(print_time, pval)
-            #self.cw_pin.set_digital(print_time,  0) 
-            self.set_digital_host(self.ccw_pin, print_time, pval)
-            self.set_digital_host(self.cw_pin, print_time, 0)                        
+            if self.pwmmodeb:
+                self.set_digital_host(self.ccw_pin, print_time, 1)
+                self.set_digital_host(self.cw_pin, print_time, 1)             
+                print_time = print_time + waittmsec
+                #PWMB MODE 1-pval
+                self.set_digital_host(self.ccw_pin, print_time, 1)
+                self.set_digital_host(self.cw_pin, print_time, pval)
+            else:
+                #PWMA MODE
+                self.set_digital_host(self.ccw_pin, print_time, pval)
+                self.set_digital_host(self.cw_pin, print_time, 0)                 
+                           
         else:    
-            #self.ccw_pin.set_digital(print_time, 1)
-            #self.cw_pin.set_digital(print_time,  0)
             self.set_digital_host(self.ccw_pin, print_time, 1)
             self.set_digital_host(self.cw_pin, print_time, 0)             
         print_time = print_time+tm_sec
         self.set_digital_host(self.ccw_pin, print_time, 1)
         self.set_digital_host(self.cw_pin, print_time, 1)         
-        #self.ccw_pin.set_digital(print_time, 1)
-        #self.cw_pin.set_digital(print_time,  1)
         #print_time = print_time+STOP_WAIT_TIME
         print_time = print_time + waittmsec   
         self.set_digital_host(self.ccw_pin, print_time, 0)
         self.set_digital_host(self.cw_pin, print_time, 0)               
-        #self.ccw_pin.set_digital(print_time, 0)
-        #self.cw_pin.set_digital(print_time,  0)   
         self.last_run_time = print_time
         toolhead.dwell(0.001)
         toolhead.wait_moves()
@@ -203,11 +199,13 @@ class AngDCMotor:
         if self.is_pwm:
             self.cw_pin.set_pwm(print_time,  valuea)
             self.ccw_pin.set_pwm(print_time, valueb)            
-        else:    
+        else: 
+            if valuea:
+                valuea = 1
+            if valueb:
+                valueb = 1  
             self.cw_pin.set_digital(print_time,  valuea)
             self.ccw_pin.set_digital(print_time, valueb)
-
-
 
 class Angledcmove:
     def __init__(self, config):
@@ -268,8 +266,10 @@ class Angledcmove:
 
 
     def cmd_DCM_PINOUT(self, gcmd):
-        valuea = gcmd.get_int('A',1, minval=0, maxval=2)
-        valueb = gcmd.get_int('B',1, minval=0, maxval=2)
+        #valuea = gcmd.get_int('A',1, minval=0, maxval=2)
+        #valueb = gcmd.get_int('B',1, minval=0, maxval=2)
+        valuea = gcmd.get_float('A', 1, minval=0., maxval=1.0) 
+        valueb = gcmd.get_float('B', 1, minval=0., maxval=1.0)
         #run slow
         toolhead = self.printer.lookup_object('toolhead')
         #toolhead.register_lookahead_callback(
