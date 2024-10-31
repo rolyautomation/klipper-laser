@@ -56,10 +56,18 @@ CW_EN  = 1
 CCW_DIS = 0
 CW_DIS  = 0
 
+
+INTER_CMD_TIME = 0.101
 DC_MIN_TIME = 0.001
-STOP_WAIT_TIME = 0.001
+STOP_WAIT_TIME = 0.101
 #10ms
-RUN_UNIT_SEC = 1.010
+#RUN_UNIT_SEC = 0.010
+#INTER_WAIT_TIME = 0.100
+#8ms
+RUN_UNIT_SEC = 0.008
+#10ms
+INTER_WAIT_TIME = 0.010
+
 
 class AngDCMotor:
     def __init__(self, config):
@@ -93,38 +101,78 @@ class AngDCMotor:
             raise config.error("cw_pin ccw_pin must be on same mcu")
         self.last_run_time = 0
 
-    def cw_move_time(self,tm_sec):
-        print_time =  self.reactor.monotonic()+3
-        print_time = max(self.last_run_time + DC_MIN_TIME, print_time)
+    def cw_move_time_old(self,tm_sec):
+        toolhead = self.printer.lookup_object('toolhead')
+        toolhead.dwell(INTER_CMD_TIME)
+        print_time = toolhead.get_last_move_time()
+        print_time_old =  self.reactor.monotonic()
+        #print_time = max(self.last_run_time + DC_MIN_TIME, print_time)
         self.ccw_pin.set_digital(print_time, 0)
         self.cw_pin.set_digital(print_time,  1)
-        print_time = print_time+tm_sec
-        self.ccw_pin.set_digital(print_time, 1)
-        self.cw_pin.set_digital(print_time,  1)
-        print_time = print_time+STOP_WAIT_TIME
+        #logging.info("\n n:%s old:%s \n" ,print_time,print_time_old)
+        toolhead.dwell(tm_sec)
+        print_time = toolhead.get_last_move_time()
+        #print_time = print_time+tm_sec
+        self.ccw_pin.set_digital(print_time, 0)
+        self.cw_pin.set_digital(print_time,  0)
+
+        toolhead.dwell(STOP_WAIT_TIME)
+        print_time = toolhead.get_last_move_time()
+
+        #print_time = print_time+STOP_WAIT_TIME
         self.ccw_pin.set_digital(print_time, 0)
         self.cw_pin.set_digital(print_time,  0)
         self.last_run_time = print_time
 
-    def ccw_move_time(self,tm_sec):
-        print_time =  self.reactor.monotonic()+3
-        print_time = max(self.last_run_time + DC_MIN_TIME, print_time)
+        toolhead.wait_moves()
+
+    def cw_move_time(self,tm_sec, waittmsec = INTER_WAIT_TIME):
+        toolhead = self.printer.lookup_object('toolhead')
+        print_time = toolhead.get_last_move_time()
+        print_time = print_time + waittmsec
+        self.ccw_pin.set_digital(print_time, 0)
+        self.cw_pin.set_digital(print_time,  1)
+        #logging.info("\n n:%s old:%s \n" ,print_time,print_time_old)
+        #toolhead.dwell(tm_sec)
+        #print_time = toolhead.get_last_move_time()
+        print_time = print_time+tm_sec
+        self.ccw_pin.set_digital(print_time, 1)
+        self.cw_pin.set_digital(print_time,  1)
+        #toolhead.dwell(STOP_WAIT_TIME)
+        #print_time = toolhead.get_last_move_time()
+        #print_time = print_time+STOP_WAIT_TIME
+        print_time = print_time + waittmsec
+        self.ccw_pin.set_digital(print_time, 0)
+        self.cw_pin.set_digital(print_time,  0)
+        self.last_run_time = print_time
+        toolhead.dwell(0.001)
+        toolhead.wait_moves()
+        
+
+
+    def ccw_move_time(self,tm_sec, waittmsec = INTER_WAIT_TIME):
+        toolhead = self.printer.lookup_object('toolhead')
+        print_time = toolhead.get_last_move_time()
+        print_time = print_time + waittmsec
         self.ccw_pin.set_digital(print_time, 1)
         self.cw_pin.set_digital(print_time,  0)
         print_time = print_time+tm_sec
         self.ccw_pin.set_digital(print_time, 1)
         self.cw_pin.set_digital(print_time,  1)
-        print_time = print_time+STOP_WAIT_TIME
+        #print_time = print_time+STOP_WAIT_TIME
+        print_time = print_time + waittmsec        
         self.ccw_pin.set_digital(print_time, 0)
         self.cw_pin.set_digital(print_time,  0)   
         self.last_run_time = print_time
+        toolhead.dwell(0.001)
+        toolhead.wait_moves()
         #self.reactor.pause(self.reactor.monotonic() + 0.0001)  
 
 
+    def dc_set_pin(self, print_time, valuea, valueb):
+        self.cw_pin.set_digital(print_time,  valuea)
+        self.ccw_pin.set_digital(print_time, valueb)
 
-    def _set_pin(self, print_time, value):
-        self.cw_pin.set_digital(print_time,  value)
-        self.ccw_pin.set_digital(print_time, value)
 
 class Angledcmove:
     def __init__(self, config):
@@ -146,9 +194,8 @@ class Angledcmove:
 
         self.gcode.register_command("ANGLE_LAST_VAL", self.cmd_ANGLE_LAST_VAL)  
 
-        self.gcode.register_command("TEST_DCM", self.cmd_TEST_DCM)  
-
-        self.gcode.register_command("TEST_PINOUT", self.cmd_TEST_PINOUT)          
+        self.gcode.register_command("DCM_MOVE", self.cmd_DCM_MOVE)  
+        self.gcode.register_command("DCM_PINOUT", self.cmd_DCM_PINOUT)          
 
 
     cmd_AS5600_INIT_help = "Report on the state of as5600"
@@ -169,30 +216,47 @@ class Angledcmove:
         #logging.info("\n %s\n" ,msg)
         pass
 
-    def cmd_TEST_DCM(self, gcmd):
-        sum = 0
+    def cmd_DCM_MOVE(self, gcmd):
+
+        mvdir = gcmd.get_int('D',1, minval=0, maxval=2)
+        mvtmsec = gcmd.get_float('S', 0.01, minval=0.01, maxval=10)
+        waittmsec = gcmd.get_float('W', 0.01, minval=0.01, maxval=10)
+        msg = "dcm_move:"
+        if mvdir > 0:
+            msg = msg + "cw,"
+            self.dcmotor.cw_move_time(mvtmsec, waittmsec)
+        else:
+            msg = msg + "ccw,"
+            self.dcmotor.ccw_move_time(mvtmsec, waittmsec)
+        msg = msg + "tm=%s wtm=%s " % (mvtmsec,waittmsec)
+        #sum = 0
         #self.dcmotor.cw_move_time(RUN_UNIT_SEC)
         #self.dcmotor.ccw_move_time(RUN_UNIT_SEC)
-
-        for i in range(1):
-            self.dcmotor.cw_move_time(RUN_UNIT_SEC)
-            self.reactor.pause(self.reactor.monotonic() +RUN_UNIT_SEC)  
-            self.reactor.pause(self.reactor.monotonic() +RUN_UNIT_SEC) 
-            sum = sum + i
-        msg = "test=%d" % (sum) 
+        #for i in range(2):
+            #self.dcmotor.cw_move_time(RUN_UNIT_SEC)
+            #self.dcmotor.ccw_move_time(RUN_UNIT_SEC)
+            #self.reactor.pause(self.reactor.monotonic() +RUN_UNIT_SEC)  
+            #self.reactor.pause(self.reactor.monotonic() +RUN_UNIT_SEC) 
+            #sum = sum + i
+        #msg = "test=%d" % (sum) 
         gcmd.respond_info(msg)    
         pass
 
-    def cmd_TEST_PINOUT(self, gcmd):
-
-        value = gcmd.get_int('VALUE',1, minval=0, maxval=2)
-        #toolhead = self.printer.lookup_object('toolhead')
+    def cmd_DCM_PINOUT(self, gcmd):
+        valuea = gcmd.get_int('A',1, minval=0, maxval=2)
+        valueb = gcmd.get_int('B',1, minval=0, maxval=2)
+        #run slow
+        toolhead = self.printer.lookup_object('toolhead')
         #toolhead.register_lookahead_callback(
             #lambda print_time: self.dcmotor._set_pin(print_time, value))
-        print_time =  self.reactor.monotonic()+5
-        self.dcmotor._set_pin(print_time, value)    
-
-        msg = "output=%s" % (print_time) 
+        print_time = toolhead.get_last_move_time()  
+        self.dcmotor.dc_set_pin(print_time, valuea, valueb)
+        toolhead.dwell(0.001)  # Minimal dwell  
+        toolhead.wait_moves()          
+        #print_time =  self.reactor.monotonic()+5
+        #self.dcmotor._set_pin(print_time, value)    
+        #msg = "output=%s" % (print_time) 
+        msg = "A=%d B=%d" % (valuea, valueb) 
         gcmd.respond_info(msg)   
 
 
