@@ -69,7 +69,8 @@ class VibrationPulseTest:
                                          above=0., maxval=2.)
     def run_test(self, axis, gcmd):
         toolhead = self.printer.lookup_object('toolhead')
-        X, Y, Z, E = toolhead.get_position()
+        #X, Y, Z, E = toolhead.get_position()
+        X, Y, Z, A, B, C, E = toolhead.get_position()
         sign = 1.
         freq = self.freq_start
         # Override maximum acceleration and acceleration to
@@ -99,8 +100,10 @@ class VibrationPulseTest:
             dX, dY = axis.get_point(L)
             nX = X + sign * dX
             nY = Y + sign * dY
-            toolhead.move([nX, nY, Z, E], max_v)
-            toolhead.move([X, Y, Z, E], max_v)
+            #toolhead.move([nX, nY, Z, E], max_v)
+            #toolhead.move([X, Y, Z, E], max_v)
+            toolhead.move([nX, nY, Z, A, B, C, E], max_v)
+            toolhead.move([X, Y, Z, A, B, C, E], max_v)            
             sign = -sign
             old_freq = freq
             freq += 2. * t_seg * self.hz_per_sec

@@ -35,13 +35,19 @@ AS5600_CHIP_ADDR = 0x36
 '''
 
 
-
+'''
 AS5600_REGS = {
     'REG_ZMCO': 0x00, 'REG_ZPOS': 0x01, 'REG_MPOS': 0x03, 'REG_MANG': 0x05,
     'REG_CONF': 0x07, 'REG_RAW_ANGLE': 0x0C, 'REG_ANGLE': 0x0E,
     'REG_STATUS': 0x0B, 'REG_AGC': 0x1A, 'REG_MAGNITUDE': 0x1B, 'REG_BURN': 0xFF
 }
-
+'''
+AS5600_REGS = {
+    'REG_ZMCO': 0x00, 'REG_ZPOS': 0x01, 'REGL_ZPOS': 0x02, 'REG_MPOS': 0x03, 'REGL_MPOS': 0x04,
+    'REG_MANG': 0x05, 'REGL_MANG': 0x06, 'REG_CONF': 0x07,  'REGL_CONF': 0x08, 
+    'REG_RAW_ANGLE': 0x0C, 'REGL_RAW_ANGLE': 0x0D, 'REG_ANGLE': 0x0E, 'REGL_ANGLE': 0x0F,
+    'REG_STATUS': 0x0B, 'REG_AGC': 0x1A, 'REG_MAGNITUDE': 0x1B, 'REGL_MAGNITUDE': 0x1C, 'REG_BURN': 0xFF
+}
 
 STATUS_MD = 1 << 5
 STATUS_ML = 1 << 4
@@ -228,23 +234,91 @@ class Angledcmove:
         self.gcode.register_command("ANGLE_LAST_VAL", self.cmd_ANGLE_LAST_VAL)  
 
         self.gcode.register_command("DCM_MOVE", self.cmd_DCM_MOVE)  
-        self.gcode.register_command("DCM_PINOUT", self.cmd_DCM_PINOUT)          
+        self.gcode.register_command("DCM_PINOUT", self.cmd_DCM_PINOUT) 
+        self.run_stopflag = 0
+        self.sample_timer = self.reactor.register_timer(self._sample_as5600) 
+
+
+        self.gcode.register_command("AS_DEBUG_READ", self.cmd_AS5600_DEBUG_READ)  
+        self.gcode.register_command("AS_DEBUG_WRITE", self.cmd_AS5600_DEBUG_WRITE) 
+
+
+
+
+    cmd_AS5600_DEBUG_READ_help = "Query register (for debugging)"
+    def cmd_AS5600_DEBUG_READ(self, gcmd):
+        regv = gcmd.get("REG", minval=0, maxval=255, parser=lambda x: int(x, 0))
+        lregn = [k for k, v in self.chip_registers.items() if v == regv]
+        regn = lregn[0] if len(lregn) > 0 else None
+        if regn is None: 
+            gcmd.respond_info("AS5600 REG[0x%x] address error" % (regv))
+            return
+        reg_address =  self.chip_registers[regn]
+        if reg_address != regv :
+            gcmd.respond_info("AS5600 REG[0x%x] != %s" % (regv, regn))
+            return
+        val = self.read_register_D8(regn)
+        gcmd.respond_info("AS5600 REG[0x%x] = 0x%x" % (regv, val))
+
+
+    cmd_AS5600_DEBUG_WRITE_help = "Set register (for debugging)"
+    def cmd_AS5600_DEBUG_WRITE(self, gcmd):
+        regv = gcmd.get("REG", minval=0, maxval=255, parser=lambda x: int(x, 0))
+        lregn = [k for k, v in self.chip_registers.items() if v == regv]
+        regn = lregn[0] if len(lregn) > 0 else None
+        if regn is None: 
+            gcmd.respond_info("AS5600 REG[0x%x] address error" % (regv))
+            return
+        reg_address =  self.chip_registers[regn]
+        if reg_address != regv :
+            gcmd.respond_info("AS5600 REG[0x%x] != %s" % (regv, regn))
+            return
+
+        val = gcmd.get("VAL", minval=0, maxval=255, parser=lambda x: int(x, 0))
+        self.write_register(regn,val)
+        gcmd.respond_info("AS5600 WREG[0x%x] = 0x%x" % (regv, val))  
+
+        #self.chip.set_reg(reg, val)  
+                                
+    def _sample_as5600(self, eventtime):
+        self.check_magnet_status()
+        last_raw_angle = self.read_register_D16('REG_RAW_ANGLE')
+        last_filter_angle = self.read_register_D16('REG_ANGLE')
+        hex_str1 = hex(last_raw_angle)
+        hex_str2 = hex(last_filter_angle)            
+        msg = "%s:REG_RAW_ANGLE=%s:%d" % (self.magnet_status,hex_str,self.last_angle)
+        return self.reactor.NEVER  
 
 
     cmd_AS5600_INIT_help = "Report on the state of as5600"
     def cmd_AS5600_INIT(self, gcmd):
+
+        self.write_register_D16('REG_ZPOS', 3)
+        self.write_register_D16('REG_MPOS', 0xff)
+        #self.write_register_D16('REG_MANG', 4095)
+
         self.cur_zpos = self.read_register_D16('REG_ZPOS')
         self.cur_mpos = self.read_register_D16('REG_MPOS')
+        self.cur_conf = self.read_register_D16('REG_CONF') 
+        self.cur_magn = self.read_register_D16('REG_MAGNITUDE') 
+        self.cur_vmang = self.read_register_D16('REG_MANG')
+
         msg = "as5600:"
         msg = msg + "ZPOS=" + hex(self.cur_zpos) + ","
         msg = msg + "MPOS=" + hex(self.cur_mpos) + ","
+        msg = msg + "CONF=" + hex(self.cur_conf) + ","   
+        msg = msg + "MAGN=" + hex(self.cur_magn) + ","  
+        msg = msg + "MANG=" + hex(self.cur_vmang) + "," 
         gcmd.respond_info(self.name + ":" + msg)
 
     def cmd_ANGLE_LAST_VAL(self, gcmd):
         self.check_magnet_status()
         self.last_angle = self.read_register_D16('REG_RAW_ANGLE')
+        last_filter_angle = self.read_register_D16('REG_ANGLE')
         hex_str = hex(self.last_angle)
+        hex_str2 = hex(last_filter_angle) 
         msg = "%s:REG_RAW_ANGLE=%s:%d" % (self.magnet_status,hex_str,self.last_angle)
+        msg = msg + "RAW_ANGLE=%s:%d" % (hex_str2,last_filter_angle)
         gcmd.respond_info(msg)
         #logging.info("\n %s\n" ,msg)
 
