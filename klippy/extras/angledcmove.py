@@ -218,6 +218,8 @@ class Angledcmove:
         self.printer = config.get_printer()
         self.name = config.get_name().split(' ')[-1]
         self.reactor = self.printer.get_reactor()
+        self.save_vars = None
+        
         self.dcmotor = AngDCMotor(config)
         self.i2c = bus.MCU_I2C_from_config(
             config, default_addr=AS5600_CHIP_ADDR, default_speed=100000)
@@ -241,9 +243,33 @@ class Angledcmove:
 
         self.gcode.register_command("AS_DEBUG_READ", self.cmd_AS5600_DEBUG_READ)  
         self.gcode.register_command("AS_DEBUG_WRITE", self.cmd_AS5600_DEBUG_WRITE) 
+        self.gcode.register_command("SAVE_POS_AS", self.cmd_SAVE_POS_AS)  
+        self.gcode.register_command("LOOK_POS_AS", self.cmd_LOOK_POS_AS) 
+        self.printer.register_event_handler("klippy:connect",
+                                            self._handle_connect_init)        
+    def _handle_connect_init(self):
+        self.save_vars = self.printer.lookup_object('save_variables')
+        self.load_value_pos()        
 
+    def cmd_LOOK_POS_AS(self, gcmd):                 
+        msg = "%s=%d" % ('poshead',self.poshead)
+        msg = msg + ",%s=%d" % ('posuse',self.posuse)
+        gcmd.respond_info(msg)
 
+    def load_value_pos(self):
+        self.poshead = self.save_vars.allVariables.get('poshead', 0)        
+        self.posuse = self.save_vars.allVariables.get('posuse', 0)  
 
+    def cmd_SAVE_POS_AS(self, gcmd):
+        pos = gcmd.get_int('P',1, minval=0, maxval=2)
+        cur_angle = self.read_register_D16('REG_RAW_ANGLE')
+        pos_str = 'poshead'
+        if pos > 0 :
+            pos_str = 'posuse'
+        self.save_vars.cmd_PROG_VARIABLE(pos_str, repr(cur_angle))
+        self.load_value_pos()
+        msg = "%s=%d" % (pos_str,cur_angle)
+        gcmd.respond_info(msg)
 
     cmd_AS5600_DEBUG_READ_help = "Query register (for debugging)"
     def cmd_AS5600_DEBUG_READ(self, gcmd):

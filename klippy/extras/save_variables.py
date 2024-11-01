@@ -57,6 +57,35 @@ class SaveVariables:
             logging.exception(msg)
             raise gcmd.error(msg)
         self.loadVariables()
+
+    def cmd_PROG_VARIABLE(self, varname, value):
+        #varname = gcmd.get('VARIABLE')
+        #value = gcmd.get('VALUE')
+        try:
+            value = ast.literal_eval(value)
+        except ValueError as e:
+            #raise gcmd.error("Unable to parse '%s' as a literal" % (value,))
+            msg = "Unable to parse '%s' as a literal" % (value,)
+            raise self.printer.command_error(msg)
+            
+        newvars = dict(self.allVariables)
+        newvars[varname] = value
+        # Write file
+        varfile = configparser.ConfigParser()
+        varfile.add_section('Variables')
+        for name, val in sorted(newvars.items()):
+            varfile.set('Variables', name, repr(val))
+        try:
+            f = open(self.filename, "w")
+            varfile.write(f)
+            f.close()
+        except:
+            msg = "Unable to save variable in program"
+            logging.exception(msg)
+            #raise gcmd.error(msg)
+            raise self.printer.command_error(msg)
+        self.loadVariables()
+
     def get_status(self, eventtime):
         return {'variables': self.allVariables}
 
