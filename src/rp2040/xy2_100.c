@@ -950,3 +950,120 @@ int  setup_pio_pwm(uint pwmpin, uint32_t period,uint32_t level, uint pin_start, 
 
 
 #endif
+
+
+
+#define M_PIO_CTRL_DCMOTOR
+#ifdef  M_PIO_CTRL_DCMOTOR
+
+#define M_SEL_PIO_DCM     (pio1)
+#define M_SEL_SM_DCM      (2)
+
+
+// ---------------- //
+// dcmotor_run_prog //
+// ---------------- //
+// note: 24 bits  waitcycle,  8 bits
+
+#define dcmotor_run_prog_wrap_target 0
+#define dcmotor_run_prog_wrap 5
+
+static const uint16_t dcmotor_run_prog_program_instructions[] = {
+            //     .wrap_target
+    0x80a0, //  0: pull   block                      
+    0x6058, //  1: out    y, 24                      
+    0x6002, //  2: out    pins, 2                    
+    0xa042, //  3: nop                               
+    0x0083, //  4: jmp    y--, 3                     
+    0x6002, //  5: out    pins, 2                    
+            //     .wrap
+};
+
+//#if !PICO_NO_HARDWARE
+static const struct pio_program dcmotor_run_prog_program = {
+    .instructions = dcmotor_run_prog_program_instructions,
+    .length = 6,
+    .origin = -1,
+};
+
+static inline pio_sm_config dcmotor_run_prog_program_get_default_config(uint offset) {
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_wrap(&c, offset + dcmotor_run_prog_wrap_target, offset + dcmotor_run_prog_wrap);
+    return c;
+}
+//#endif
+
+
+
+
+static inline void dcmotor_run_program_init(PIO pio, uint sm, uint offset, uint ab_pin, float clk_div) {
+
+    pio_gpio_init(pio, ab_pin);
+
+    pio_sm_set_consecutive_pindirs(pio, sm, ab_pin, 2, true);
+    pio_sm_config c = dcmotor_run_prog_program_get_default_config(offset);
+
+    sm_config_set_out_pins(&c, ab_pin, 2);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    sm_config_set_clkdiv(&c, clk_div);
+    sm_config_set_out_shift(&c, true, false, 0);
+
+    pio_sm_set_pins_with_mask(pio, sm, 0, (3u << ab_pin) );
+
+    pio_sm_init(pio, sm, offset, &c);
+    //pio_sm_set_enabled(pio, sm, true);
+
+}
+
+
+//#define DCMU_CLK_DIV   (62.5f)   //1us
+#define   DCMU_CLK_DIV   (125.f)   //2us
+//#define DCMU_CLK_DIV   (250.f)   //4us
+
+int  setup_pio_dcmctrlrun(uint ab_pin)
+{
+    int iret = 0;
+
+    PIO pio = M_SEL_PIO_DCM;
+    int dcm_sm = M_SEL_SM_DCM;   
+
+#ifdef   M_NO_SDK_ONWIN
+    open_piomodulclk();
+#endif	
+
+    uint offset_dcm = pio_add_program(pio, &dcmotor_run_prog_program);
+    dcmotor_run_program_init(pio, dcm_sm, offset_dcm, ab_pin, DCMU_CLK_DIV);
+    pio_sm_set_enabled(pio, dcm_sm, true);
+
+    if ( offset_dcm > 0)
+        iret = 1;
+
+    return(iret);
+
+}
+
+
+
+static inline void pio_dcmctrlrun_fun(PIO pio, uint sm, uint32_t dcm_instr) {
+    pio_sm_put_blocking(pio, sm, dcm_instr);
+}
+
+
+//  micro us  ctrl
+int  send_dcmctrlrun_instr(uint ab_pin, uint32_t dcm_instr)
+{
+     int iret = 0;
+     static int run_startflag = 0;
+
+     if (run_startflag == 0)
+     {
+        run_startflag = 1;
+        setup_pio_dcmctrlrun(ab_pin);
+
+     }
+     pio_dcmctrlrun_fun(M_SEL_PIO_DCM, M_SEL_SM_DCM, dcm_instr);
+     return(iret);
+
+}
+
+#endif

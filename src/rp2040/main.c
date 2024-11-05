@@ -94,14 +94,23 @@ rp2040_clear_reset_pio(uint32_t reset_bit)
 
 void  open_piomodulclk(void)
 {
+    //at 2024/11/05  run once
+    static int  runoncef = 0;
 
-    // Configure pio0 clock
-    uint32_t rb = RESETS_RESET_PIO0_BITS;
-    rp2040_clear_reset_pio(rb);
+    if (runoncef == 0)
+    {
+        runoncef = 1;
 
-    // Configure pio1 clock
-    rb = RESETS_RESET_PIO1_BITS;
-    rp2040_clear_reset_pio(rb);
+        // Configure pio0 clock
+        uint32_t rb = RESETS_RESET_PIO0_BITS;
+        rp2040_clear_reset_pio(rb);
+
+        // Configure pio1 clock
+        rb = RESETS_RESET_PIO1_BITS;
+        rp2040_clear_reset_pio(rb);   
+
+    }
+
 
 }
 
