@@ -32,6 +32,12 @@ class ZctrlPanel:
         self.inside_handlegcode = False
         #self.isidle_mode = False
         self.isidle_mode = True
+        self.dcm_keymode = False
+
+        self.dcm_existf = config.has_section('angledcmove as5600m')
+        #fail value
+        #self.dcm_existf = config.has_section('angledcmove')
+        self.limitswitch_existf = config.has_section('limitswitch_check lswcheck')
 
         self.z_soft_high_val = config.getfloat(
             'max_z_safe_d', MAX_Z_SOFT_VAL, above=40, maxval=120)
@@ -49,7 +55,6 @@ class ZctrlPanel:
             'time_interval', 0.1, above=0., maxval=1)  
 
         self.qminlen  = config.getint('qminlen', M_QLEN_MIN, minval=0)                            
-
 
         buttons = self.printer.load_object(config, "buttons")
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
@@ -85,8 +90,16 @@ class ZctrlPanel:
         self.downclick_timer = self.reactor.register_timer(self.long_downclick_event)        
         self.register_zbutton(config, 'down_pin', self.down_callback)
 
-        
+        self.printer.register_event_handler("klippy:connect",
+                                            self._handle_connect_check)         
 
+
+    def _handle_connect_check(self):
+        #if self.dcm_existf :
+            #logging.info("\n angledcmove \n")
+        #else:
+            #logging.info("\n not angledcmover \n")        
+        pass
 
 
     def check_isprinting(self,eventtime):
@@ -140,11 +153,13 @@ class ZctrlPanel:
         if qlen >  self.qminlen:        
             #logging.info("\nmore than=%d\n",self.qminlen)
             return 1
-        #limitswitch_check = self.printer.lookup_object('limitswitch_check')
-        limitswitch_check = self.printer.lookup_object('limitswitch_check lswcheck')
-        
-        if limitswitch_check is not None:
-            z_min_st, z_max_st = limitswitch_check.get_zlsw()
+        #error limitswitch_check = self.printer.lookup_object('limitswitch_check')
+        if self.limitswitch_existf :
+            #logging.info("\n limitswitch_check \n")
+            limitswitch_check = self.printer.lookup_object('limitswitch_check lswcheck')
+            if limitswitch_check is not None:
+                z_min_st, z_max_st = limitswitch_check.get_zlsw()
+
         pos = toolhead.get_position()  
         zpos = pos[2]
         rzpos = pos[2]
