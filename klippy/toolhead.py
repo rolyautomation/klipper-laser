@@ -134,6 +134,9 @@ class LookAheadQueue:
         if self.queue:
             return self.queue[-1]
         return None
+    def get_data_len_queue(self):
+        return len(self.queue)
+
     def flush(self, lazy=False):
         self.junction_flush = LOOKAHEAD_FLUSH_TIME
         update_flush_count = lazy
@@ -545,6 +548,9 @@ class ToolHead:
                 curpos[i] = coord[i]
         self.move(curpos, speed)
         self.printer.send_event("toolhead:manual_move")
+
+    def check_lookqueue_addnum(self):    
+        return self.lookahead.get_data_len_queue()
 
     def manual_move_zaxis(self, zpos, speed):
         curpos = list(self.commanded_pos)

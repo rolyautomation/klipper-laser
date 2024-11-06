@@ -538,14 +538,14 @@ class Angledcmove:
         msg = msg + "tm=%s wtm=%s pv=%s" % (mvtmsec, waittmsec, pvalue)
         gcmd.respond_info(msg)    
 
-    def dcm_move_correct(self, mvtmsec=0.01, mvdir=0)  
+    def dcm_move_correct(self, mvtmsec=0.01, mvdir=0):  
         waittmsec = 0.01
         pvalue = 0.5
         if mvdir > 0:
             self.dcmotor.cw_move_time(mvtmsec, waittmsec, pvalue)
         else:
             self.dcmotor.ccw_move_time(mvtmsec, waittmsec, pvalue)    
-            
+
 
     def cmd_DCM_PINOUT(self, gcmd):
         #valuea = gcmd.get_int('A',1, minval=0, maxval=2)
