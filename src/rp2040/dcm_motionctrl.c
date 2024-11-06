@@ -114,14 +114,14 @@ command_rinstr_ab_dcmotor(uint32_t *args)
         cur_instr0_val  =  M_BRAKE_MOTOR << M_BIT_FRPOS;
         if ( s->rundir > 0 )
         {
-            //cur_instr0_val =  cur_instr0_val | mcw_val;
-            cur_instr0_val =  cur_instr0_val | mccw_val;
+            cur_instr0_val =  cur_instr0_val | mcw_val;
+            //no need cur_instr0_val =  cur_instr0_val | mccw_val;
         }
         else
         {
 
-            cur_instr0_val =  cur_instr0_val | mcw_val;
-            //cur_instr0_val =  cur_instr0_val | mccw_val;
+            ////no need  cur_instr0_val =  cur_instr0_val | mcw_val;
+            cur_instr0_val =  cur_instr0_val | mccw_val;
 
         }
         cur_instr0_val =  (cur_instr0_val << M_MOTOR_BIT) | s->dcm_runtime;        
@@ -159,7 +159,13 @@ command_rinstr_ab_dcmotor(uint32_t *args)
     } 
     if (cur_instr0_val > 0)
     {
-        send_dcmctrlrun_instr(s->ab_pin_start, cur_instr0_val);    
+        send_dcmctrlrun_instr(s->ab_pin_start, cur_instr0_val);  
+
+        //#if 1
+        //output("dcm:[%c,%u]",s->ab_pin_start,cur_instr0_val);
+        //#endif 
+        
+
     }
     if (cur_instr1_val > 0)
     {

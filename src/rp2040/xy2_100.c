@@ -999,6 +999,7 @@ static inline pio_sm_config dcmotor_run_prog_program_get_default_config(uint off
 static inline void dcmotor_run_program_init(PIO pio, uint sm, uint offset, uint ab_pin, float clk_div) {
 
     pio_gpio_init(pio, ab_pin);
+    pio_gpio_init(pio, ab_pin+1);
 
     pio_sm_set_consecutive_pindirs(pio, sm, ab_pin, 2, true);
     pio_sm_config c = dcmotor_run_prog_program_get_default_config(offset);
@@ -1012,8 +1013,11 @@ static inline void dcmotor_run_program_init(PIO pio, uint sm, uint offset, uint 
 
     pio_sm_init(pio, sm, offset, &c);
     //pio_sm_set_enabled(pio, sm, true);
+    
 
 }
+
+
 
 
 //#define DCMU_CLK_DIV   (62.5f)   //1us

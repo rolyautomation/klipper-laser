@@ -94,8 +94,9 @@ M_RM_IDL_RUN = 2
 AB_PIN_CHG  =  1
 
 
-M_COTM_US =  1000000
-
+#M_COTM_US =  1000000
+#M_COTM_US =  1000
+M_COTM_US =  500000
 
 
 
@@ -363,16 +364,16 @@ class AngDCMotor:
         if self.is_piom:
             if  valuea and valueb:
                 self.pio_dcm.pio_instr_xmod(print_time, M_RM_BREAK) 
-                logging.info("\n M_RM_BREAK \n")
+                #logging.info("\n M_RM_BREAK \n")
             elif  not valuea and not valueb:          
                 self.pio_dcm.pio_instr_xmod(print_time, M_RM_IDLE) 
-                logging.info("\n M_RM_IDLE \n")
+                #logging.info("\n M_RM_IDLE \n")
             elif  valuea and not valueb:
                 self.pio_dcm.pio_instr_xmod(print_time, M_RM_AHBL)
-                logging.info("\n M_RM_AHBL \n")                
+                #logging.info("\n M_RM_AHBL \n")                
             else: 
                 self.pio_dcm.pio_instr_xmod(print_time, M_RM_ALBH)
-                logging.info("\n M_RM_ALBH \n")                 
+                #logging.info("\n M_RM_ALBH \n")                 
             return  
         if self.is_pwm:
             self.cw_pin.set_pwm(print_time,  valuea)
@@ -523,7 +524,8 @@ class Angledcmove:
     def cmd_DCM_MOVE(self, gcmd):
 
         mvdir = gcmd.get_int('D',1, minval=0, maxval=2)
-        mvtmsec = gcmd.get_float('S', 0.01, minval=0.01, maxval=10)
+        #mvtmsec = gcmd.get_float('S', 0.01, minval=0.01, maxval=10)
+        mvtmsec = gcmd.get_float('S', 0.01, minval=0., maxval=20)
         waittmsec = gcmd.get_float('W', 0.01, minval=0.01, maxval=10)
         pvalue = gcmd.get_float('P', 1, minval=0., maxval=1.0)        
         msg = "dcm_move:"
@@ -536,6 +538,14 @@ class Angledcmove:
         msg = msg + "tm=%s wtm=%s pv=%s" % (mvtmsec, waittmsec, pvalue)
         gcmd.respond_info(msg)    
 
+    def dcm_move_correct(self, mvtmsec=0.01, mvdir=0)  
+        waittmsec = 0.01
+        pvalue = 0.5
+        if mvdir > 0:
+            self.dcmotor.cw_move_time(mvtmsec, waittmsec, pvalue)
+        else:
+            self.dcmotor.ccw_move_time(mvtmsec, waittmsec, pvalue)    
+            
 
     def cmd_DCM_PINOUT(self, gcmd):
         #valuea = gcmd.get_int('A',1, minval=0, maxval=2)
@@ -552,8 +562,6 @@ class Angledcmove:
         toolhead.wait_moves()          
         msg = "A=%d B=%d" % (valuea, valueb) 
         gcmd.respond_info(msg)   
-
-
 
     def read_register(self, reg_name, read_len):
         # read a single register
