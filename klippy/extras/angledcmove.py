@@ -80,6 +80,106 @@ RUN_UNIT_SEC = 0.008
 INTER_WAIT_TIME = 0.010
 MAX_SCHEDULE_TIME = 5.0
 
+
+M_RM_IDLE  = 3
+M_RM_BREAK = 4
+#M_RM_IDL_BRK = 5
+#M_RM_BRK_IDL = 6
+M_RM_AHBL = 5
+M_RM_ALBH = 6
+
+M_RM_BRK_RUN = 1
+M_RM_IDL_RUN = 2
+
+AB_PIN_CHG  =  1
+
+
+M_COTM_US =  1000000
+
+
+
+
+class MabControl_PIO:
+    def __init__(self, config, ab_chg):
+        self.printer = config.get_printer()
+        self.name = config.get_name()
+        self.reactor = self.printer.get_reactor()
+
+        self.ab_chg = ab_chg
+        ppins = self.printer.lookup_object('pins')
+
+        cw_pin_params = ppins.lookup_pin(config.get('cw_pin'))
+        ccw_pin_params = ppins.lookup_pin(config.get('ccw_pin'))     
+
+        mcu = cw_pin_params['chip']
+        if mcu is not ccw_pin_params['chip']:
+            raise config.error("Mab_pio pins must be on same mcu")  
+
+        self._mcu = mcu
+        self._cw_pin = cw_pin_params['pin']    
+        self._ccw_pin = ccw_pin_params['pin']  
+
+        self._oid = self._mcu.create_oid()
+        self._mcu.register_config_callback(self._build_config)
+
+        self._last_clock = 0  
+
+    def _build_config(self):
+
+        self._mcu.add_config_cmd("config_ab_dcmotor oid=%d ab_min_pin=%s wkm=%u"
+                                        % (self._oid, self._cw_pin, self.ab_chg))  
+
+        self._cmd_queue = self._mcu.alloc_command_queue()
+
+        self._pio_instr_cmds_cmd = self._mcu.lookup_command(
+            "rinstr_ab_dcmotor oid=%c rtm=%u wtm=%u dir=%c wmod=%c", cq=self._cmd_queue)                                                                                                    
+                                         
+    def get_mcu(self):
+        return self._mcu
+
+    def pio_instr_send(self, print_time, runtm, waittm, vdir, vwmod):
+        clock = self._mcu.print_time_to_clock(print_time)
+        self._pio_instr_cmds_cmd.send([self._oid, runtm, waittm, vdir, vwmod],
+                           minclock=self._last_clock, reqclock=clock)
+        self._last_clock = clock   
+
+    def pio_instr_cw(self, print_time, runtm, pmode=0):
+        waittm = 1
+        vdir = 1
+        runtmus = int(runtm*M_COTM_US+0.5)
+        vwmod = M_RM_IDL_RUN
+        if pmode > 0 :
+            vwmod = M_RM_BRK_RUN
+        self.pio_instr_send(print_time, runtmus, waittm, vdir, vwmod)    
+
+    def pio_instr_ccw(self, print_time, runtm, pmode=0):
+        waittm = 1
+        vdir = 0
+        runtmus = int(runtm*M_COTM_US+0.5)
+        vwmod = M_RM_IDL_RUN
+        if pmode > 0 :
+            vwmod = M_RM_BRK_RUN
+        self.pio_instr_send(print_time, runtmus, waittm, vdir, vwmod)  
+
+    def pio_instr_idle(self, print_time, runtmus=1):
+        waittm = 1
+        vdir = 0
+        vwmod = M_RM_IDLE
+        self.pio_instr_send(print_time, runtmus, waittm, vdir, vwmod)  
+
+    def pio_instr_break(self, print_time, runtmus=1):
+        waittm = 1
+        vdir = 0
+        vwmod = M_RM_BREAK
+        self.pio_instr_send(print_time, runtmus, waittm, vdir, vwmod)  
+
+    def pio_instr_xmod(self, print_time, xmod=M_RM_IDLE, runtmus=1):
+        waittm = 1
+        vdir = 0
+        vwmod = xmod
+        self.pio_instr_send(print_time, runtmus, waittm, vdir, vwmod) 
+
+
 class AngDCMotor:
     def __init__(self, config):
         self.printer = config.get_printer()
@@ -89,6 +189,15 @@ class AngDCMotor:
         ppins = self.printer.lookup_object('pins')
         self.cw_last_value = 0
         self.ccw_last_value =  0
+
+        self.is_piom = config.getboolean('pio_mode', False)
+        ab_chg  = config.getint('ab_chg', 0, minval=0)
+        self.pio_rmodeb = config.getint('prmode', 0, minval=0)
+
+        if self.is_piom:
+            #self.pio_rmodeb = config.getint('prmode', 0, minval=0)
+            self.pio_dcm = MabControl_PIO(config, ab_chg)
+            return  
 
         self.is_pwm = config.getboolean('pwm', False)
         if self.is_pwm:
@@ -135,8 +244,32 @@ class AngDCMotor:
         else:
             pinc.set_digital(print_time, value)         
 
+    def cw_move_time_pio(self,tm_sec, waittmsec = INTER_WAIT_TIME):
+        toolhead = self.printer.lookup_object('toolhead')
+        print_time = toolhead.get_last_move_time()
+        print_time = print_time + waittmsec
+        if (self.pio_rmodeb > 0):
+            self.pio_dcm.pio_instr_xmod(print_time, M_RM_BREAK) 
+            print_time = print_time + waittmsec
+            self.pio_dcm.pio_instr_cw(print_time, tm_sec, 1)
+            print_time = print_time+tm_sec + waittmsec
+            self.pio_dcm.pio_instr_xmod(print_time, M_RM_IDLE)
+        else:
+            self.pio_dcm.pio_instr_xmod(print_time, M_RM_IDLE) 
+            print_time = print_time + waittmsec
+            self.pio_dcm.pio_instr_cw(print_time, tm_sec, 0)                
+            print_time = print_time+tm_sec + waittmsec
+            self.pio_dcm.pio_instr_xmod(print_time, M_RM_IDLE)
+
+        self.last_run_time = print_time
+        toolhead.dwell(0.001)
+        toolhead.wait_moves()            
+
 
     def cw_move_time(self,tm_sec, waittmsec = INTER_WAIT_TIME, pval=1):
+        if self.is_piom:
+            self.cw_move_time_pio(tm_sec,waittmsec)
+            return 
         toolhead = self.printer.lookup_object('toolhead')
         print_time = toolhead.get_last_move_time()
         print_time = print_time + waittmsec
@@ -168,8 +301,33 @@ class AngDCMotor:
         self.last_run_time = print_time
         toolhead.dwell(0.001)
         toolhead.wait_moves()
-        
+
+    def ccw_move_time_pio(self,tm_sec, waittmsec = INTER_WAIT_TIME):  
+        toolhead = self.printer.lookup_object('toolhead')
+        print_time = toolhead.get_last_move_time()
+        print_time = print_time + waittmsec
+        if (self.pio_rmodeb > 0):
+            self.pio_dcm.pio_instr_xmod(print_time, M_RM_BREAK) 
+            print_time = print_time + waittmsec
+            self.pio_dcm.pio_instr_ccw(print_time, tm_sec, 1)
+            print_time = print_time+tm_sec + waittmsec
+            self.pio_dcm.pio_instr_xmod(print_time, M_RM_IDLE)
+        else:
+            self.pio_dcm.pio_instr_xmod(print_time, M_RM_IDLE) 
+            print_time = print_time + waittmsec
+            self.pio_dcm.pio_instr_ccw(print_time, tm_sec, 0)                
+            print_time = print_time+tm_sec + waittmsec
+            self.pio_dcm.pio_instr_xmod(print_time, M_RM_IDLE)
+
+        self.last_run_time = print_time
+        toolhead.dwell(0.001)
+        toolhead.wait_moves()           
+
+
     def ccw_move_time(self,tm_sec, waittmsec = INTER_WAIT_TIME, pval=1):
+        if self.is_piom:
+            self.ccw_move_time_pio(tm_sec,waittmsec)
+            return         
         toolhead = self.printer.lookup_object('toolhead')
         print_time = toolhead.get_last_move_time()
         print_time = print_time + waittmsec
@@ -202,6 +360,20 @@ class AngDCMotor:
 
 
     def dc_set_pin(self, print_time, valuea, valueb):
+        if self.is_piom:
+            if  valuea and valueb:
+                self.pio_dcm.pio_instr_xmod(print_time, M_RM_BREAK) 
+                logging.info("\n M_RM_BREAK \n")
+            elif  not valuea and not valueb:          
+                self.pio_dcm.pio_instr_xmod(print_time, M_RM_IDLE) 
+                logging.info("\n M_RM_IDLE \n")
+            elif  valuea and not valueb:
+                self.pio_dcm.pio_instr_xmod(print_time, M_RM_AHBL)
+                logging.info("\n M_RM_AHBL \n")                
+            else: 
+                self.pio_dcm.pio_instr_xmod(print_time, M_RM_ALBH)
+                logging.info("\n M_RM_ALBH \n")                 
+            return  
         if self.is_pwm:
             self.cw_pin.set_pwm(print_time,  valuea)
             self.ccw_pin.set_pwm(print_time, valueb)            
