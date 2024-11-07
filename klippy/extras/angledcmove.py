@@ -10,6 +10,19 @@ REPORT_TIME = .8
 AS5600_CHIP_ADDR = 0x36
 
 
+
+ANGLE_IN_MIN = 0
+ANGLE_IN_MAX = 4095
+ANGLE_MOD_VAL = 4096
+ANGLE_HF_VAL  = 2048
+DIFF_VAL = 2
+#TTURN_TM_SEC = 2.8
+#TTURN_TM_SEC = 2.73
+TTURN_TM_SEC = 2.65
+MIN_RUN_TMUNIT = 0.005
+FIND_MAX_TIMES  = 100
+
+
 '''
 #define REG_ZMCO        _u(0x00)
 #define REG_ZPOS        _u(0x01)
@@ -397,6 +410,9 @@ class Angledcmove:
         self.i2c = bus.MCU_I2C_from_config(
             config, default_addr=AS5600_CHIP_ADDR, default_speed=100000)
         self.mcu = self.i2c.get_mcu()
+
+        self.taturn_sec = TTURN_TM_SEC
+
         self.chip_registers = AS5600_REGS
         self.last_angle = 0
         self.magnet_status = 'nom'
@@ -418,11 +434,19 @@ class Angledcmove:
         self.gcode.register_command("AS_DEBUG_WRITE", self.cmd_AS5600_DEBUG_WRITE) 
         self.gcode.register_command("SAVE_POS_AS", self.cmd_SAVE_POS_AS)  
         self.gcode.register_command("LOOK_POS_AS", self.cmd_LOOK_POS_AS) 
+        self.gcode.register_command("FIND_POS_BYAS", self.cmd_FIND_POS_BYAS)       
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_init)        
     def _handle_connect_init(self):
         self.save_vars = self.printer.lookup_object('save_variables')
-        self.load_value_pos()        
+        self.load_value_pos()   
+
+    def cmd_FIND_POS_BYAS(self, gcmd):   
+        mpos = gcmd.get_int('M',1, minval=0, maxval=4095)  
+        retst = self.find_angle_pos(mpos) 
+        msg = "%s=%d" % ("result:",retst)
+        gcmd.respond_info(msg)  
+
 
     def cmd_LOOK_POS_AS(self, gcmd):                 
         msg = "%s=%d" % ('poshead',self.poshead)
@@ -520,6 +544,80 @@ class Angledcmove:
         msg = msg + "RAW_ANGLE=%s:%d" % (hex_str2,last_filter_angle)
         gcmd.respond_info(msg)
         #logging.info("\n %s\n" ,msg)
+
+    def read_cur_angle_value(self):  
+        #cur_value = self.read_register_D16('REG_RAW_ANGLE')
+        cur_value = self.read_register_D16('REG_ANGLE')
+        return  cur_value  
+
+
+    def decide_val_tolerance(self, curangle, destangle):
+        accept_toler = 0
+        diffval = abs(curangle - destangle)
+        if diffval < DIFF_VAL:
+            accept_toler = 1
+        diffval_1 =  ANGLE_MOD_VAL - diffval
+        if diffval_1 < DIFF_VAL:
+            accept_toler = 1
+        return accept_toler
+        
+    def angel_transfrom_rtm(self, angle_value):   
+        ret_sec = angle_value/ANGLE_MOD_VAL
+        ret_sec = self.taturn_sec * ret_sec
+        if ret_sec < MIN_RUN_TMUNIT:
+            ret_sec = MIN_RUN_TMUNIT            
+        return ret_sec
+
+    def wait_motionless(self, tmval = 0.001):
+        toolhead = self.printer.lookup_object('toolhead')
+        toolhead.dwell(tmval) 
+        toolhead.wait_moves()  
+
+    def find_angle_pos(self, destangle): 
+        successf = 0
+        if destangle < 0  or  destangle > ANGLE_IN_MAX :
+            successf = 1
+            return successf   
+        find_times = 0     
+        #cur_angle_value = self.read_cur_angle_value()
+        #ret = self.decide_val_tolerance(cur_angle_value, destangle)
+        #if (ret > 0)
+            #return successf
+        while True:
+            cur_angle_value = self.read_cur_angle_value()
+            logging.info("cur_angle=%d\n" ,cur_angle_value)
+            ret = self.decide_val_tolerance(cur_angle_value, destangle)
+            if (ret > 0):
+                break  
+            if find_times > FIND_MAX_TIMES:
+                successf = 2
+                break             
+            diffv = destangle - cur_angle_value
+            abs_diffv = abs(diffv)
+            CW_DIR = 0
+            runangle = 0
+            if abs_diffv  <  ANGLE_HF_VAL:
+                runangle = abs_diffv  
+                if  diffv > 0:
+                    CW_DIR = 1
+                else:
+                    CW_DIR = 0
+            else:
+                runangle = ANGLE_MOD_VAL-abs_diffv 
+                if  diffv > 0:
+                    CW_DIR = 0
+                else:
+                    CW_DIR = 1
+            runtmsec = self.angel_transfrom_rtm(runangle)
+            logging.info("%dinfo [%s:%s] dir=%d \n",find_times, runangle, runtmsec, CW_DIR)
+            self.dcm_move_correct(runtmsec,CW_DIR)
+            self.wait_motionless(0.5)
+            find_times = find_times + 1
+        logging.info("findtimes=%d\n", find_times)
+
+        return successf
+
+
 
     def cmd_DCM_MOVE(self, gcmd):
 

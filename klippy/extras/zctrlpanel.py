@@ -16,6 +16,12 @@ TM_INTER_VAL = 0.5
 
 M_QLEN_MIN = 3
 
+
+CCW_DIR_VAL  = 0
+CW_DIR_VAL   = 1
+
+
+
 class ZctrlPanel:
     def __init__(self, config):
         self.printer = config.get_printer()
@@ -54,7 +60,12 @@ class ZctrlPanel:
         self.ptime_interval = config.getfloat(
             'time_interval', 0.1, above=0., maxval=1)  
 
-        self.qminlen  = config.getint('qminlen', M_QLEN_MIN, minval=0)                            
+        self.qminlen  = config.getint('qminlen', M_QLEN_MIN, minval=0)   
+
+
+        self.dcm_long_stepf = 2.8/4
+        self.dcm_short_setpf = 0.01
+
 
         buttons = self.printer.load_object(config, "buttons")
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
@@ -91,7 +102,30 @@ class ZctrlPanel:
         self.register_zbutton(config, 'down_pin', self.down_callback)
 
         self.printer.register_event_handler("klippy:connect",
-                                            self._handle_connect_check)         
+                                            self._handle_connect_check)     
+
+
+        self.gcode.register_command("SW_AS_KEYM", self.cmd_SW_AS_KEYM)  
+        self.gcode.register_command("LOOK_AS_KEYM", self.cmd_LOOK_AS_KEYM)                                                 
+
+    def cmd_SW_AS_KEYM(self, gcmd):
+        sw = gcmd.get_int('S',1, minval=0, maxval=2)
+        self.dcm_keymode = False
+        st_str = 'close'
+        if sw > 0:
+            self.dcm_keymode = True
+            st_str = 'open'
+        msg = "%s=%d" % (st_str,sw)
+        gcmd.respond_info(msg) 
+
+    def cmd_LOOK_AS_KEYM(self, gcmd):
+        sw = 0
+        st_str = 'close'
+        if self.dcm_keymode :
+            sw = 1
+            st_str = 'open'
+        msg = "%s=%d" % (st_str,sw)
+        gcmd.respond_info(msg) 
 
 
     def _handle_connect_check(self):
@@ -111,7 +145,9 @@ class ZctrlPanel:
             self.isidle_mode = False
         elif state ==  "paused":
             self.isidle_mode = False
-
+        #piro high    
+        if self.dcm_keymode :    
+            self.isidle_mode = False
 
     def key_event_handle(self, key, eventtime):
 
@@ -141,6 +177,13 @@ class ZctrlPanel:
             self.inside_handlegcode = False            
         else:
             logging.exception("Script running repeat, check zctrl")
+
+    def checkdcm_allow_run(self, rdir, rdistf, rspeed=1):
+        allow_run_next = 0
+        if self.dcm_existf and self.dcm_keymode:
+            angledcmoveas = self.printer.lookup_object('angledcmove as5600m') 
+            angledcmoveas.dcm_move_correct(rdistf,rdir)
+        return allow_run_next            
 
 
     def checkz_allow_run(self, rdir, rdist, rspeed):
@@ -219,6 +262,8 @@ class ZctrlPanel:
                 self.check_isprinting(eventtime)
                 if self.isidle_mode:
                     allow_continue = self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
+                else:
+                    allow_continue = self.checkdcm_allow_run(CW_DIR_VAL, self.dcm_long_stepf)                     
                 self.key_event_handle('uplngp', eventtime)
             else:
                 self.upkey_longmode = 1        
@@ -227,6 +272,8 @@ class ZctrlPanel:
                 self.check_isprinting(eventtime)
                 if self.isidle_mode:            
                     allow_continue = self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
+                else:
+                    allow_continue = self.checkdcm_allow_run(CW_DIR_VAL, self.dcm_long_stepf)    
                 self.key_event_handle('uplngp', eventtime)
         #return eventtime+TM_INTER_VAL  
         if (allow_continue != 0):
@@ -242,6 +289,8 @@ class ZctrlPanel:
                 self.check_isprinting(eventtime)
                 if self.isidle_mode:           
                     allow_continue = self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
+                else:
+                    allow_continue = self.checkdcm_allow_run(CCW_DIR_VAL, self.dcm_long_stepf)                      
                 self.key_event_handle('downlngp', eventtime)
             else:
                 self.downkey_longmode = 1                 
@@ -250,6 +299,8 @@ class ZctrlPanel:
                 self.check_isprinting(eventtime)
                 if self.isidle_mode:             
                     allow_continue = self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
+                else:
+                    allow_continue = self.checkdcm_allow_run(CCW_DIR_VAL, self.dcm_long_stepf)                     
                 self.key_event_handle('downlngp', eventtime)
         #return eventtime+TM_INTER_VAL 
         if (allow_continue != 0):
@@ -279,6 +330,8 @@ class ZctrlPanel:
                 self.check_isprinting(eventtime)
                 if self.isidle_mode:                 
                     self.checkz_allow_run(UP_DIR_VAL, self.pshort_e_dist, self.pshort_speed)
+                else:
+                    allow_continue = self.checkdcm_allow_run(CW_DIR_VAL, self.dcm_short_setpf)                     
                 self.key_event_handle('uppress', eventtime)
         #else:             
         elif self.is_long_upclick:
@@ -309,6 +362,8 @@ class ZctrlPanel:
                 self.check_isprinting(eventtime)
                 if self.isidle_mode:                  
                     self.checkz_allow_run(DOWN_DIR_VAL, self.pshort_e_dist, self.pshort_speed)
+                else:
+                    allow_continue = self.checkdcm_allow_run(CCW_DIR_VAL, self.dcm_short_setpf)                     
                 self.key_event_handle('downpress', eventtime)
                 self.downkey_usef = False
 
