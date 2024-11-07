@@ -434,7 +434,9 @@ class Angledcmove:
         self.gcode.register_command("AS_DEBUG_WRITE", self.cmd_AS5600_DEBUG_WRITE) 
         self.gcode.register_command("SAVE_POS_AS", self.cmd_SAVE_POS_AS)  
         self.gcode.register_command("LOOK_POS_AS", self.cmd_LOOK_POS_AS) 
-        self.gcode.register_command("FIND_POS_BYAS", self.cmd_FIND_POS_BYAS)       
+        self.gcode.register_command("FIND_POS_BYAS", self.cmd_FIND_POS_BYAS)    
+        self.gcode.register_command("SWINGARM_BYAS", self.cmd_SWINGARM_BYAS)  
+
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_init)        
     def _handle_connect_init(self):
@@ -447,6 +449,18 @@ class Angledcmove:
         msg = "%s=%d" % ("result:",retst)
         gcmd.respond_info(msg)  
 
+    def cmd_SWINGARM_BYAS(self, gcmd): 
+        if (self.poshead == self.posuse):
+            msg = "not do Position verification"
+        else:
+            pos = gcmd.get_int('P',1, minval=0, maxval=2)
+            destpos = self.poshead
+            if pos > 0 :
+                destpos = self.posuse
+            msg = "%s=%d" % ('destp',destpos)  
+            retst = self.find_angle_pos(destpos) 
+            msg = msg + "%s=%d" % ("result:",retst)
+        gcmd.respond_info(msg)
 
     def cmd_LOOK_POS_AS(self, gcmd):                 
         msg = "%s=%d" % ('poshead',self.poshead)
