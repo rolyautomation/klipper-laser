@@ -52,7 +52,14 @@ class MultiMotorAxis:
             if i == index:
                 if ma.is_active():
                     retst = 1
-        return retst            
+        return retst 
+
+    def get_curma_index(self):
+        index = 0
+        for i, ma in enumerate(self.ma):
+            if ma.is_active():
+                index = i
+        return index         
 
     def inactive_ma_rail_all(self):
         for i, ma in enumerate(self.ma):
@@ -88,8 +95,16 @@ class MultiMotorAxis:
             self.ma[index].inactivate()
         else:
             self.ma[index].activate()
+            toolhead = self.printer.lookup_object('toolhead')
+            toolhead.flush_step_generation()
+            pos = toolhead.get_position()
+            pos[3] = 0
+            newpos = pos
+            #kin.set_position_roller(newpos)
+            toolhead.set_position(newpos)
         # A axis  zero     
         #kin.update_limits(self.axis, self.get_kin_range(toolhead, mode))
+
     def _handle_ready(self):
         # Apply the transform later during Klipper initialization to make sure
         # that input shaping can pick up the correct stepper kinematic flags.

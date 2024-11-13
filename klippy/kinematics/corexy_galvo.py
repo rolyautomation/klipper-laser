@@ -5,7 +5,8 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging, math
 import stepper
-
+from . import mmsa_modes
+CUR_SEL_A = 0
 
 class CoreXYGalvoKinematics:
     def __init__(self, toolhead, config):
@@ -54,7 +55,48 @@ class CoreXYGalvoKinematics:
                                   self._hradiation_angle, self._focus_distance,
                                   self._half_distance_galvo, self._magnify_factor)  
 
-        
+        ranges = [r.get_range() for r in self.rails]
+        self.axes_min = toolhead.Coord(*[r[0] for r in ranges], e=0.)
+        self.axes_max = toolhead.Coord(*[r[1] for r in ranges], e=0.)    
+
+        self.ma_module = None
+        if config.has_section('rollergp_a1'):
+            ma1_config = config.getsection('rollergp_a1') 
+            ma2_config = None
+            ma3_config = None
+            if config.has_section('rollergp_a2'):  
+                ma2_config = config.getsection('rollergp_a2') 
+            if config.has_section('rollergp_a3'):  
+                ma3_config = config.getsection('rollergp_a3') 
+
+            self.rails.append(stepper.LookupMultiRail(ma1_config))
+            self.rails[6].setup_itersolve('galvo_stepper_alloc', b'a', 
+                                  self._hradiation_angle, self._focus_distance,
+                                  self._half_distance_galvo, self._magnify_factor) 
+
+            ma_rail_0 =  mmsa_modes.MultiMotorAxisRail(self.rails[3], 3, 0, CUR_SEL_A)
+            ma_rail_1 =  mmsa_modes.MultiMotorAxisRail(self.rails[6], 3, 1, CUR_SEL_A)
+            ma_rail_2 =  None 
+            ma_rail_3 =  None 
+
+            if ma2_config is not None:
+                self.rails.append(stepper.LookupMultiRail(ma2_config))
+                self.rails[7].setup_itersolve('galvo_stepper_alloc', b'a', 
+                                  self._hradiation_angle, self._focus_distance,
+                                  self._half_distance_galvo, self._magnify_factor) 
+                ma_rail_2 =  mmsa_modes.MultiMotorAxisRail(self.rails[7], 3, 2, CUR_SEL_A)                                   
+
+            if ma3_config is not None:
+                self.rails.append(stepper.LookupMultiRail(ma3_config))
+                self.rails[8].setup_itersolve('galvo_stepper_alloc', b'a', 
+                                  self._hradiation_angle, self._focus_distance,
+                                  self._half_distance_galvo, self._magnify_factor)
+                ma_rail_3 =  mmsa_modes.MultiMotorAxisRail(self.rails[8], 3, 3, CUR_SEL_A)                                   
+
+            self.ma_module = mmsa_modes.MultiMotorAxis(
+                                                ma1_config, ma_rail_0, ma_rail_1,
+                                                ma_rail_2, ma_rail_3, 3)
+
         for s in self.get_steppers():
             s.set_trapq(toolhead.get_trapq())
             toolhead.register_step_generator(s.generate_steps)
@@ -83,12 +125,11 @@ class CoreXYGalvoKinematics:
         
         #xyz
         #self.endstop_hit = [(0, 0)] * 3
-        
-        
         self.limits = [(1.0, -1.0)] * (3+3)
-        ranges = [r.get_range() for r in self.rails]
-        self.axes_min = toolhead.Coord(*[r[0] for r in ranges], e=0.)
-        self.axes_max = toolhead.Coord(*[r[1] for r in ranges], e=0.)
+        #ranges = [r.get_range() for r in self.rails]
+        #self.axes_min = toolhead.Coord(*[r[0] for r in ranges], e=0.)
+        #self.axes_max = toolhead.Coord(*[r[1] for r in ranges], e=0.)
+
     def get_steppers(self):
         return [s for rail in self.rails for s in rail.get_steppers()]
 
@@ -107,17 +148,31 @@ class CoreXYGalvoKinematics:
         bx = (pos[4]/self._magnify_factor-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
         cy = (pos[5]/self._magnify_factor-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo             
         #return [bx, cy, pos[2]]
-        return [x, y, pos[2], pos[3], bx, cy]
+        if ( self.ma_module is not None and 0 != self.ma_module.get_curma_index() ):
+            offp = self.ma_module.get_curma_index()
+            return [x, y, pos[2], pos[5+offp], bx, cy]
+        else:
+            return [x, y, pos[2], pos[3], bx, cy]
 
     def soft_homing_BC_AXIS(self): 
         self.rails[4].soft_homing_BC_AXIS()       
-        self.rails[5].soft_homing_BC_AXIS()   
+        self.rails[5].soft_homing_BC_AXIS() 
+         
+    #Reserved functions  
+    def set_position_roller(self, newpos):
+        firstrail = self.rails[3]
+        firstrail.set_position(newpos)
+        if  self.ma_module is not None:
+            for i, rail in enumerate(self.rails):
+                if (i > 5):
+                    rail.set_position(newpos)                        
 
     def set_position(self, newpos, homing_axes):
         for i, rail in enumerate(self.rails):
             rail.set_position(newpos)
             if i in homing_axes:
                 self.limits[i] = rail.get_range()
+        #reason: A: soft reset zero        
     def note_z_not_homed(self):
         # Helper for Safe Z Home
         self.limits[2] = (1.0, -1.0)
@@ -137,6 +192,7 @@ class CoreXYGalvoKinematics:
                 forcepos[axis] += 1.5 * (position_max - hi.position_endstop)
             # Perform homing
             homing_state.home_rails([rail], forcepos, homepos)
+            #reason: A: soft reset zero 
     def _motor_off(self, print_time):
         self.limits = [(1.0, -1.0)] * (3+3)
     def _check_endstops(self, move):
