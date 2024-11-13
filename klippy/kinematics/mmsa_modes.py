@@ -126,7 +126,7 @@ class MultiMotorAxis:
                 msg = "%s:%d" % ("Selected",index)
         else:
             msg = "%s:%d" % ("Selected already",index)                           
-         gcmd.respond_info(msg)  
+        gcmd.respond_info(msg)  
     cmd_SAVE_MULTIMOTOR_AXIS_STATE_help = \
             "Save multi motor single axis modes and idnum"
     def cmd_SAVE_MULTIMOTOR_AXIS_STATE(self, gcmd):
