@@ -95,7 +95,6 @@ class MultiMotorAxis:
         # that input shaping can pick up the correct stepper kinematic flags.
         for ma in self.ma:
             ma.apply_transform()
-
     cmd_SET_MULTIMOTOR_AXIS_help = "Configure the multi motor single axis mode"
     def cmd_SET_MULTIMOTOR_AXIS(self, gcmd):
         index = gcmd.get_int('NUM', minval=-1, maxval=10)
@@ -113,7 +112,6 @@ class MultiMotorAxis:
         else:
             msg = "%s:%d" % ("Selected already",index)                           
          gcmd.respond_info(msg)  
-
     cmd_SAVE_MULTIMOTOR_AXIS_STATE_help = \
             "Save multi motor single axis modes and idnum"
     def cmd_SAVE_MULTIMOTOR_AXIS_STATE(self, gcmd):
@@ -178,7 +176,6 @@ class MultiMotorAxisRail:
         for sk in self.ma_stepper_kinematics:
             ffi_lib.multimotor_axis_set_transform(
                     sk, self.ENC_AXES[0], self.scale, self.offset)
-
     def activate_onoff(self, selnum, position=None):
         self.offset = 0  
         self.scale = 0.
@@ -187,13 +184,11 @@ class MultiMotorAxisRail:
             self.scale = 1.
             self.mode = ACTIVE                          
         self.apply_transform()
-        
     def activate(self, position=None):
         self.offset = 0  
         self.scale = 1.
         self.mode = ACTIVE                          
         self.apply_transform()
-
     def inactivate(self, position=None):
         self.offset = 0
         self.scale = 0.
