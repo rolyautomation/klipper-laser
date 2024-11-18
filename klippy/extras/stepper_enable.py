@@ -75,6 +75,8 @@ class PrinterStepperEnable:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.enable_lines = {}
+        self.enable_lines_disset = {}
+        self.enlines_aaxis = []        
         self.printer.register_event_handler("gcode:request_restart",
                                             self._handle_request_restart)
         # Register M18/M84 commands
@@ -87,11 +89,19 @@ class PrinterStepperEnable:
                                desc=self.cmd_SET_STEPPER_ENABLE_help)
         gcode.register_command("LOOK_STEPPER_ENABLE",
                                self.cmd_LOOK_STEPPER_ENABLE,
-                               desc=self.cmd_LOOK_STEPPER_ENABLE_help)                               
+                               desc=self.cmd_LOOK_STEPPER_ENABLE_help)   
+        gcode.register_command("CTRL_MULTIMOTOR_ED",
+                               self.cmd_CTRL_MULTIMOTOR_ED,
+                               desc=self.cmd_CTRL_MULTIMOTOR_ED_help)                                   
     def register_stepper(self, config, mcu_stepper):
         name = mcu_stepper.get_name()
         enable = setup_enable_pin(self.printer, config.get('enable_pin', None))
         self.enable_lines[name] = EnableTracking(mcu_stepper, enable)
+        aaxis_str = "_a"
+        if aaxis_str in name:
+            pass
+        else:
+            self.enable_lines_disset[name] =  self.enable_lines[name]    
     def motor_off(self):
         toolhead = self.printer.lookup_object('toolhead')
         toolhead.dwell(DISABLE_STALL_TIME)
@@ -104,7 +114,8 @@ class PrinterStepperEnable:
         toolhead = self.printer.lookup_object('toolhead')
         toolhead.dwell(DISABLE_STALL_TIME)
         print_time = toolhead.get_last_move_time()
-        for el in self.enable_lines.values():
+        #for el in self.enable_lines.values():
+        for el in self.enable_lines_disset.values():
             el.motor_disable(print_time)
         #self.printer.send_event("stepper_enable:motor_off", print_time)
         toolhead.dwell(DISABLE_STALL_TIME)        
@@ -152,7 +163,25 @@ class PrinterStepperEnable:
             else:
                 dstauts = dstauts + "_v0," 
         gcmd.respond_info('RES "%s"' % (dstauts,))           
-   
+    cmd_CTRL_MULTIMOTOR_ED_help = "control stepper enable/disable by index"
+    def cmd_CTRL_MULTIMOTOR_ED(self, gcmd):
+        index = gcmd.get_int('N',1, minval=0, maxval=3)
+        doenable = gcmd.get_int('V',1, minval=0, maxval=1)
+        aaxis_str = "_a"
+        aaxislen = len(self.enlines_aaxis)
+        if aaxislen <= 0 :
+            for stepper_name, el in self.enable_lines.items():
+                if aaxis_str in stepper_name:
+                    #self.enlines_aaxis.append(el) 
+                    self.enlines_aaxis.append(stepper_name) 
+            aaxislen = len(self.enlines_aaxis)   
+        if  index < aaxislen:
+            stepper_name = self.enlines_aaxis[index]  
+            self.motor_debug_enable(stepper_name, doenable)
+            msg = "sn=%s en=%d" % (stepper_name, doenable) 
+        else:
+            msg = "no index=%d en=%d" % (index, doenable)              
+        gcmd.respond_info(msg) 
     def lookup_enable(self, name):
         if name not in self.enable_lines:
             raise self.printer.config_error("Unknown stepper '%s'" % (name,))
