@@ -21,6 +21,7 @@ class MultiMotorAxis:
         #self.ma = (rail_0, rail_1)
         self.ma_len = len(self.ma)
         self.saved_states = {}
+        self.cur_selindex = -1
         #safe_dist = ma_config.getfloat('safe_distance', None, minval=0.)
         #self.safe_dist = safe_dist
         self.printer.add_object('multimotor_axis', self)
@@ -29,6 +30,9 @@ class MultiMotorAxis:
         gcode.register_command(
                    'SET_MULTIMOTOR_AXIS', self.cmd_SET_MULTIMOTOR_AXIS,
                    desc=self.cmd_SET_MULTIMOTOR_AXIS_help)
+        gcode.register_command(
+                   'LOOK_MULTIMOTOR_AXIS', self.cmd_LOOK_MULTIMOTOR_AXIS,
+                   desc=self.cmd_LOOK_MULTIMOTOR_AXIS_help)                   
         gcode.register_command(
                    'SAVE_MULTIMOTOR_AXIS_STATE',
                    self.cmd_SAVE_MULTIMOTOR_AXIS_STATE,
@@ -54,12 +58,15 @@ class MultiMotorAxis:
                     retst = 1
         return retst 
 
+    def update_curma_index(self):
+        self.cur_selindex = self.get_curma_index()
+
     def get_curma_index(self):
-        index = 0
+        index = -1
         for i, ma in enumerate(self.ma):
             if ma.is_active():
                 index = i
-        return index         
+        return index   
 
     def inactive_ma_rail_all(self):
         for i, ma in enumerate(self.ma):
@@ -79,8 +86,13 @@ class MultiMotorAxis:
         # Restore the original rails ordering
         #self.toggle_active_dc_rail(0)
     def get_status(self, eventtime=None):
-        return {('mmsa_%d' % (i,)) : ma.mode
-                for (i, ma) in enumerate(self.ma)}
+        #return {('mmsa_%d' % (i,)) : ma.mode
+                #for (i, ma) in enumerate(self.ma)}
+        res = { ('mmsa_%d' % (i,)) : ma.mode
+                 for (i, ma) in enumerate(self.ma) }
+        res.update({'index': self.cur_selindex } )
+        return res
+
     def get_kin_range(self, toolhead, mode):
         pos = toolhead.get_position()
         #return (range_min, range_max)
@@ -110,6 +122,13 @@ class MultiMotorAxis:
         # that input shaping can pick up the correct stepper kinematic flags.
         for ma in self.ma:
             ma.apply_transform()
+        self.update_curma_index()    
+
+    cmd_LOOK_MULTIMOTOR_AXIS_help = "look the multi motor single axis status"
+    def cmd_LOOK_MULTIMOTOR_AXIS(self, gcmd):
+        msg = "%s:%d" % ("Current selected",self.cur_selindex)                           
+        gcmd.respond_info(msg) 
+
     cmd_SET_MULTIMOTOR_AXIS_help = "Configure the multi motor single axis mode"
     def cmd_SET_MULTIMOTOR_AXIS(self, gcmd):
         index = gcmd.get_int('NUM', minval=-1, maxval=10)
@@ -123,7 +142,10 @@ class MultiMotorAxis:
             if  index >= 0 :
                 mode =  ACTIVE                  
                 self.activate_ma_mode(index, mode)
+                self.cur_selindex = index
                 msg = "%s:%d" % ("Selected",index)
+            else:
+                self.cur_selindex = -1        
         else:
             msg = "%s:%d" % ("Selected already",index)                           
         gcmd.respond_info(msg)  
