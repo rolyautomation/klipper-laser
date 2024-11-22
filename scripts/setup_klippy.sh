@@ -28,6 +28,7 @@ kinsubdir="kinematics/"
 csubdir="chelper/"
 esubdir="extras/"
 edsubdir="${esubdir}display/"
+progverf=".version"
 
 mdir_kin="${outdest}${progdir}${kinsubdir}"
 mdir_csub="${outdest}${progdir}${csubdir}"
@@ -89,8 +90,18 @@ else
     echo "successful: $inmdir_edsub"
 fi
 
+
+if [ ! -s "${insrc}${progdir}${progverf}" ]; then
+    echo "failure,exit to please check: ${insrc}${progdir}${progverf}"
+    exit 1
+else
+    echo "successful: ${insrc}${progdir}${progverf}"
+fi
+
+
 echo  "copying from ${insrc}${fprog} to ${outdest}${progdir}"
 cp   ${insrc}${fprog}  ${outdest}${progdir}
+cp   ${insrc}${progdir}${progverf}  ${outdest}${progdir}
 
 echo  "copying from ${insrc}${fkin} to ${outdest}${progdir}${kinsubdir}"
 cp  ${insrc}${fkin}    ${outdest}${progdir}${kinsubdir}

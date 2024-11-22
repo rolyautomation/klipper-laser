@@ -96,6 +96,16 @@ class Printer:
                                'extras', module_name + '.py')
         py_dirname = os.path.join(os.path.dirname(__file__),
                                   'extras', module_name, '__init__.py')
+
+        wkenvvalue = len(self.start_args.get('run_env'))
+        if wkenvvalue > 4:
+            py_name = os.path.join(os.path.dirname(__file__),
+                                'extras', module_name + '.pyc')
+            py_dirname = os.path.join(os.path.dirname(__file__),
+                                    'extras', module_name, '__init__.pyc')
+
+        logging.info("%d:%s" ,wkenvvalue, py_name)                            
+
         if not os.path.exists(py_name) and not os.path.exists(py_dirname):
             if default is not configfile.sentinel:
                 return default
@@ -283,6 +293,13 @@ def main():
         opts.error("Incorrect number of arguments")
     start_args = {'config_file': args[0], 'apiserver': options.apiserver,
                   'start_reason': 'startup'}
+
+
+    wkenv = "DEV"
+    enterfilename = os.path.basename(__file__)
+    if enterfilename.endswith(".pyc"):
+        wkenv = "RELEASE"
+    start_args['run_env'] = wkenv
 
     debuglevel = logging.INFO
     if options.verbose:
