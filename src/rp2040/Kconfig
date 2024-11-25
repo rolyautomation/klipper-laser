@@ -131,6 +131,48 @@ choice
        select USBCANBUS
 endchoice
 
+
+choice
+ prompt "Report USB Firmware Name"
+ #default MFIBER_OPT
+ default MMAINBOARD_OPT
+ config MMAINBOARD_OPT
+     bool "Main control board"
+ config MGALVO_OPT
+      bool "head galvo board"
+ config MROLLER_OPT
+      bool "roller board"
+ config MFIBER_OPT
+      bool "optical fiber board"
+endchoice
+
+
+# Define the final string value based on the selected option
+if MMAINBOARD_OPT
+    config REP_FN
+        string 
+        default "mmain"
+endif
+
+if MGALVO_OPT
+    config REP_FN
+        string 
+        default "mgalvo"
+endif
+
+if MROLLER_OPT
+    config REP_FN
+        string 
+        default "mroller"
+endif
+
+if MFIBER_OPT
+    config REP_FN
+        string 
+        default "mfiber"
+endif
+
+
 config XY2100
     bool "Enable XY2-100 protocol"
     depends on MACH_RP2040
