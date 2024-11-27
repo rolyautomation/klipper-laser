@@ -128,11 +128,11 @@ class SafeGuardkeyt:
         gcode.register_command('CHK_SAFEKEY', self.cmd_CHK_SAFEKEY,
                                desc=self.cmd_CHK_SAFEKEY_help)            
 
-        gcode = self.printer.lookup_object('gcode')
+        #gcode = self.printer.lookup_object('gcode')
         gcode.register_command('QUERY_SAFEKEY', self.cmd_QUERY_SAFEKEY,
                                desc=self.cmd_QUERY_SAFEKEY_help)   
 
-        gcode = self.printer.lookup_object('gcode')
+        #gcode = self.printer.lookup_object('gcode')
         gcode.register_command('GEN_SAFEKEY', self.cmd_GEN_SAFEKEY,
                                desc=self.cmd_GEN_SAFEKEY_help)  
                                
