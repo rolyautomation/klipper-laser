@@ -25,10 +25,15 @@ class TnqueueGcode:
         self.printer.register_event_handler("klippy:shutdown",
                                             self.handle_qshutdown)
 
+        #self.trail_mustnewline = 1
+        self.trail_mustnewline  = config.getint('tendline', 0, minval=0)  
+        self.queue_maxsize  = config.getint('qlenmax', QMAXSIZE, minval=4) 
+        self.triggerint_size  = config.getint('qlimitint', 10, minval=4)                                           
+
         wh = self.printer.lookup_object('webhooks')
         wh.register_endpoint("gcode/qscript", self._handle_qscript)
 
-        self.queue_maxsize = QMAXSIZE
+        #self.queue_maxsize = QMAXSIZE
         self.gcode_queue = queue.Queue(self.queue_maxsize)
         self.queue_usedsize = 0
 
@@ -36,7 +41,6 @@ class TnqueueGcode:
         self.warn_code = 0
         self.stopbuttonflag = 0
 
-        self.trail_mustnewline = 1
 
         # Print Stat Tracking
         #self.print_stats = self.printer.load_object(config, 'print_stats')
@@ -52,7 +56,7 @@ class TnqueueGcode:
             config, 'on_error_gcode', DEFAULT_ERROR_GCODE)
         # Register commands
         self.gcode = self.printer.lookup_object('gcode')
-        for cmd in ['M411', 'M412', 'M413']:
+        for cmd in ['M411', 'M412', 'M413', 'M414']:
             self.gcode.register_command(cmd, getattr(self, 'cmd_' + cmd))
 
     def send_error_exception(self, errorcode):
@@ -99,7 +103,8 @@ class TnqueueGcode:
 
     def get_status(self, eventtime):
         usedsize,totalsize = self.get_queue_size()
-        totalstatus =  1  if usedsize > totalsize/3 else 0 
+        #totalstatus =  1  if usedsize > totalsize/3 else 0 
+        totalstatus =  1  if usedsize > self.triggerint_size else 0 
         return {
             'queue_used': usedsize,
             'queue_maxs': totalsize,
@@ -139,7 +144,6 @@ class TnqueueGcode:
             self.work_timer = self.reactor.register_timer(
                      self.work_qhandler, self.reactor.NOW)
 
-
     def do_qcancel(self):
         self.must_exit_work = True
         self.must_pause_work = False
@@ -150,7 +154,10 @@ class TnqueueGcode:
     def cmd_error(self, gcmd):
         raise gcmd.error("net queue not supported")
 
-
+    def cmd_M414(self, gcmd):
+        # clean error
+        self.clean_error_exception()
+        
     def cmd_M413(self, gcmd):
         # Start/resume telnet print
         self.do_qresume()
@@ -168,19 +175,12 @@ class TnqueueGcode:
     def clear_queue(self, q):
         while not q.empty():
             q.get() 
-
+          
     # Background work timer
     def work_qhandler(self, eventtime):
         #logging.info("Starting SD card print (position %d)", self.file_position)
         logging.info("Starting net queue")
         self.reactor.unregister_timer(self.work_timer)
-        #try:
-        #    self.current_file.seek(self.file_position)
-        #except:
-        #    logging.exception("virtual_sdcard seek")
-        #    self.work_timer = None
-        #    return self.reactor.NEVER
-        #self.print_stats.note_start()
         gcode_mutex = self.gcode.get_mutex()
         partial_input = ""
         lines = []
@@ -191,12 +191,6 @@ class TnqueueGcode:
                 self.reactor.pause(self.reactor.monotonic() + 0.100)
                 continue                
             if not lines:
-                # Read more data
-                #try:
-                #   data = self.current_file.read(8192)
-                #except:
-                #    logging.exception("virtual_sdcard read")
-                #    break
                 if not self.gcode_queue.empty():
                     data = self.gcode_queue.get()
                 else:
@@ -215,18 +209,6 @@ class TnqueueGcode:
                     logging.info("no data net queue") 
                     self.reactor.pause(self.reactor.monotonic() + 0.100)
                     continue                                          
-                #if not data:
-                    # End of file
-                    #self.current_file.close()
-                    #self.current_file = None
-                    #logging.info("Finished SD card print")
-                    #self.gcode.respond_raw("Done printing file")
-                    #break
-                #lines = data.split('\n')
-                #lines[0] = partial_input + lines[0]
-                #partial_input = lines.pop()
-                #lines.reverse()
-                #self.reactor.pause(self.reactor.NOW)
                 #continue
             # Pause if any other request is pending in the gcode class
             if gcode_mutex.test():
@@ -235,12 +217,7 @@ class TnqueueGcode:
             # Dispatch command
             self.cmd_from_sd = True
             line = lines.pop()
-            #if sys.version_info.major >= 3:
-            #    next_file_position = self.file_position + len(line.encode()) + 1
-            #else:
-            #    next_file_position = self.file_position + len(line) + 1
-            #self.next_file_position = next_file_position
-            logging.info(f"run:{line}")
+            #logging.info(f"run:{line}")
             try:
                 self.gcode.run_script(line)
             except self.gcode.error as e:
@@ -254,20 +231,11 @@ class TnqueueGcode:
                 logging.exception("net queue dispatch")
                 break
             self.cmd_from_sd = False
-            #self.file_position = self.next_file_position
-            # Do we need to skip around?
-            #if self.next_file_position != next_file_position:
-            #    try:
-            #        self.current_file.seek(self.file_position)
-            #    except:
-            #        logging.exception("virtual_sdcard seek")
-            #        self.work_timer = None
-            #        return self.reactor.NEVER
-            #    lines = []
-            #    partial_input = ""
+
         #logging.info("Exiting SD card print (position %d)", self.file_position)
         logging.info("Exiting net queue")
         self.work_timer = None
+        partial_input = ""
         self.clear_queue(self.gcode_queue)
         self.cmd_from_sd = False
         if error_message is not None:
