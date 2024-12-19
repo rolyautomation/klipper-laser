@@ -59,9 +59,17 @@ class TnqueueGcode:
         for cmd in ['M411', 'M412', 'M413', 'M414']:
             self.gcode.register_command(cmd, getattr(self, 'cmd_' + cmd))
 
+        self.gcode.register_command("TST_INPUT_ECODE", self.cmd_TST_INPUT_ECODE)                                            
+
+    def cmd_TST_INPUT_ECODE(self, gcmd):
+        errorcode =  gcmd.get_int('E', 0, minval=0)   
+        self.send_error_exception(errorcode)
+        msg = "%s:%d" % ("input errorcode:",errorcode)                           
+        gcmd.respond_info(msg) 
+
     def send_error_exception(self, errorcode):
         self.error_code = errorcode
-
+        
     def clean_error_exception(self):
         self.error_code = 0
 
@@ -201,7 +209,8 @@ class TnqueueGcode:
                     lines[0] = partial_input + lines[0]
                     partial_input = lines.pop()
                     lines.reverse()
-                    logging.info(f"pinput:{partial_input}")
+                    #logging.info(f"pinput:{partial_input}")
+                    #wait self.reactor.pause(self.reactor.NOW)
                     self.reactor.pause(self.reactor.NOW)
                     continue  
                 else:
