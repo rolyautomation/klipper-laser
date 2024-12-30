@@ -182,7 +182,9 @@ void  load_next_pwm_ctrl_data(uint32_t interval, int16_t  add, uint16_t count, u
 
 }
 
-#define M_MIN_PULSE_TICKS   (10)
+//#define M_MIN_PULSE_TICKS   (10)
+#define M_MIN_PULSE_TICKS       (4)
+#define M_MIN_POWER_VALUE_PER   (0.1)
 
 uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
 {
@@ -193,7 +195,7 @@ uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
     
     if (inter_pulse_ticks < M_MIN_PULSE_TICKS)
     {
-        return(result_value);
+        ;//return(result_value);
     }
     //sts
     if (sts_speed_pulse_ticks > 0)
@@ -222,6 +224,10 @@ uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
 
     }
 
+    if (inter_pulse_ticks < M_MIN_PULSE_TICKS)
+    {
+        inter_pulse_ticks = M_MIN_PULSE_TICKS;   
+    }    
     fa =  inter_pulse_ticks;
     fb =  g_pwm_ctrl_data.speed_pulse_ticks;
     fb =  fb/fa;
@@ -229,6 +235,10 @@ uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
     if (fb > 1.0 )
     {
         fb = 1.0;
+    }
+    if (fb < M_MIN_POWER_VALUE_PER)
+    {
+        fb = M_MIN_POWER_VALUE_PER;
     }
     fc =  g_pwm_ctrl_data.pwmval;
     fc = fb*fc;

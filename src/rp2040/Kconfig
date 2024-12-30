@@ -144,6 +144,8 @@ choice
       bool "roller board"
  config MFIBER_OPT
       bool "optical fiber board"
+ config KLIPPER_OPT
+      bool "default klipper"      
 endchoice
 
 
@@ -170,6 +172,12 @@ if MFIBER_OPT
     config REP_FN
         string 
         default "mfiber"
+endif
+
+if KLIPPER_OPT
+    config REP_FN
+        string 
+        default "Klipper"
 endif
 
 
