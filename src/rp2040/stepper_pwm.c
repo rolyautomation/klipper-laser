@@ -185,6 +185,7 @@ void  load_next_pwm_ctrl_data(uint32_t interval, int16_t  add, uint16_t count, u
 //#define M_MIN_PULSE_TICKS   (10)
 #define M_MIN_PULSE_TICKS       (4)
 #define M_MIN_POWER_VALUE_PER   (0.1)
+#define M_POWER_VAL_LOWERLIMIT  (26)
 
 uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
 {
@@ -193,6 +194,11 @@ uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
     float  fb = 0;  
     float  fc = 0;       
     
+    if (inter_pulse_ticks == 0)
+    {
+        return(result_value);
+    } 
+    #if 0   
     if (inter_pulse_ticks < M_MIN_PULSE_TICKS)
     {
         ;//return(result_value);
@@ -223,12 +229,16 @@ uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
         sts_speed_pulse_ticks_max = inter_pulse_ticks;
 
     }
-
+    /*
     if (inter_pulse_ticks < M_MIN_PULSE_TICKS)
     {
         inter_pulse_ticks = M_MIN_PULSE_TICKS;   
-    }    
+    }  
+    */  
+    #endif    
     fa =  inter_pulse_ticks;
+    //add new value
+    //fa =  fa/2;
     fb =  g_pwm_ctrl_data.speed_pulse_ticks;
     fb =  fb/fa;
     //new add
@@ -236,14 +246,21 @@ uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
     {
         fb = 1.0;
     }
+    #if 0
     if (fb < M_MIN_POWER_VALUE_PER)
     {
         fb = M_MIN_POWER_VALUE_PER;
     }
+    #endif
     fc =  g_pwm_ctrl_data.pwmval;
     fc = fb*fc;
     result_value = fc;
     result_value =  result_value & 0xFF;
+    //min power 255*0.1=25.5
+    if((result_value < M_POWER_VAL_LOWERLIMIT) && (g_pwm_ctrl_data.pwmval > 0))
+    {
+        result_value = M_POWER_VAL_LOWERLIMIT;     
+    }
     return(result_value);
 
 }

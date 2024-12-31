@@ -472,6 +472,7 @@ class ToolHead:
             self.printer.invoke_shutdown("Exception in flush_handler")
         return self.reactor.NEVER
     # Movement commands
+    # selected function
     def predict_move_distance_old(self,newpos):
         start_pos_in = self.commanded_pos
         end_pos_in   = newpos
@@ -481,6 +482,7 @@ class ToolHead:
         move_d = math.sqrt(sum([d*d for d in axes_d[:6]]))
         if move_d < .000000001:
             move_d = 0.01
+            #move_d = 0.
         else:  
             #move_d =  move_d/2  #test is ok
             #move_d =  move_d/4
@@ -497,6 +499,7 @@ class ToolHead:
         move_d = max(axes_d)
         if move_d < .000000001:
             move_d = 0.01
+            #move_d = 0.
         else:  
             #move_d =  move_d/2  #test is ok
             #move_d =  move_d/4
