@@ -185,7 +185,13 @@ void  load_next_pwm_ctrl_data(uint32_t interval, int16_t  add, uint16_t count, u
 //#define M_MIN_PULSE_TICKS   (10)
 #define M_MIN_PULSE_TICKS       (4)
 #define M_MIN_POWER_VALUE_PER   (0.1)
-#define M_POWER_VAL_LOWERLIMIT  (26)
+//0%
+#define M_POWER_VAL_LOWERLIMIT   (0)
+//10%
+//#define M_POWER_VAL_LOWERLIMIT (26)
+//15%
+//#define M_POWER_VAL_LOWERLIMIT  (38)
+
 
 uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
 {

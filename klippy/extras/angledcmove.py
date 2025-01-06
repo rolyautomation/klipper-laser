@@ -5,6 +5,7 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 from . import bus
+import time
 
 REPORT_TIME = .8
 AS5600_CHIP_ADDR = 0x36
@@ -19,6 +20,7 @@ DIFF_VAL = 2
 #TTURN_TM_SEC = 2.8
 #TTURN_TM_SEC = 2.73
 TTURN_TM_SEC = 2.65
+TTURN_TM_SEC_D = 1.65
 MIN_RUN_TMUNIT = 0.005
 FIND_MAX_TIMES  = 100
 
@@ -436,9 +438,32 @@ class Angledcmove:
         self.gcode.register_command("LOOK_POS_AS", self.cmd_LOOK_POS_AS) 
         self.gcode.register_command("FIND_POS_BYAS", self.cmd_FIND_POS_BYAS)    
         self.gcode.register_command("SWINGARM_BYAS", self.cmd_SWINGARM_BYAS)  
+        self.gcode.register_command("SEL_ALG_FIND", self.cmd_SEL_ALG_FIND)
 
         self.printer.register_event_handler("klippy:connect",
-                                            self._handle_connect_init)        
+                                            self._handle_connect_init)    
+
+        self.kp = config.getfloat('pid_Kp', 1.0)
+        self.ki = config.getfloat('pid_Ki', 0.1)
+        self.kd = config.getfloat('pid_Kd', 0.01)
+        self.previous_error = 0
+        self.integral = 0
+        #self.last_time = time.time()
+        self.last_time = 0
+        self.sel_alg = 0
+        self.previous_diff = 0
+        self.previous_rtm = 0
+
+    def cmd_SEL_ALG_FIND(self, gcmd):
+        selalgv = gcmd.get_int('S',0, minval=0, maxval=10) 
+        if selalgv == 1:
+            self.sel_alg = 1
+        elif selalgv == 0:
+            self.sel_alg = 0 
+        msg = "sel alg=%s " % (self.sel_alg, )            
+        gcmd.respond_info(msg)  
+                 
+
     def _handle_connect_init(self):
         self.save_vars = self.printer.lookup_object('save_variables')
         self.load_value_pos()   
@@ -587,7 +612,15 @@ class Angledcmove:
         toolhead.dwell(tmval) 
         toolhead.wait_moves()  
 
-    def find_angle_pos(self, destangle): 
+    def find_angle_pos(self, destangle):
+        retst = 0
+        if self.sel_alg == 0:
+            retst = self.find_angle_pos_v01(destangle)
+        else:            
+            retst = self.find_angle_pos_pidalg(destangle)
+        return  retst            
+
+    def find_angle_pos_v01(self, destangle): 
         successf = 0
         if destangle < 0  or  destangle > ANGLE_IN_MAX :
             successf = 1
@@ -630,6 +663,88 @@ class Angledcmove:
         logging.info("findtimes=%d\n", find_times)
 
         return successf
+
+
+
+    def control_pid(self, error):
+        current_time = time.time()
+        delta_time = current_time - self.last_time
+        derivative = (error - self.previous_error) / delta_time
+        self.integral += error * delta_time
+
+        output = self.kp * error + self.ki * self.integral + self.kd * derivative
+        self.previous_error = error
+        self.last_time = current_time
+        logging.info("control_pid =[%s %s %s]\n", output,self.last_time,self.previous_error)
+        return output
+
+    def angel_transfrom_rtm_pid(self, angle_value):   
+        #ret_sec = angle_value/ANGLE_MOD_VAL
+        #ret_sec = self.taturn_sec * ret_sec
+        ret_sec = angle_value/self.previous_diff
+        ret_sec = self.previous_rtm * ret_sec
+        if ret_sec  >=  MIN_RUN_TMUNIT:
+            self.previous_diff = angle_value
+            self.previous_rtm = ret_sec
+        if ret_sec < MIN_RUN_TMUNIT:
+            ret_sec = MIN_RUN_TMUNIT            
+        return ret_sec
+
+
+    def find_angle_pos_pidalg(self, destangle): 
+        successf = 0
+        if destangle < 0  or  destangle > ANGLE_IN_MAX :
+            successf = 1
+            return successf   
+        find_times = 0     
+
+        self.previous_error = 0
+        self.integral = 0        
+        self.last_time = time.time()
+
+        self.previous_diff = ANGLE_MOD_VAL
+        #self.previous_rtm = TTURN_TM_SEC
+        self.previous_rtm = TTURN_TM_SEC_D
+        
+        while True:
+            cur_angle_value = self.read_cur_angle_value()
+            logging.info("pid cur_angle=%d\n" ,cur_angle_value)
+            ret = self.decide_val_tolerance(cur_angle_value, destangle)
+            if (ret > 0):
+                break  
+            if find_times > FIND_MAX_TIMES:
+                successf = 2
+                break             
+            diffv = destangle - cur_angle_value
+            abs_diffv = abs(diffv)
+            CW_DIR = 0
+            runangle = 0
+            if abs_diffv  <  ANGLE_HF_VAL:
+                runangle = abs_diffv  
+                if  diffv > 0:
+                    CW_DIR = 1
+                else:
+                    CW_DIR = 0
+            else:
+                runangle = ANGLE_MOD_VAL-abs_diffv 
+                if  diffv > 0:
+                    CW_DIR = 0
+                else:
+                    CW_DIR = 1
+
+
+            
+            #runtmsec = self.angel_transfrom_rtm(runangle)
+            runtmsec_pid = self.angel_transfrom_rtm_pid(runangle)
+            runtmsec = self.control_pid(runtmsec_pid)
+            logging.info("%d pid info [%s:%s %s] dir=%d \n",find_times, runangle, runtmsec, runtmsec_pid, CW_DIR)
+            runtmsec = runtmsec_pid
+            self.dcm_move_correct(runtmsec,CW_DIR)
+            self.wait_motionless(0.5)
+            find_times = find_times + 1
+        logging.info("pid findtimes=%d\n", find_times)
+
+        return successf    
 
 
 

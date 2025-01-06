@@ -558,9 +558,23 @@ class PrinterExtruderPWM:
 
         self._extrdpwm_oid = None
         logging.info("PrinterExtruderPWM end") 
+        self.optmode = 1
         self._restartcmd_flag = False
         self._laser_type = 0
         self._pwm_prf = 0
+        gcode.register_command("RSYNCPOWER", self.cmd_RSYNCPOWER)
+        
+
+    def cmd_RSYNCPOWER(self, gcmd):
+        syncpmode = gcmd.get_int('M',0, minval=0, maxval=10) 
+        if syncpmode == 1:
+            self.optmode = 0
+        elif syncpmode == 0:
+            self.optmode = 1 
+            self._restartcmd_flag = False
+        msg = "resp optmode=%s rflag=%s " % (self.optmode, self._restartcmd_flag)            
+        gcmd.respond_info(msg)  
+         
 
     def update_move_time(self, flush_time, clear_history_time):
         #close#logging.info("update_move_time extruderpwm") 
@@ -697,7 +711,11 @@ class PrinterExtruderPWM:
         if (speed_pulse_ticks is None):
             speed_pulse_ticks = 1500 
         restartcmd_flag  = not self._restartcmd_flag
-        self._restartcmd_flag = restartcmd_flag
+        if self.optmode > 0 :
+            if restartcmd_flag:
+                self._restartcmd_flag = restartcmd_flag
+        else :
+            self._restartcmd_flag = restartcmd_flag                    
 
         #pwmvalue 
         #pwmmode
