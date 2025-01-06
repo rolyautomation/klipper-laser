@@ -193,6 +193,26 @@ class CoreXYGalvoKinematics:
             # Perform homing
             homing_state.home_rails([rail], forcepos, homepos)
             #reason: A: soft reset zero 
+
+    def jogrun(self, jogrun_state):
+        # Each axis is homed independently and in order
+        for axis in jogrun_state.get_axes():
+            rail = self.rails[axis]
+            # Determine movement
+            position_min, position_max = rail.get_range()
+            #hi = rail.get_homing_info()
+            #homepos = [None, None, None, None]
+            #homepos[axis] = hi.position_endstop
+            #forcepos = list(homepos)
+            #if hi.positive_dir:
+            #    forcepos[axis] -= 1.5 * (hi.position_endstop - position_min)
+            #else:
+            #    forcepos[axis] += 1.5 * (position_max - hi.position_endstop)
+            # Perform homing
+            #jogrun_state.jogrun_rails([rail], forcepos, homepos)
+            jogrun_state.jogrun_rails([rail])
+            #reason: A: soft reset zero 
+
     def _motor_off(self, print_time):
         self.limits = [(1.0, -1.0)] * (3+3)
     def _check_endstops(self, move):
