@@ -9,6 +9,11 @@ HOMING_START_DELAY = 0.001
 ENDSTOP_SAMPLE_TIME = .000015
 ENDSTOP_SAMPLE_COUNT = 4
 
+JOGAXIS  =  'jogaxis'
+KIN_SPOS =  'kinspos'
+STEPPERPOS =  'stepperpos'
+PTIME =  'ptime'
+
 # Return a completion that completes when all completions in a list complete
 def multi_complete(printer, completions):
     if len(completions) == 1:
@@ -150,17 +155,26 @@ class HomingMove:
 
 
     def joghoming_move(self, movepos, speed, probe_pos=True,
-                    triggered=True, check_triggered=True):
+                    triggered=True, check_triggered=True, recpoint=None):
         # Notify start of homing/probing move
         #self.printer.send_event("homing:homing_move_begin", self)
         # Note start location
         self.toolhead.flush_step_generation()
         kin = self.toolhead.get_kinematics()
+        if recpoint is None:
+            logging.info("joghoming_move recpoint is None\n")
+            return
+        kin_spos =  recpoint[KIN_SPOS]
+        self.stepper_positions = recpoint[STEPPERPOS]
+        print_time = recpoint[PTIME]
+
+        '''
         kin_spos = {s.get_name(): s.get_commanded_position()
                     for s in kin.get_steppers()}
         self.stepper_positions = [ StepperPosition(s, name)
                                    for es, name in self.endstops
                                    for s in es.get_steppers() ]
+        '''                                   
         # Start endstop checking
         print_time = self.toolhead.get_last_move_time()
         endstop_triggers = []
@@ -174,9 +188,7 @@ class HomingMove:
         all_endstop_trigger = multi_complete(self.printer, endstop_triggers)
         self.toolhead.dwell(HOMING_START_DELAY)
 
-
-
-        logging.info("joghoming_move\n")
+        #logging.info("joghoming_move=%s,%s\n",recpoint[PTIME],print_time,)
         # Issue move
         error = None
         #try:
@@ -186,6 +198,9 @@ class HomingMove:
         # Wait for endstops to trigger
         trigger_times = {}
         move_end_print_time = self.toolhead.get_last_move_time()
+        logging.info("joghoming_move=%s,%s,%s\n",recpoint[PTIME],print_time,move_end_print_time)
+        
+        #move_end_print_time = print_time + 0.01
         for mcu_endstop, name in self.endstops:
             try:
                 trigger_time = mcu_endstop.home_wait(move_end_print_time)
@@ -234,11 +249,11 @@ class HomingMove:
         return trigpos
 
 
-
 # State tracking of homing requests
 class Homing:
-    def __init__(self, printer):
+    def __init__(self, printer, recpiont=None):
         self.printer = printer
+        self.recpiont = recpiont
         self.toolhead = printer.lookup_object('toolhead')
         self.changed_axes = []
         self.trigger_mcu_pos = {}
@@ -319,10 +334,8 @@ class Homing:
         jogmove = HomingMove(self.printer, endstops)
         hi = rails[0].get_homing_info()
         homepos = self.toolhead.get_position()
-        jogmove.joghoming_move(homepos, hi.speed, probe_pos=True, triggered=False)
-        #jogmove.joghoming_move(homepos, hi.speed, probe_pos=True, triggered=True)
-
-
+        jogmove.joghoming_move(homepos, hi.speed, probe_pos=True, triggered=False, recpoint=self.recpiont)
+        #jogmove.joghoming_move(homepos, hi.speed, probe_pos=True, triggered=True, recpoint=self.recpiont)
         logging.info("jogrun_rails run\n")
         # Signal home operation complete
         self.toolhead.flush_step_generation()
@@ -350,7 +363,10 @@ class PrinterHoming:
         # Register g-code commands
         gcode = self.printer.lookup_object('gcode')
         gcode.register_command('G28', self.cmd_G28)
-        gcode.register_command('M116', self.cmd_M116_JOG)
+        gcode.register_command('M280', self.cmd_M280_JOG_STA)        
+        gcode.register_command('M281', self.cmd_M281_JOG_END)
+        gcode.register_command('M282', self.cmd_M282_JOG_CLS)        
+        self._recpoint = {}
     def manual_home(self, toolhead, endstops, pos, speed,
                     triggered, check_triggered):
         hmove = HomingMove(self.printer, endstops, toolhead)
@@ -396,21 +412,66 @@ class PrinterHoming:
             self.printer.lookup_object('stepper_enable').motor_off()
             raise
 
-    def cmd_M116_JOG(self, gcmd):
+    def cmd_M282_JOG_CLS(self, gcmd):
+        self._recpoint = {} 
+
+    def cmd_M280_JOG_STA(self, gcmd):   
+        axes = []
+        for pos, axis in enumerate('XYZ'):
+            if gcmd.get(axis, None) is not None:
+                axes.append(pos)
+        if not axes:
+            axes = [2]
+            #axes = [0, 1, 2]
+
+        toolhead = self.printer.lookup_object('toolhead')
+        toolhead.flush_step_generation()
+        pt = toolhead.get_last_move_time()
+        kin = toolhead.get_kinematics()
+        raildata = kin.jogrun_sta(axes)
+        rails = raildata['rail']
+        minv  = raildata['min']
+        maxv  = raildata['max']        
+        endstops = [es for rail in rails for es in rail.get_endstops()]
+        kin_spos = {s.get_name(): s.get_commanded_position()
+                    for s in kin.get_steppers()}
+        stepper_positions = [ StepperPosition(s, name)
+                                   for es, name in endstops
+                                   for s in es.get_steppers() ]
+        recpoint = {
+                     JOGAXIS: axes,
+                     KIN_SPOS: kin_spos,
+                     STEPPERPOS: stepper_positions,
+                     PTIME     : pt
+                     }
+        self._recpoint = recpoint
+        logging.info("look recpoint= %s\n",self._recpoint)
+         
+
+    def cmd_M281_JOG_END(self, gcmd):
         #pass
         axes = []
         for pos, axis in enumerate('XYZ'):
             if gcmd.get(axis, None) is not None:
                 axes.append(pos)
         if not axes:
-            axes = [0, 1, 2]
-        jogrun_state = Homing(self.printer)
+            axes = [2]            
+            #axes = [0, 1, 2]
+        if not self._recpoint:
+            logging.info("not record point=%s\n",axes) 
+            return
+        if  axes  !=  self._recpoint[JOGAXIS]:
+            logging.info("pls check status%s nq %s\n",axes,self._recpoint[JOGAXIS]) 
+            return  
+               
+        jogrun_state = Homing(self.printer,self._recpoint)
         jogrun_state.set_axes(axes)
         kin = self.printer.lookup_object('toolhead').get_kinematics()
         #logging.info("\npwm Sp:%s V:%s E:%s A:%s\n", move.start_v, move.cruise_v, move.end_v, move.accel) 
         logging.info("stop kin jogrun=%s\n",axes) 
-        kin.jogrun(jogrun_state)   
-
+        kin.jogrun_end(jogrun_state) 
+        logging.info("kin jogrun end\n")
+        self._recpoint = {}  
 
 def load_config(config):
     return PrinterHoming(config)
