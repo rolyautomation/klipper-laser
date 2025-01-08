@@ -4,6 +4,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
+import os
 
 LONG_PRESS_DURATION = 0.400
 #LONG_PRESS_DURATION = 1.800
@@ -21,8 +22,14 @@ CCW_DIR_VAL  = 0
 CW_DIR_VAL   = 1
 
 
+gpio_pin_zaxis = 23
+# Define the paths for sysfs GPIO interface
+export_path = "/sys/class/gpio/export"
+unexport_path = "/sys/class/gpio/unexport"
 
-class ZctrlPanel:
+
+
+class ZctrlDrip:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.reactor = self.printer.get_reactor()  
@@ -39,6 +46,7 @@ class ZctrlPanel:
         #self.isidle_mode = False
         self.isidle_mode = True
         self.dcm_keymode = False
+        self.startdirpflag = False
 
         self.dcm_existf = config.has_section('angledcmove as5600m')
         #fail value
@@ -61,6 +69,12 @@ class ZctrlPanel:
             'time_interval', 0.1, above=0., maxval=1)  
 
         self.qminlen  = config.getint('qminlen', M_QLEN_MIN, minval=0)   
+        self.gpio_zmin  = config.getint('gpio_zmin', gpio_pin_zaxis, minval=0)  
+
+
+        self.gpio_path = f"/sys/class/gpio/gpio{self.gpio_zmin}"
+        self.direction_path = f"{self.gpio_path}/direction"
+        self.value_path = f"{self.gpio_path}/value"
 
 
         self.dcm_long_stepf = 2.8/4
@@ -86,10 +100,11 @@ class ZctrlPanel:
                                                           'downlngr_gcode', '')                                                               
 
         self.gcode = self.printer.lookup_object('gcode')
+        '''
         self.gcode.register_mux_command("QUERY_ZCTRL", "ZCTRL", self.name,
                                         self.cmd_QUERY_ZCTRL,
                                         desc=self.cmd_QUERY_ZCTRL_help)
-
+        '''
 
         self.is_short_upclick = False
         self.is_long_upclick = False
@@ -104,9 +119,44 @@ class ZctrlPanel:
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_check)     
 
+        self.gpio_init_limit()
+        #self.gcode.register_command("SW_AS_KEYM", self.cmd_SW_AS_KEYM)  
+        #self.gcode.register_command("LOOK_AS_KEYM", self.cmd_LOOK_AS_KEYM) 
 
-        self.gcode.register_command("SW_AS_KEYM", self.cmd_SW_AS_KEYM)  
-        self.gcode.register_command("LOOK_AS_KEYM", self.cmd_LOOK_AS_KEYM)                                                 
+
+
+    def export_gpio(self, pin):
+        """Export the GPIO pin."""
+        try:
+            with open(export_path, 'w') as f:
+                f.write(str(pin))
+        except IOError:
+            logging.info(f"GPIO {pin} already exported.")              
+
+    def unexport_gpio(self, pin):
+        """Unexport the GPIO pin."""
+        with open(unexport_path, 'w') as f:
+            f.write(str(pin))
+
+    def set_gpio_direction(self, pin, direction):
+        """Set the GPIO direction."""
+        with open(self.direction_path, 'w') as f:
+            f.write(direction)
+
+    def write_gpio_value(self, pin, value):
+        """Write a value to the GPIO pin."""
+        with open(self.value_path, 'w') as f:
+            f.write(str(value))
+
+    def gpio_init_limit(self):
+        self.export_gpio(self.gpio_zmin)
+        self.set_gpio_direction(self.gpio_zmin, 'out')
+        self.write_gpio_value(self.gpio_zmin, 1)
+
+    def gpio_out_value(self,val):
+        self.write_gpio_value(self.gpio_zmin, val)
+
+        
 
     def cmd_SW_AS_KEYM(self, gcmd):
         sw = gcmd.get_int('S',1, minval=0, maxval=2)
@@ -187,8 +237,20 @@ class ZctrlPanel:
             angledcmoveas.dcm_move_correct(rdistf,rdir)
         return allow_run_next            
 
+    def checkz_allow_run_drip(self, rdir, rdist, rspeed):
+        if not self.startdirpflag:
+            self.startdirpflag = True
+            self.gpio_out_value(1)
+            instrstr = 'M284  Z   E1  F100\n'
+            if rdir == DOWN_DIR_VAL:
+                instrstr = 'M284  Z   E0  F100\n'
+            self.gcode.run_script(instrstr)
+            self.startdirpflag = False   
 
-    def checkz_allow_run(self, rdir, rdist, rspeed):
+    def checkz_allow_run(self, rdir, rdist, rspeed):   
+        pass   
+
+    def checkz_allow_run_old(self, rdir, rdist, rspeed):
         toolhead = self.printer.lookup_object('toolhead')
         z_min_st = 0
         z_max_st = 0
@@ -240,7 +302,7 @@ class ZctrlPanel:
             toolhead.manual_move_zaxis(rzpos, rspeed)
         return allow_val
 
-    def stop_now_run(self):
+    def stop_now_run_old(self):
         flag = 0
         with self.mutex:
             if self.upkey_longmode  > 0 :
@@ -256,60 +318,33 @@ class ZctrlPanel:
             toolhead.dwell(0.001) 
             #toolhead.flush_step_generation()
 
+    def stop_now_run(self):
+        flag = 0
+        logging.info("stop_now_run drip\n")
+        if self.startdirpflag:
+           #stopinstr_str= 'SET_PIN PIN=softtriggio VALUE=0\n'
+           #self.gcode.run_script_from_command(stopinstr_str)
+           self.gpio_out_value(0)
+           logging.info("send drip\n")
+           #self.gcode.run_script(stopinstr_str)
+        if flag :
+            toolhead = self.printer.lookup_object('toolhead')
+            toolhead.dwell(0.001) 
+            #toolhead.flush_step_generation()  
+
     def long_upclick_event(self, eventtime):
         allow_continue = 0
-        with self.mutex:
-            if (self.upkey_longmode > 0):
-                self.upkey_longmode = 2 
-                self.check_isprinting(eventtime)
-                if self.isidle_mode:
-                    allow_continue = self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
-                else:
-                    allow_continue = self.checkdcm_allow_run(CW_DIR_VAL, self.dcm_long_stepf)                     
-                self.key_event_handle('uplngp', eventtime)
-            else:
-                self.upkey_longmode = 1        
-                self.is_short_upclick = False
-                self.is_long_upclick = True
-                self.check_isprinting(eventtime)
-                if self.isidle_mode:            
-                    allow_continue = self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
-                else:
-                    allow_continue = self.checkdcm_allow_run(CW_DIR_VAL, self.dcm_long_stepf)    
-                self.key_event_handle('uplngp', eventtime)
-        #return eventtime+TM_INTER_VAL  
-        if (allow_continue != 0):
-            return eventtime + self.ptime_interval
-        else:    
-            return self.reactor.NEVER
+        self.is_short_upclick = False
+        self.is_long_upclick = True        
+        allow_continue = self.checkz_allow_run_drip(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
+        return self.reactor.NEVER
 
     def long_downclick_event(self, eventtime):
         allow_continue = 0 
-        with self.mutex:               
-            if self.downkey_longmode  > 0 :
-                self.downkey_longmode = 2
-                self.check_isprinting(eventtime)
-                if self.isidle_mode:           
-                    allow_continue = self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
-                else:
-                    allow_continue = self.checkdcm_allow_run(CCW_DIR_VAL, self.dcm_long_stepf)                      
-                self.key_event_handle('downlngp', eventtime)
-            else:
-                self.downkey_longmode = 1                 
-                self.is_short_downclick = False
-                self.is_long_downclick = True
-                self.check_isprinting(eventtime)
-                if self.isidle_mode:             
-                    allow_continue = self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
-                else:
-                    allow_continue = self.checkdcm_allow_run(CCW_DIR_VAL, self.dcm_long_stepf)                     
-                self.key_event_handle('downlngp', eventtime)
-        #return eventtime+TM_INTER_VAL 
-        if (allow_continue != 0):
-            return eventtime + self.ptime_interval
-        else:    
-            return self.reactor.NEVER 
-        #return self.reactor.NEVER        
+        self.is_short_downclick = False
+        self.is_long_downclick = True        
+        allow_continue = self.checkz_allow_run_drip(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
+        return self.reactor.NEVER        
 
     def up_callback(self, eventtime, state):
         self.up_state = state
@@ -345,6 +380,7 @@ class ZctrlPanel:
             else:    
                 #logging.info("\n uplngr \n")
                 pass
+
 
     def down_callback(self, eventtime, state):
         self.down_state = state
@@ -429,4 +465,4 @@ class ZctrlPanel:
         
 
 def load_config_prefix(config):
-    return ZctrlPanel(config)
+    return ZctrlDrip(config)

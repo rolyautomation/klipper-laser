@@ -237,7 +237,35 @@ class CoreXYGalvoKinematics:
             # Perform homing
             #jogrun_state.jogrun_rails([rail], forcepos, homepos)
             jogrun_state.jogrun_rails([rail])
-            #reason: A: soft reset zero             
+            #reason: A: soft reset zero    
+
+    def jogrun_drip(self, jogrun_state):
+        # Each axis is homed independently and in order
+        for axis in jogrun_state.get_axes():
+            rail = self.rails[axis]
+            position_min, position_max = rail.get_range()
+            # Determine movement
+            dripparam = jogrun_state.get_dripparam()
+            godist = dripparam[0]
+            if dripparam[1] < 2:
+                if  dripparam[1] == 1:
+                    godist = position_max
+                else:
+                    godist = position_min  
+            #hi = rail.get_homing_info()
+            homepos = [None, None, None, None]
+            #homepos[axis] = hi.position_endstop
+            gopos = list(homepos)
+            gopos[axis] = godist
+            #if hi.positive_dir:
+            #    forcepos[axis] -= 1.5 * (hi.position_endstop - position_min)
+            #else:
+            #    forcepos[axis] += 1.5 * (position_max - hi.position_endstop)
+            # Perform homing
+            #homing_state.jogrun_rails_drip([rail], forcepos, homepos)
+            jogrun_state.jogrun_rails_drip([rail], gopos)
+
+
 
     def _motor_off(self, print_time):
         self.limits = [(1.0, -1.0)] * (3+3)
