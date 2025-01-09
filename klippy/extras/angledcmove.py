@@ -108,12 +108,43 @@ M_RM_IDL_RUN = 2
 
 AB_PIN_CHG  =  1
 
-
 #M_COTM_US =  1000000
 #M_COTM_US =  1000
 M_COTM_US =  500000
 
 
+#4096
+class MFindPID:
+    def __init__(self, Kp, Ki, Kd):
+        self.Kp = Kp
+        self.Ki = Ki
+        self.Kd = Kd
+        self.target_val=0.0
+        self.actual_val=0.0
+        self.err = 0.0
+        self.err_last = 0.0
+        self.err_next = 0.0 
+        self.integral = 0.0       
+    def cacl_next_positon_incmode(self, diffval):
+        self.err=diffval
+        increment_val = self.Kp*(self.err - self.err_next) + self.Ki*self.err + self.Kd*(self.err - 2 * self.err_next + self.err_last)
+        self.actual_val += increment_val
+        self.err_last = self.err_next
+        self.err_next = self.err
+        return self.actual_val
+    def cacl_next_positon_nmode(self, diffval):
+        self.err=diffval
+        self.integral+=self.err
+        self.actual_val=self.Kp*self.err+self.Ki*self.integral+self.Kd*(self.err-self.err_last)
+        self.err_last=self.err
+        return self.actual_val
+    def restart_init(self):
+        self.target_val=0.0
+        self.actual_val=0.0
+        self.err = 0.0
+        self.err_last = 0.0
+        self.err_next = 0.0 
+        self.integral = 0.0 
 
 class MabControl_PIO:
     def __init__(self, config, ab_chg):
@@ -450,9 +481,16 @@ class Angledcmove:
         self.integral = 0
         #self.last_time = time.time()
         self.last_time = 0
-        self.sel_alg = 0
+
+        #self.sel_alg = 0
+        self.sel_alg = 1
         self.previous_diff = 0
         self.previous_rtm = 0
+        #self.normpid = MFindPID(0.31,0.07,0.3)
+        #self.normpid = MFindPID(0.28,0.07,0.03)
+        self.normpid = MFindPID(0.25,0.07,0.03)
+        self.incpid = MFindPID(0.21,0.80,0.01)
+        
 
     def cmd_SEL_ALG_FIND(self, gcmd):
         selalgv = gcmd.get_int('S',0, minval=0, maxval=10) 
@@ -691,7 +729,7 @@ class Angledcmove:
         return ret_sec
 
 
-    def find_angle_pos_pidalg(self, destangle): 
+    def find_angle_pos_pidalg_v00(self, destangle): 
         successf = 0
         if destangle < 0  or  destangle > ANGLE_IN_MAX :
             successf = 1
@@ -732,8 +770,7 @@ class Angledcmove:
                 else:
                     CW_DIR = 1
 
-
-            
+        
             #runtmsec = self.angel_transfrom_rtm(runangle)
             runtmsec_pid = self.angel_transfrom_rtm_pid(runangle)
             runtmsec = self.control_pid(runtmsec_pid)
@@ -744,8 +781,59 @@ class Angledcmove:
             find_times = find_times + 1
         logging.info("pid findtimes=%d\n", find_times)
 
-        return successf    
+        return successf 
 
+    def find_angle_pos_pidalg(self, destangle): 
+        successf = 0
+        if destangle < 0  or  destangle > ANGLE_IN_MAX :
+            successf = 1
+            return successf   
+        find_times = 0 
+        #mode_pid = 0
+        mode_pid = 0
+        self.normpid.restart_init() 
+        self.incpid.restart_init() 
+        if mode_pid > 0:
+            logging.info("incpid mode\n") 
+
+        while True:
+            cur_angle_value = self.read_cur_angle_value()
+            logging.info("pid cur_angle=%d\n" ,cur_angle_value)
+            ret = self.decide_val_tolerance(cur_angle_value, destangle)
+            if (ret > 0):
+                break  
+            if find_times > FIND_MAX_TIMES:
+                successf = 2
+                break             
+            diffv_pid = destangle - cur_angle_value
+            #isright
+            if mode_pid > 0:
+                diffv = self.incpid.cacl_next_positon_incmode(diffv_pid)  
+            else:
+                diffv = self.normpid.cacl_next_positon_nmode(diffv_pid)                   
+            logging.info("incpid next =%s, %s\n" ,diffv_pid, diffv)  
+            abs_diffv = abs(diffv)
+            CW_DIR = 0
+            runangle = 0
+            if abs_diffv  <  ANGLE_HF_VAL:
+                runangle = abs_diffv  
+                if  diffv > 0:
+                    CW_DIR = 1
+                else:
+                    CW_DIR = 0
+            else:
+                runangle = ANGLE_MOD_VAL-abs_diffv 
+                if  diffv > 0:
+                    CW_DIR = 0
+                else:
+                    CW_DIR = 1
+            runtmsec = self.angel_transfrom_rtm(runangle)
+            logging.info("%dinfo [%s:%s] dir=%d \n",find_times, runangle, runtmsec, CW_DIR)
+            self.dcm_move_correct(runtmsec,CW_DIR)
+            self.wait_motionless(0.5)
+            find_times = find_times + 1
+        logging.info("findtimes=%d\n", find_times)                    
+        return successf            
 
 
     def cmd_DCM_MOVE(self, gcmd):

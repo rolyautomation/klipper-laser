@@ -5,6 +5,7 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 import os
+import RPi.GPIO as GPIO
 
 LONG_PRESS_DURATION = 0.400
 #LONG_PRESS_DURATION = 1.800
@@ -26,7 +27,25 @@ gpio_pin_zaxis = 23
 # Define the paths for sysfs GPIO interface
 export_path = "/sys/class/gpio/export"
 unexport_path = "/sys/class/gpio/unexport"
-
+# Set the GPIO mode
+#GPIO.setmode(GPIO.BCM)
+# Set up a specific pin (e.g., BCM 23) as input
+#GPIO.setup(23, GPIO.IN)
+# Read the value of the pin
+#pin_value = GPIO.input(23)
+#print(f"BCM 23 value: {'HIGH' if pin_value else 'LOW'}")
+# Clean up
+#GPIO.cleanup()
+#import RPi.GPIO as GPIO
+#import time
+#GPIO.setmode(GPIO.BCM)
+#GPIO.setup(23, GPIO.OUT)
+# 设置高电平
+#GPIO.output(23, GPIO.HIGH)
+#time.sleep(1)  # 保持高电平1秒
+# 设置低电平
+#GPIO.output(23, GPIO.LOW)
+#GPIO.cleanup()
 
 
 class ZctrlDrip:
@@ -128,8 +147,9 @@ class ZctrlDrip:
     def export_gpio(self, pin):
         """Export the GPIO pin."""
         try:
-            with open(export_path, 'w') as f:
-                f.write(str(pin))
+            if not os.path.exists(self.gpio_path):
+                with open(export_path, 'w') as f:
+                    f.write(str(pin))
         except IOError:
             logging.info(f"GPIO {pin} already exported.")              
 
@@ -138,25 +158,38 @@ class ZctrlDrip:
         with open(unexport_path, 'w') as f:
             f.write(str(pin))
 
-    def set_gpio_direction(self, pin, direction):
+    def set_gpio_direction(self, pin, dirstr):
         """Set the GPIO direction."""
-        with open(self.direction_path, 'w') as f:
-            f.write(direction)
+        try:
+            with open(self.direction_path, 'w') as f:
+                f.write(str(dirstr))
+        except IOError:
+            logging.info(f"error:GPIO {pin} set_gpio_direction")                 
 
     def write_gpio_value(self, pin, value):
         """Write a value to the GPIO pin."""
-        with open(self.value_path, 'w') as f:
-            f.write(str(value))
+        try:        
+            with open(self.value_path, 'w') as f:
+                f.write(str(value))
+        except IOError:
+            logging.info(f"error:GPIO {pin} write_gpio_value")                   
 
     def gpio_init_limit(self):
-        self.export_gpio(self.gpio_zmin)
-        self.set_gpio_direction(self.gpio_zmin, 'out')
-        self.write_gpio_value(self.gpio_zmin, 1)
+        #self.export_gpio(self.gpio_zmin)
+        #self.set_gpio_direction(self.gpio_zmin, 'out')
+        #self.write_gpio_value(self.gpio_zmin, 1)
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.gpio_zmin, GPIO.OUT)  
+        GPIO.output(self.gpio_zmin, GPIO.HIGH)  
 
     def gpio_out_value(self,val):
-        self.write_gpio_value(self.gpio_zmin, val)
-
-        
+        #self.write_gpio_value(self.gpio_zmin, val)
+        if val > 0:
+            GPIO.output(self.gpio_zmin, GPIO.HIGH)
+        else:
+            GPIO.output(self.gpio_zmin, GPIO.LOW)
+            
+    
 
     def cmd_SW_AS_KEYM(self, gcmd):
         sw = gcmd.get_int('S',1, minval=0, maxval=2)
