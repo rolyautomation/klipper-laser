@@ -1,12 +1,11 @@
-# BLTouch support
+# jogging support
 #
 # Copyright (C) 2018-2024  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
-from . import probe
-import RPi.GPIO as GPIO
-
+#from . import probe
+#import RPi.GPIO as GPIO
 SPEED_MIN_LIMIT = 20
 SPEED_MAX_LIMIT = 100
 
@@ -33,34 +32,37 @@ class Joggingrun:
                                desc=self.cmd_QUERY_JOGPIN_help)        
 
         self.position_endstop = 0
-        self.gpio_trigpin  = config.getint('trig_pin', 23, minval=0) 
-        self.last_outval   = 0  
-
-        self.trig_sw  = config.getint('trig_sw', 1, minval=0) 
-
+         
         self.min_speed  = config.getint('min_speed', SPEED_MIN_LIMIT, minval=2)  
         self.max_speed  = config.getint('max_speed', SPEED_MAX_LIMIT, minval=20) 
-
         self.xmin_axes  = config.getint('xmin_axes', 0, minval=0)   
         self.ymin_axes  = config.getint('ymin_axes', 0, minval=0)   
         self.zmin_axes  = config.getint('zmin_axes', 0, minval=0)   
-    
-        self.chktrigger_timer = self.reactor.register_timer(self.chktrigger_fun)                       
 
+        wh = self.printer.lookup_object('webhooks')
+        wh.register_endpoint("gcode/jogcancel", self._handle_jogcancel)  
+        self.jogworkmode = 0 
+                         
+        self.machinepos = None 
         gcode.register_command('M286', self.cmd_M286_JOG_XYZ)  
-        gcode.register_command('M287', self.cmd_M287_JOG_TRIGG)  
+
+        #gcode.register_command('M287', self.cmd_M287_JOG_TRIGG)  
         # Common probe implementation helpers
         #self.cmd_helper = probe.ProbeCommandHelper(
             #config, self, self.mcu_endstop.query_endstop)
         #self.probe_session = probe.ProbeSessionHelper(config, self)
         self.printer.register_event_handler('klippy:mcu_identify',
                                             self._handle_mcu_identify)
-        self.gpio_trigpin_init() 
-        self.machinepos = None 
-        self.waitflagjog = 0
-        self.chk_interval = 0.002
-        self.sumtime = 0 
 
+        #self.chktrigger_timer = self.reactor.register_timer(self.chktrigger_fun)                                              
+        #self.gpio_trigpin  = config.getint('trig_pin', 23, minval=0) 
+        #self.trig_sw  = config.getint('trig_sw', 1, minval=0) 
+        #self.last_outval   = 0                                             
+        #self.gpio_trigpin_init() 
+        #self.waitflagjog = 0
+        #self.chk_interval = 0.002
+        #self.sumtime = 0 
+        """
         self.printer.register_event_handler("homing:homing_move_begin",
                                             self.handle_homing_move_begin)
         self.printer.register_event_handler("homing:homing_move_end",
@@ -70,6 +72,9 @@ class Joggingrun:
 
         self.printer.register_event_handler("jogging:trigger_to_stop",
                                             self.handle_trigger_to_stop)  
+        """
+        self.printer.register_event_handler("homing:homing_move_end",
+                                            self.handle_homing_move_end)
 
         #by user:self.printer.send_event("jogging:trigger_to_stop", 1)                                                                                                                                  
 
@@ -86,6 +91,16 @@ class Joggingrun:
                 #self.mcu_probe.add_stepper(stepper)
                 self.add_stepper(stepper) 
 
+
+    def _handle_jogcancel(self, web_request):
+        if self.jogworkmode > 0:                
+            self.printer.send_event("jogging:trigger_to_stop", 0)    
+
+
+    def handle_homing_move_end(self, hmove):
+        self.jogworkmode = 0     
+         
+    """
     def handle_homing_move_begin(self, hmove):
         self.waitflagjog = 0
         self.sumtime = 0
@@ -132,10 +147,28 @@ class Joggingrun:
         if self.trig_sw > 0:              
             GPIO.output(self.gpio_trigpin, GPIO.LOW)
             self.last_outval = 0  
+    """
 
     def get_position_endstop(self):
         return self.position_endstop
 
+    def check_is_move(self, curpos, gopos, mdir):
+        #logging.info("check_is_move")    
+        ismove = True
+        if mdir == 0 and curpos <= gopos:
+            ismove = False
+        elif mdir == 1 and curpos >= gopos:
+            ismove = False
+        return ismove
+
+    def speedunit_min_sec(self, axis, speed_min):
+        speed_factor = 1. / 60.
+        speed_sec =  speed_min   
+        if axis < 2:
+            speed_sec = speed_min * speed_factor
+        return speed_sec    
+
+        
     cmd_QUERY_JOGPIN_help = "Return the status of the z-probe"
     def cmd_QUERY_JOGPIN(self, gcmd):
         if self.query_endstop is None:
@@ -170,6 +203,7 @@ class Joggingrun:
             dist = float(params['D']) 
         if 'F' in params:
             drip_speed = float(params['F'])
+            drip_speed = self.speedunit_min_sec(axes[0], drip_speed)
             #if drip_speed <= 0.: 
             #    drip_speed = 20.0
             if drip_speed < self.min_speed: 
@@ -200,11 +234,21 @@ class Joggingrun:
         #if 'z' not in toolhead.get_status(curtime)['homed_axes']:
         #    raise self.printer.command_error("Must home before probe")
         pos = toolhead.get_position()
-        pos[axis] = godist
-        speedv = dripparam[2]
-        logging.info("inparam=%s,%s\n",pos,speedv) 
-        retv = self.probing_move(pos,speedv)
-        logging.info("probing_move=%s\n",retv) 
+        ismove = self.check_is_move(pos[axis], godist, dripparam[1])
+        if ismove:
+            pos[axis] = godist
+            speedv = dripparam[2]
+            logging.info("inparam=%s,%s\n",pos,speedv) 
+            if self.jogworkmode == 0:
+                self.jogworkmode = 1
+                retv = self.probing_move(pos,speedv)
+                self.jogworkmode = 0
+                logging.info("probing_move=%s\n",retv) 
+            else:
+                logging.info("probing_move busy\n")
+        else:
+            logging.info("current position is here,no need move\n")    
+
         #recpointnull = {}
         #jogrun_state = Homing(self.printer,recpointnull)
         #jogrun_state.set_axes(axes)
@@ -213,6 +257,8 @@ class Joggingrun:
         #logging.info("stop kin jogrun_drip=%s\n",axes) 
         #kin.jogrun_drip(jogrun_state) 
         #logging.info("kin jogrun_drip end\n")
+
+    """    
     def cmd_M287_JOG_TRIGG(self, gcmd):
         #pass  
         outvalue = 0                  
@@ -226,8 +272,8 @@ class Joggingrun:
             self.gpio_trigpin_low_out()             
         msg = "hgpio=%s,outval=%s" % (self.gpio_trigpin, self.last_outval) 
         gcmd.respond_info(msg)
-  
+    """
+
 def load_config_prefix(config):
     return Joggingrun(config)  
-
-     
+         

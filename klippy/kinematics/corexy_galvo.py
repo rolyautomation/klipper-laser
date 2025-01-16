@@ -265,7 +265,14 @@ class CoreXYGalvoKinematics:
             #homing_state.jogrun_rails_drip([rail], forcepos, homepos)
             jogrun_state.jogrun_rails_drip([rail], gopos)
 
-
+    def get_machine_pos(self):
+        axes_xyz = [0,1,2]
+        posdata = []
+        for axis in axes_xyz:
+            rail = self.rails[axis]
+            position_min, position_max = rail.get_range() 
+            posdata.append([position_min,position_max]) 
+        return posdata   
 
     def _motor_off(self, print_time):
         self.limits = [(1.0, -1.0)] * (3+3)

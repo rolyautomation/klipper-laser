@@ -58,6 +58,7 @@ class FastDigitalOut_v00:
         gcmd.respond_info(msg)
 '''
 
+
 class FastDigitalOut:
 
     def __init__(self, config):
@@ -65,32 +66,18 @@ class FastDigitalOut:
         self.printer = printer = config.get_printer()
         self.fastout_name = config.get_name().split()[-1]
         self.reactor = self.printer.get_reactor()
-
-
         ppins = printer.lookup_object('pins')
         ctrl_pin_params = ppins.lookup_pin(config.get('ctrl_pin'))
         self._mcu = ctrl_pin_params['chip']
         self._ctrl_pin = ctrl_pin_params['pin']   
         self._oid = self._mcu.create_oid()
-
-
         self._mcu.register_config_callback(self._build_config)
-
-        self.last_outval = 1
-
         gcode = self.printer.lookup_object("gcode")
-        """
-        gcode.register_mux_command("SET_POS_GALVO", "GALVO",
-                                   self.galvo_name,
-                                   self.cmd_SET_POS_GALVO,
-                                   desc=self.cmd_SET_POS_GALVO_help)          
-        """
         gcode.register_command('TST_FASTDOUT',
                                 self.cmd_TST_FASTDOUT)
 
-
         self.chktrigger_timer = self.reactor.register_timer(self.chktrigger_fun) 
-
+        self.last_outval = 1
         self.waitflagjog = 0
         self.chk_interval = 0.002
         self.sumtime = 0 
@@ -102,21 +89,17 @@ class FastDigitalOut:
                                             self.handle_homing_moving) 
         self.printer.register_event_handler("jogging:trigger_to_stop",
                                             self.handle_trigger_to_stop)  
-
-
-
     def _build_config(self):
         self.cmd_queue = self._mcu.alloc_command_queue()
         self._mcu.add_config_cmd("config_digital_out oid=%d pin=%s"
                                 " value=%d default_value=%d max_duration=%d" % (
                                     self._oid, self._ctrl_pin, 1, 1, 0))   
         cmd_queue = self.cmd_queue
-        self._set_cmd = self._mcu.lookup_command(
-            "queue_digital_out oid=%c clock=%u on_ticks=%u", cq=cmd_queue) 
+        #self._set_cmd = self._mcu.lookup_command(
+        #"queue_digital_out oid=%c clock=%u on_ticks=%u", cq=cmd_queue) 
 
         self.update_pin_cmd = self._mcu.lookup_command(
-            "update_digital_out oid=%c value=%c", cq=self.cmd_queue)              
-
+            "update_digital_out oid=%c value=%c", cq=self.cmd_queue)  
 
 
     def get_mcu(self):
@@ -124,15 +107,12 @@ class FastDigitalOut:
 
     #def update_digital_out_noclock(self, value):
         #clock = self._mcu.get_clock()
-        #self.set_cmd.send([self.oid, clock, (not not value)])        
+        #self.set_cmd.send([self._oid, clock, (not not value)])        
         #self.update_pin_cmd.send([self.oid, not not value])   
 
     def update_digital_out_noclock(self, value):
-        #clock = self._mcu.get_clock()
-        #self.set_cmd.send([self.oid, clock, (not not value)])  
         self.last_outval = value      
         self.update_pin_cmd.send([self._oid, not not value]) 
-
 
     def gpio_trigpin_high_out(self):
         self.update_digital_out_noclock(1)
@@ -150,8 +130,8 @@ class FastDigitalOut:
     def handle_homing_move_end(self, hmove):
         self.waitflagjog = 0        
         if self.last_outval < 1:
-            #self.gpio_trigpin_high_out()  
-            pass
+            self.gpio_trigpin_high_out()  
+            #pass
             
 
     def handle_homing_moving(self, hmove):
@@ -173,7 +153,6 @@ class FastDigitalOut:
         logging.info("mcu trigger_to_stop=%s\n",num) 
         self.reactor.update_timer(self.chktrigger_timer, self.reactor.NOW)
         #self.gpio_trigpin_low_out() 
-
 
     '''
     def update_digital_out(self, value, minclock=0, reqclock=0):
@@ -197,7 +176,6 @@ class FastDigitalOut:
             self.update_digital_out_noclock(0)             
         msg = "hgpio=%s,outval=%s" % (self._ctrl_pin, self.last_outval) 
         gcmd.respond_info(msg)
-
 
 
 def load_config_prefix(config):
