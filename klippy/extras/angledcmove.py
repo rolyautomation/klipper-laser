@@ -6,6 +6,8 @@
 import logging
 from . import bus
 import time
+import threading
+
 
 REPORT_TIME = .8
 AS5600_CHIP_ADDR = 0x36
@@ -23,6 +25,10 @@ TTURN_TM_SEC = 2.65
 TTURN_TM_SEC_D = 1.65
 MIN_RUN_TMUNIT = 0.005
 FIND_MAX_TIMES  = 100
+FIND_MAX_TIMES_TST  = 1000
+APPROACH_TARGET = 0.50
+#very important
+DC_MOVE_PWM_MINV  = 0.8
 
 
 '''
@@ -138,6 +144,7 @@ class MFindPID:
         self.actual_val=self.Kp*self.err+self.Ki*self.integral+self.Kd*(self.err-self.err_last)
         self.err_last=self.err
         return self.actual_val
+
     def restart_init(self):
         self.target_val=0.0
         self.actual_val=0.0
@@ -145,6 +152,61 @@ class MFindPID:
         self.err_last = 0.0
         self.err_next = 0.0 
         self.integral = 0.0 
+
+
+MAX_INTEGRAL = 100  
+MIN_INTEGRAL = -100 
+INTEGER_LIMIT =  50
+
+class ControlPID_MG:
+    def __init__(self, Kp, Ki, Kd, max_dcspeed):
+        self.max_dcspeed = max_dcspeed
+        self.Kp = Kp
+        self.Ki = Ki
+        self.Kd = Kd        
+        self.prev_angle_time = 0.
+        self.target_val=0.0
+        self.actual_val=0.0
+        self.err = 0.0
+        self.err_last = 0.0
+        self.err_next = 0.0 
+        self.integral = 0.0  
+    def angle_update_v00(self, read_time, angle, target_angle):
+        time_diff = read_time - self.prev_angle_time
+        # Calculate change of temperature
+        # Calculate accumulated temperature "error"
+        angle_err = target_angle - angle
+        self.err= angle_err
+        self.integral+=self.err
+        self.actual_val=self.Kp*self.err+self.Ki*self.integral+self.Kd*(self.err-self.err_last)
+        self.err_last=self.err
+        return self.actual_val
+
+
+    def angle_update(self, read_time, angle, target_angle):
+        time_diff = read_time - self.prev_angle_time
+        # Calculate change of temperature
+        # Calculate accumulated temperature "error"
+        angle_err = target_angle - angle
+        self.err= angle_err
+        if abs(self.err) < INTEGER_LIMIT:
+            self.integral+=self.err
+        else:
+            self.integral = 0 
+        self.integral = max(MIN_INTEGRAL, min(MAX_INTEGRAL, self.integral))
+        self.actual_val=self.Kp*self.err+self.Ki*self.integral+self.Kd*(self.err-self.err_last)
+        self.err_last=self.err
+        return self.actual_val        
+
+
+    def restart_init(self):
+        self.target_val=0.0
+        self.actual_val=0.0
+        self.err = 0.0
+        self.err_last = 0.0
+        self.err_next = 0.0 
+        self.integral = 0.0         
+
 
 class MabControl_PIO:
     def __init__(self, config, ab_chg):
@@ -232,7 +294,8 @@ class AngDCMotor:
         self.printer = config.get_printer()
         self.name = config.get_name()
         self.reactor = self.printer.get_reactor()
-
+        #self.toolhead = self.printer.lookup_object('toolhead')
+        #self.toolhead = None
         ppins = self.printer.lookup_object('pins')
         self.cw_last_value = 0
         self.ccw_last_value =  0
@@ -313,23 +376,28 @@ class AngDCMotor:
         toolhead.wait_moves()            
 
 
-    def cw_move_time(self,tm_sec, waittmsec = INTER_WAIT_TIME, pval=1):
+    def cw_move_time_v00(self,tm_sec, waittmsec = INTER_WAIT_TIME, pval=1):
         if self.is_piom:
             self.cw_move_time_pio(tm_sec,waittmsec)
             return 
         toolhead = self.printer.lookup_object('toolhead')
         print_time = toolhead.get_last_move_time()
+        start_time = print_time
+        logging.info("s1:%s" ,print_time)
         print_time = print_time + waittmsec
+        logging.info("s2:%s" ,print_time)
         if self.is_pwm:
             if self.pwmmodeb:
                 self.set_digital_host(self.ccw_pin, print_time, 1)
                 self.set_digital_host(self.cw_pin, print_time, 1)              
                 print_time = print_time + waittmsec
+                logging.info("s31:%s" ,print_time)
                 #PWMB MODE 1-pval
                 self.set_digital_host(self.ccw_pin, print_time, pval)
                 self.set_digital_host(self.cw_pin, print_time, 1)  
             else:
                 #PWMA MODE
+                logging.info("s3:%s" ,print_time)
                 self.set_digital_host(self.ccw_pin, print_time, 0)
                 self.set_digital_host(self.cw_pin, print_time, pval)                 
 
@@ -339,15 +407,25 @@ class AngDCMotor:
             self.set_digital_host(self.cw_pin, print_time, 1)                            
         #logging.info("\n n:%s old:%s \n" ,print_time,print_time_old)
         print_time = print_time+tm_sec
+        logging.info("s4:%s" ,print_time)
         self.set_digital_host(self.ccw_pin, print_time, 1)
         self.set_digital_host(self.cw_pin, print_time, 1)         
         #print_time = print_time+STOP_WAIT_TIME
         print_time = print_time + waittmsec
+        logging.info("s5:%s" ,print_time)
         self.set_digital_host(self.ccw_pin, print_time, 0)
         self.set_digital_host(self.cw_pin, print_time, 0)        
         self.last_run_time = print_time
-        toolhead.dwell(0.001)
+        end_time = print_time + waittmsec
+        #toolhead.dwell(0.001)
+        delay_time = end_time-start_time
+        logging.info("s7:%s" ,delay_time)
+        toolhead.dwell(2*delay_time)
         toolhead.wait_moves()
+
+
+
+
 
     def ccw_move_time_pio(self,tm_sec, waittmsec = INTER_WAIT_TIME):  
         toolhead = self.printer.lookup_object('toolhead')
@@ -371,11 +449,12 @@ class AngDCMotor:
         toolhead.wait_moves()           
 
 
-    def ccw_move_time(self,tm_sec, waittmsec = INTER_WAIT_TIME, pval=1):
+    def ccw_move_time_v00(self,tm_sec, waittmsec = INTER_WAIT_TIME, pval=1):
         if self.is_piom:
             self.ccw_move_time_pio(tm_sec,waittmsec)
-            return         
+            return   
         toolhead = self.printer.lookup_object('toolhead')
+        toolhead.wait_moves()
         print_time = toolhead.get_last_move_time()
         print_time = print_time + waittmsec
         if self.is_pwm:
@@ -406,6 +485,84 @@ class AngDCMotor:
         toolhead.wait_moves()
 
 
+
+    def cw_move_time(self,tm_sec, waittmsec = INTER_WAIT_TIME, pval=1):
+        if self.is_piom:
+            self.cw_move_time_pio(tm_sec,waittmsec)
+            return 
+        toolhead = self.printer.lookup_object('toolhead')
+        print_time = toolhead.get_last_move_time()
+        start_time = print_time
+        #logging.info("s1:%s" ,print_time)
+        print_time = print_time + waittmsec
+        #logging.info("s2:%s" ,print_time)
+        if self.is_pwm:
+            if self.pwmmodeb:
+                #logging.info("s31:%s" ,print_time)
+                #PWMB MODE 1-pval
+                self.set_digital_host(self.ccw_pin, print_time, pval)
+                self.set_digital_host(self.cw_pin, print_time, 1)  
+            else:
+                #PWMA MODE
+                #logging.info("s3:%s" ,print_time)
+                self.set_digital_host(self.ccw_pin, print_time, 0)
+                self.set_digital_host(self.cw_pin, print_time, pval)                 
+        else:
+            self.set_digital_host(self.ccw_pin, print_time, 0)
+            self.set_digital_host(self.cw_pin, print_time, 1)                            
+        #logging.info("\n n:%s old:%s \n" ,print_time,print_time_old)
+        print_time = print_time+tm_sec
+        #logging.info("s5:%s" ,print_time)
+        self.set_digital_host(self.ccw_pin, print_time, 0)
+        self.set_digital_host(self.cw_pin, print_time, 0)        
+        end_time = print_time + waittmsec
+        self.last_run_time = print_time        
+        delay_time = end_time-start_time
+        #logging.info("s7:%s" ,delay_time)
+        toolhead.dwell(delay_time)
+        toolhead.wait_moves()
+        
+
+
+    def ccw_move_time(self,tm_sec, waittmsec = INTER_WAIT_TIME, pval=1):
+        if self.is_piom:
+            self.ccw_move_time_pio(tm_sec,waittmsec)
+            return   
+        toolhead = self.printer.lookup_object('toolhead')
+        toolhead.wait_moves()
+        print_time = toolhead.get_last_move_time()
+        start_time = print_time
+        print_time = print_time + waittmsec
+        if self.is_pwm:
+            if self.pwmmodeb:
+                #PWMB MODE 1-pval
+                self.set_digital_host(self.ccw_pin, print_time, 1)
+                self.set_digital_host(self.cw_pin, print_time, pval)
+            else:
+                #PWMA MODE
+                self.set_digital_host(self.ccw_pin, print_time, pval)
+                self.set_digital_host(self.cw_pin, print_time, 0)                 
+                           
+        else:    
+            self.set_digital_host(self.ccw_pin, print_time, 1)
+            self.set_digital_host(self.cw_pin, print_time, 0)             
+        print_time = print_time+tm_sec
+        self.set_digital_host(self.ccw_pin, print_time, 0)
+        self.set_digital_host(self.cw_pin, print_time, 0)  
+        end_time = print_time + waittmsec
+        self.last_run_time = print_time  
+        delay_time = end_time-start_time                    
+        toolhead.dwell(delay_time)
+        toolhead.wait_moves()  
+
+    def is_move_complete(self):
+        toolhead = self.printer.lookup_object('toolhead')
+        current_time = toolhead.get_last_move_time()
+        last_time = self.last_run_time
+        return current_time >= last_time
+
+                
+
     def dc_set_pin(self, print_time, valuea, valueb):
         if self.is_piom:
             if  valuea and valueb:
@@ -431,14 +588,31 @@ class AngDCMotor:
                 valueb = 1  
             self.cw_pin.set_digital(print_time,  valuea)
             self.ccw_pin.set_digital(print_time, valueb)
+           
 
+
+    def dc_set_pin_speedmode(self, print_time, valuea, valueb):
+        retmode = 0
+        if self.is_piom:
+            return retmode
+        if self.is_pwm:
+            self.cw_pin.set_pwm(print_time,  valuea)
+            self.ccw_pin.set_pwm(print_time, valueb) 
+            retmode = 1
+            return retmode           
+        else: 
+            return retmode
+
+            
 class Angledcmove:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.name = config.get_name().split(' ')[-1]
         self.reactor = self.printer.get_reactor()
         self.save_vars = None
-        
+
+        #self.toolhead = self.printer.lookup_object('toolhead')
+        self.toolhead = None
         self.dcmotor = AngDCMotor(config)
         self.i2c = bus.MCU_I2C_from_config(
             config, default_addr=AS5600_CHIP_ADDR, default_speed=100000)
@@ -459,6 +633,7 @@ class Angledcmove:
 
         self.gcode.register_command("DCM_MOVE", self.cmd_DCM_MOVE)  
         self.gcode.register_command("DCM_PINOUT", self.cmd_DCM_PINOUT) 
+        self.gcode.register_command("DCM_PINOUT_PID", self.cmd_DCM_PINOUT_PID)         
         self.run_stopflag = 0
         self.sample_timer = self.reactor.register_timer(self._sample_as5600) 
 
@@ -467,7 +642,10 @@ class Angledcmove:
         self.gcode.register_command("AS_DEBUG_WRITE", self.cmd_AS5600_DEBUG_WRITE) 
         self.gcode.register_command("SAVE_POS_AS", self.cmd_SAVE_POS_AS)  
         self.gcode.register_command("LOOK_POS_AS", self.cmd_LOOK_POS_AS) 
-        self.gcode.register_command("FIND_POS_BYAS", self.cmd_FIND_POS_BYAS)    
+        self.gcode.register_command("FIND_POS_BYAS", self.cmd_FIND_POS_BYAS)   
+        self.gcode.register_command("FIND_POS_BYAS_SA", self.cmd_FIND_POS_BYAS_SA) 
+        self.gcode.register_command("FIND_POS_BYAS_EN", self.cmd_FIND_POS_BYAS_EN) 
+        self.gcode.register_command("FIND_POS_BYAS_ST", self.cmd_FIND_POS_BYAS_ST)          
         self.gcode.register_command("SWINGARM_BYAS", self.cmd_SWINGARM_BYAS)  
         self.gcode.register_command("SEL_ALG_FIND", self.cmd_SEL_ALG_FIND)
 
@@ -482,15 +660,42 @@ class Angledcmove:
         #self.last_time = time.time()
         self.last_time = 0
 
-        #self.sel_alg = 0
-        self.sel_alg = 1
+        self.sel_alg = 0
+        #self.sel_alg = 1
         self.previous_diff = 0
         self.previous_rtm = 0
         #self.normpid = MFindPID(0.31,0.07,0.3)
         #self.normpid = MFindPID(0.28,0.07,0.03)
         self.normpid = MFindPID(0.25,0.07,0.03)
         self.incpid = MFindPID(0.21,0.80,0.01)
-        
+
+        #self.pidreptime = config.getint('pidreptimef',0.02,minval=0.01)
+        self.pidreptime = config.getfloat('pidreptimef', 0.02, above=0.01, maxval=2)
+        self.samptimer_fpos = self.reactor.register_timer(self.samp_fpos_fun) 
+        self.sample_angle_value = 0 
+        #self.lock = threading.Lock()  
+        self.last_angle_val = 0. 
+        self.last_angle_time = 0.  
+        #self.pid_normal = ControlPID_MG(0.21,0.80,0.01,0.45)
+        #self.pid_normal = ControlPID_MG(0.21,0.07,0.01,0.45)
+        #self.pid_normal = ControlPID_MG(0.21,0.00,0.01,0.45)
+        self.pid_normal = ControlPID_MG(0.21,0.02,0.01,0.45)        
+        self.force_exit = 0
+        self.targer_angle = 0
+        self.find_times = 0
+        self.pwm_dcwork_flag = 0
+        self.pwm_delay = 0.005
+        self.stop_delay = 0.001
+        #self.min_pwm_plus = 0.04
+        #self.max_pwm_plus = 0.50 
+        self.min_pwm_plus = 0.50
+        self.max_pwm_plus = 0.80         
+        self.findpid_work = 0 
+        self.finetuningmode = 0  
+        self.pwm_chg_status = 0
+        self.gcmd = None
+        self.dc_abm_running = False
+
 
     def cmd_SEL_ALG_FIND(self, gcmd):
         selalgv = gcmd.get_int('S',0, minval=0, maxval=10) 
@@ -512,7 +717,39 @@ class Angledcmove:
         msg = "%s=%d" % ("result:",retst)
         gcmd.respond_info(msg)  
 
+    def cmd_FIND_POS_BYAS_SA(self, gcmd):  
+        self.gcmd =  gcmd
+        mpos = gcmd.get_int('M',1, minval=0, maxval=4095)  
+        if self.findpid_work == 0:
+            self.set_targer_angle(mpos)
+            self.pid_normal.restart_init()
+            self.reactor.update_timer(self.samptimer_fpos, self.reactor.NOW)
+            msghead = 'start find'
+        else:
+            msghead =  'busy,find'
+        #retst = self.find_angle_pos(mpos) 
+        msg = "%s=%d" % (msghead,self.targer_angle)
+        gcmd.respond_info(msg) 
+
+    def cmd_FIND_POS_BYAS_EN(self, gcmd):   
+        #mpos = gcmd.get_int('M',1, minval=0, maxval=4095)  
+        #retst = self.find_angle_pos(mpos) 
+        if self.findpid_work > 0:
+            self.force_exit = 0
+            msghead =  'stop find ='   
+        else:
+            msghead =  'idle ='   
+        msg = "%s=%d" % (msghead,self.targer_angle)
+        #msg = "%s=%d" % ("result:",retst)
+        gcmd.respond_info(msg) 
+
+    def cmd_FIND_POS_BYAS_ST(self, gcmd):   
+        msg = "status:wokr=%d,last=%d,targer=%d" % (self.findpid_work,self.last_angle_val, self.targer_angle)
+        gcmd.respond_info(msg) 
+
+
     def cmd_SWINGARM_BYAS(self, gcmd): 
+        self.gcmd =  gcmd
         if (self.poshead == self.posuse):
             msg = "not do Position verification"
         else:
@@ -521,10 +758,17 @@ class Angledcmove:
             if pos > 0 :
                 destpos = self.posuse
             msg = "%s=%d" % ('destp',destpos)  
-            retst = self.find_angle_pos(destpos) 
-            msg = msg + "%s=%d" % ("result:",retst)
+            if self.findpid_work == 0:
+                self.set_targer_angle(destpos)
+                self.pid_normal.restart_init()
+                self.reactor.update_timer(self.samptimer_fpos, self.reactor.NOW)
+                msghead = 'start find '
+            else:
+                msghead =  'busy,find '            
+            #retst = self.find_angle_pos(destpos) 
+            msg = msghead + msg + "%s=%d" % ("result:",0)
         gcmd.respond_info(msg)
-
+        
     def cmd_LOOK_POS_AS(self, gcmd):                 
         msg = "%s=%d" % ('poshead',self.poshead)
         msg = msg + ",%s=%d" % ('posuse',self.posuse)
@@ -627,6 +871,145 @@ class Angledcmove:
         cur_value = self.read_register_D16('REG_ANGLE')
         return  cur_value  
 
+    def stop_dc_move_pwm_v00(self, read_time):
+        self.findpid_work = 0
+        if self.pwm_dcwork_flag > 0:
+            if self.toolhead is None:
+                self.toolhead = self.printer.lookup_object('toolhead')    
+            self.pwm_dcwork_flag = 0
+            self.find_times = 0
+            #fast stop 
+            valuea = 0
+            valueb = 0
+            pwm_time = read_time + self.pwm_delay
+            print_time_move = self.toolhead.get_last_move_time()  
+            print_time = min(pwm_time, print_time_move)            
+            self.dcmotor.dc_set_pin_speedmode(print_time, valuea, valueb)
+            self.pwm_chg_status = 0 
+
+
+    def stop_dc_move_pwm(self, read_time):
+        self.findpid_work = 0
+        if self.pwm_dcwork_flag > 0:
+            if self.toolhead is None:
+                self.toolhead = self.printer.lookup_object('toolhead')    
+            self.pwm_dcwork_flag = 0
+            self.find_times = 0
+            #fast stop 
+            valuea = 0
+            valueb = 0
+            #pwm_time = read_time + self.pwm_delay
+            #print_time_move = self.toolhead.get_last_move_time()  
+            #print_time = min(pwm_time, print_time_move)  
+            print_time =  read_time+self.stop_delay         
+            self.dcmotor.dc_set_pin_speedmode(print_time, valuea, valueb) 
+            self.finetuningmode = 0
+            self.pwm_chg_status = 0
+
+    def set_targer_angle(self, targer_angle):
+        self.targer_angle = targer_angle
+        self.finetuningmode = 0
+
+    def samp_fpos_fun(self, eventtime):
+        self.sample_angle_value = self.read_cur_angle_value()
+        self.findpid_work == 1
+        measured_time = self.reactor.monotonic()
+        print_time = self.i2c.get_mcu().estimated_print_time(measured_time)
+        if self.force_exit == 0:
+            #retst = self._callback(print_time, self.sample_angle_value)
+            retst = self.angle_dadjust_callback(print_time, self.sample_angle_value)
+            if retst == 0:
+                # find contiune
+                return measured_time + self.pidreptime 
+            else:
+                # find success
+                # stop pwm
+                self.stop_dc_move_pwm(print_time)
+                logging.info("finish to stop=%s\n",retst)  
+                msg = "finish find:%s=%d" % ("result:",retst)
+                self.gcmd.respond_info(msg)      
+                return self.reactor.NEVER                    
+        else:
+            #stop find pos
+            #stop pwm
+            msg = "froce exit find:%s=%d" % ("result:",10)
+            self.gcmd.respond_info(msg)             
+            self.stop_dc_move_pwm(print_time)
+            return self.reactor.NEVER    
+
+    #def setup_callback(self, cb):
+    #    self._callback = cb
+    
+    def set_pwm_co(self, read_time, co_value):
+        #co_value to pwm
+        adj_co = co_value/ANGLE_MOD_VAL
+        adj_val = max(self.min_pwm_plus, min(self.max_pwm_plus, adj_co))
+        valuea = valueb = 0.
+        if co_value < 0:
+            valuea = adj_val
+            valueb = 0            
+            #valuea = 0
+            #valueb = adj_val
+        elif co_value > 0:
+            valuea = 0
+            valueb = adj_val            
+            #valuea = adj_val
+            #valueb = 0
+        else:
+            pass
+        if self.finetuningmode > 0:
+            if self.pwm_chg_status > 0:
+                valuea = 0    
+                valueb = 0
+                #self.pwm_chg_status = 0
+                self.pwm_chg_status += 1
+                if self.pwm_chg_status > 2 :
+                    self.pwm_chg_status = 0    
+            else:
+                self.pwm_chg_status = 1   
+
+        if self.toolhead is None:
+            self.toolhead = self.printer.lookup_object('toolhead')             
+        pwm_time = read_time + self.pwm_delay
+        print_time_move = self.toolhead.get_last_move_time()  
+        print_time = min(pwm_time, print_time_move)   
+        logging.info("time=%s [%s:%s] \n",print_time, valuea, valueb)         
+        self.dcmotor.dc_set_pin_speedmode(print_time, valuea, valueb)
+
+    def angle_dadjust_callback(self, read_time, angle_val):
+        retst = 0
+        time_diff = read_time - self.last_angle_time
+        self.last_angle_val = angle_val
+        self.last_angle_time = read_time 
+        retst = self.decide_val_tolerance(angle_val, self.targer_angle)
+        self.pwm_chg_status
+        #if retst > 0 :
+        if retst > 0 and self.pwm_chg_status == 0 and self.finetuningmode > 0:
+            return  retst
+        #if self.find_times > FIND_MAX_TIMES:
+        if self.find_times > FIND_MAX_TIMES_TST:
+            retst = 2
+            return  retst 
+        self.pwm_dcwork_flag = 1  
+        self.find_times +=1  
+        co = self.pid_normal.angle_update(read_time,angle_val,self.targer_angle)  
+        logging.info("(%d)info [%s:%s] pidco=%s \n",self.find_times, angle_val, self.targer_angle, co) 
+        if abs(co) < APPROACH_TARGET:
+            #retst = 3
+            #return  retst 
+            self.finetuningmode = 1                       
+        self.set_pwm_co(read_time, co)
+        retst = 0
+        return retst
+        #with self.lock:
+            #time_diff = read_time - self.last_angle_time
+            #self.last_angle_val = temp
+            #self.last_angle_time = read_time
+            #self.control.temperature_update(read_time, temp, self.target_temp)
+            #temp_diff = temp - self.smoothed_temp
+            #adj_time = min(time_diff * self.inv_smooth_time, 1.)
+            #self.smoothed_temp += temp_diff * adj_time
+            #self.can_extrude = (self.smoothed_temp >= self.min_extrude_temp) 
 
     def decide_val_tolerance(self, curangle, destangle):
         accept_toler = 0
@@ -837,12 +1220,13 @@ class Angledcmove:
 
 
     def cmd_DCM_MOVE(self, gcmd):
-
         mvdir = gcmd.get_int('D',1, minval=0, maxval=2)
         #mvtmsec = gcmd.get_float('S', 0.01, minval=0.01, maxval=10)
         mvtmsec = gcmd.get_float('S', 0.01, minval=0., maxval=20)
         waittmsec = gcmd.get_float('W', 0.01, minval=0.01, maxval=10)
-        pvalue = gcmd.get_float('P', 1, minval=0., maxval=1.0)        
+        pvalue = gcmd.get_float('P', 1, minval=0., maxval=1.0) 
+        st = self.dcmotor.is_move_complete() 
+        logging.info("cmd_DCM_MOVE time:%s\n",st)        
         msg = "dcm_move:"
         if mvdir > 0:
             msg = msg + "cw,"
@@ -853,13 +1237,61 @@ class Angledcmove:
         msg = msg + "tm=%s wtm=%s pv=%s" % (mvtmsec, waittmsec, pvalue)
         gcmd.respond_info(msg)    
 
-    def dcm_move_correct(self, mvtmsec=0.01, mvdir=0):  
-        waittmsec = 0.01
-        pvalue = 0.5
-        if mvdir > 0:
-            self.dcmotor.cw_move_time(mvtmsec, waittmsec, pvalue)
+
+    def dcm_move_correct(self, mvtmsec=0.01, mvdir=0): 
+        if self.findpid_work > 0: 
+            logging.info("find busy:%s\n","dcm_move_correct")
+            return
+        st = self.dcmotor.is_move_complete()  
+        logging.info("dcmotor cmd time:%s\n",st)          
+        if not self.dc_abm_running:  
+            self.dc_abm_running = True  
+            waittmsec = 0.01
+            #any mode work
+            #pvalue = 0.5
+            #pvalue = 0.8
+            pvalue =  DC_MOVE_PWM_MINV
+            #note mbmode relation pvalue = 1
+            logging.info("run:%s %s\n","dcm_move_correct",mvdir)
+            logging.info("run:%s %s %s\n",mvtmsec, waittmsec, pvalue)
+            if mvdir > 0:
+                self.dcmotor.cw_move_time(mvtmsec, waittmsec, pvalue)
+            else:
+                self.dcmotor.ccw_move_time(mvtmsec, waittmsec, pvalue) 
+            self.dc_abm_running = False  
         else:
-            self.dcmotor.ccw_move_time(mvtmsec, waittmsec, pvalue)    
+            logging.info("press too fast,please slow")                          
+
+
+    def dcm_move_cmd(self, cmdval=1, mvdir=0): 
+        if self.findpid_work > 0: 
+            logging.info("find busy:%s\n","dcm_move_cmd")            
+            return 
+        logging.info("run:%s %s,%s\n","dcm_move_cmd",mvdir,cmdval)                   
+        toolhead = self.printer.lookup_object('toolhead') 
+        print_time = toolhead.get_last_move_time()  
+        valuea = 0
+        valueb = 0        
+        if cmdval == 1:
+            if mvdir > 0:
+                #valuea = 0.6
+                valuea = 1
+                valueb = 0
+                self.dcmotor.dc_set_pin(print_time, valuea, valueb)
+            else:
+                valuea = 0
+                #valueb = 0.6  
+                valueb = 1              
+                self.dcmotor.dc_set_pin(print_time, valuea, valueb) 
+            #new add by 0115    
+            toolhead.dwell(0.001)
+            toolhead.wait_moves()                 
+
+        else:
+            self.dcmotor.dc_set_pin(print_time, valuea, valueb)
+            #new add by 0115    
+            toolhead.dwell(0.001)
+            toolhead.wait_moves()             
 
 
     def cmd_DCM_PINOUT(self, gcmd):
@@ -876,7 +1308,25 @@ class Angledcmove:
         toolhead.dwell(0.001)  # Minimal dwell  
         toolhead.wait_moves()          
         msg = "A=%d B=%d" % (valuea, valueb) 
-        gcmd.respond_info(msg)   
+        gcmd.respond_info(msg)
+
+
+    def cmd_DCM_PINOUT_PID(self, gcmd):
+        #valuea = gcmd.get_int('A',1, minval=0, maxval=2)
+        #valueb = gcmd.get_int('B',1, minval=0, maxval=2)
+        valuea = gcmd.get_float('A', 1, minval=0., maxval=1.0) 
+        valueb = gcmd.get_float('B', 1, minval=0., maxval=1.0)
+        #run slow
+        toolhead = self.printer.lookup_object('toolhead')
+        #toolhead.register_lookahead_callback(
+            #lambda print_time: self.dcmotor._set_pin(print_time, value))
+        print_time = toolhead.get_last_move_time()  
+        self.dcmotor.dc_set_pin_speedmode(print_time, valuea, valueb)
+        toolhead.dwell(0.001)  # Minimal dwell  
+        toolhead.wait_moves()          
+        msg = "A_PID=%s B_PID=%s" % (valuea, valueb) 
+        gcmd.respond_info(msg)
+
 
     def read_register(self, reg_name, read_len):
         # read a single register
