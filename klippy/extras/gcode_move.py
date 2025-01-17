@@ -74,6 +74,18 @@ class GCodeMove:
         gcode.register_command('M302', self.cmd_M4_LASER)  
         gcode.register_command('M303', self.cmd_M5_LASER)  
 
+        gcode.register_command('M222', self.cmd_M222_LASER_POWER)  
+        gcode.register_command('M223', self.cmd_M223_LASER_SPEED)
+        gcode.register_command('M224', self.cmd_M224_LOOK)
+        self.laser_power_factor = 100.
+        self.laser_speed_factor = 100.  
+        self.laser_adj_min = 10.
+        self.laser_adj_max = 200.
+        self.laser_adj_ref = 100.
+        self.adj_speed_mmsec  =  0
+        self.adj_power_pwm  =  0
+
+
         # G-Code state
         self.galvo_coord_confactor = None
         self.saved_states = {}
@@ -142,6 +154,62 @@ class GCodeMove:
         if self.is_printer_ready:
             self.last_position = self.position_with_transform()
 
+    def cmd_M222_LASER_POWER(self, gcmd):  
+        value = gcmd.get_int('S', 100) 
+        adj_value = self.laser_power_factor 
+        if value < 100 and value > -100:
+            adj_value += value
+        else:
+            adj_value = 100.
+        if adj_value < self.laser_adj_min:
+            adj_value = self.laser_adj_min
+        if adj_value > self.laser_adj_max:
+            adj_value = self.laser_adj_max
+        self.laser_power_factor = adj_value
+
+    def cmd_M223_LASER_SPEED(self, gcmd):  
+        value = gcmd.get_int('S', 100) 
+        adj_value = self.laser_speed_factor 
+        if value < 100 and value > -100:
+            adj_value += value
+        else:
+            adj_value = 100.
+        if adj_value < self.laser_adj_min:
+            adj_value = self.laser_adj_min
+        if adj_value > self.laser_adj_max:
+            adj_value = self.laser_adj_max
+        self.laser_speed_factor = adj_value
+
+
+
+    def cmd_M224_LOOK(self, gcmd):
+        value = gcmd.get_int('S', 1) 
+        msg = "noinfo"
+        if value == 1:
+            msg = "sf:%s,pf:%s" % (self.laser_speed_factor,self.laser_power_factor)
+        elif value == 2:
+            msg = "adjvalue:[%s,%s]to[%s,%s]" % (self.speed, self.pwm_work_curpower_use,
+                self.adj_speed_mmsec, self.adj_power_pwm)
+        else:
+            msg = "wmode:%s,ponoff:%s" % (self.pwm_work_mode_use,self.pwm_work_ponoff_use)
+        gcmd.respond_info(msg)  
+
+
+    def adj_power_factor(self, power_pwm): 
+        adj_power_value =  power_pwm*self.laser_speed_factor/self.laser_adj_ref
+        adj_power_value =  adj_power_value*self.laser_power_factor/self.laser_adj_ref
+        if adj_power_value  > 255:
+            adj_power_value = 255
+        return adj_power_value  
+
+    def adj_speed_factor(self, speed_mmsec): 
+        adj_speed_value =  speed_mmsec*self.laser_speed_factor/self.laser_adj_ref
+        return adj_speed_value
+
+    def reint_speedpower_factor(self): 
+        self.laser_power_factor = self.laser_adj_ref
+        self.laser_speed_factor = self.laser_adj_ref
+
     def cmd_M3_LASER(self, gcmd):  
         params = gcmd.get_command_parameters()  
         if 'S' in params:             
@@ -172,6 +240,8 @@ class GCodeMove:
         self.pwm_work_mode =  PWM_MODE_IDLE        
         self.pwm_work_mode_use = PWM_MODE_IDLE
         self.pwm_work_ponoff_use = 0
+        #add 250117
+        #self.reint_speedpower_factor()
         # safe , close pwm by macro
 
     def cmd_G0_LASER(self, gcmd):
@@ -288,11 +358,19 @@ class GCodeMove:
             raise gcmd.error("Unable to parse move '%s'"
                              % (gcmd.get_commandline(),))
 
+
+        self.adj_power_pwm  =  self.adj_power_factor(self.pwm_work_curpower_use)
+        self.adj_speed_mmsec  =  self.adj_speed_factor(self.speed)
+        #logging.info("adjvalue: [%s,%s]to[%s,%s]\n",self.speed, self.pwm_work_curpower_use,
+                #self.adj_speed_mmsec, self.adj_power_pwm)    
+
         #close#logging.info("\npwm: pwm_work_curpower_use=%s pwm_work_mode_use=%s move_e_axis_d=%s ponoff=%s\n",
                 #self.pwm_work_curpower_use, self.pwm_work_mode_use, move_e_axis_d, self.pwm_work_ponoff_use)     
         #self.move_with_transform(self.last_position, self.speed)
-        self.move_with_transform(self.last_position, self.speed, self.pwm_work_mode_use, self.pwm_work_curpower_use, self.pwm_work_ponoff_use)
-
+        #self.move_with_transform(self.last_position, self.speed, self.pwm_work_mode_use, self.pwm_work_curpower_use, self.pwm_work_ponoff_use)
+        self.move_with_transform(self.last_position, self.adj_speed_mmsec, self.pwm_work_mode_use, self.adj_power_pwm, self.pwm_work_ponoff_use)  
+            
+        
     # G-Code coordinate manipulation
     def cmd_G20(self, gcmd):
         # Set units to inches
