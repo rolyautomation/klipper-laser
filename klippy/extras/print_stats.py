@@ -11,6 +11,8 @@ class PrintStats:
         self.reactor = printer.get_reactor()
         self.reset()
         # Register commands
+        self.printer = printer
+
         self.gcode = printer.lookup_object('gcode')
         self.gcode.register_command(
             "SET_PRINT_STATS_INFO", self.cmd_SET_PRINT_STATS_INFO,
@@ -46,12 +48,24 @@ class PrintStats:
             self._update_filament_usage(curtime)
         if self.state != "error":
             self.state = "paused"
+            sndcmd = "Webpause"
+            self.printer.send_event("reportstatus:updatenewstatus", sndcmd)   
+
     def note_complete(self):
         self._note_finish("complete")
+        sndcmd = "FileEnd"
+        self.printer.send_event("reportstatus:updatenewstatus", sndcmd)
+
     def note_error(self, message):
         self._note_finish("error", message)
+        sndcmd = "WebCancel"
+        self.printer.send_event("reportstatus:updatenewstatus", sndcmd)  
+
     def note_cancel(self):
         self._note_finish("cancelled")
+        sndcmd = "WebCancel"
+        self.printer.send_event("reportstatus:updatenewstatus", sndcmd)  
+        
     def _note_finish(self, state, error_message = ""):
         if self.print_start_time is None:
             return
