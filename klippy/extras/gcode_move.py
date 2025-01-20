@@ -36,6 +36,7 @@ class GCodeMove:
         self.is_printer_ready = False
         # Register g-code commands
         gcode = printer.lookup_object('gcode')
+        self.gcode_fs = gcode
         handlers = [
             'G1', 'G20', 'G21',
             'M82', 'M83', 'G90', 'G91', 'G92', 'M220', 'M221',
@@ -262,11 +263,35 @@ class GCodeMove:
         self.pwm_work_ponoff_use = 0
         self.cmd_G1_Prefun(gcmd)  
 
+
+    def is_fire_gfs_command(self, params):
+        bret =  False
+        if any(axis in params for axis in ['X', 'Y', 'Z', 'A', 'B', 'C']):
+            return bret
+        iret = all(fs in params for fs in ['F', 'S'])
+        if iret:
+            bret =  True
+
+            svarstr = params['S']
+            ncmd = "M305"
+            self.gcode_fs.run_script_from_command(f"M305 S{svarstr}")
+            #gfs_gcmd = self.gcode_fs.create_gcode_command(ncmd, ncmd, {"S":svarstr})
+            #if self.gcode_fs.cmd_M305 is not None:
+            #    self.gcode_fs.cmd_M305(gfs_gcmd)
+            logging.info("[%s F%s S%s]",ncmd, params['F'], svarstr)  
+        return bret
+        
+
     # G-Code movement commands
     def cmd_G1(self, gcmd):
         # Move
         self.pwm_work_mode_use =  self.pwm_work_mode
-        params = gcmd.get_command_parameters()  
+        params = gcmd.get_command_parameters() 
+
+        bret = self.is_fire_gfs_command(params)
+        if bret:
+            return
+
         if 'S' in params:             
             v = float(params['S'])
             if v <= 0.:
