@@ -163,6 +163,7 @@ class Joggingrun:
         if istcode > 0:
             try:
                 if istcode == 1:
+                #if istcode > 0:
                     self.gcode.run_script(irunstr) 
                 else:
                     self.jog_runcmdstr = irunstr
@@ -182,6 +183,7 @@ class Joggingrun:
                 self.gcode.respond_info("info: %s" % str(e))
             self.jog_runcmdstr = None
         return self.reactor.NEVER
+
 
 
     def _handle_jogcancel(self, web_request):
