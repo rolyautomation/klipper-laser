@@ -42,7 +42,13 @@ class Joggingrun:
         wh = self.printer.lookup_object('webhooks')
         wh.register_endpoint("gcode/jogcancel", self._handle_jogcancel)  
         self.jogworkmode = 0 
-                         
+        self.gcode = self.printer.lookup_object('gcode')
+        wh.register_endpoint("gcode/jogmove", self._handle_jogmove)  
+
+        
+        self.jog_starttimer = self.reactor.register_timer(self.jog_start_fun)   
+        self.jog_runcmdstr = None
+
         self.machinepos = None 
         gcode.register_command('M286', self.cmd_M286_JOG_XYZ)  
 
@@ -92,9 +98,96 @@ class Joggingrun:
                 self.add_stepper(stepper) 
 
 
+    def filter_Z_ZAcomd(self, gcode_line):
+        has_z = 'Z' in gcode_line
+        has_a = 'A' in gcode_line
+        if  has_z and has_a:
+            #parts = gcode_line.split()
+            #has_z = any('Z' in part for part in parts)
+            #has_a = any('A' in part for part in parts)
+            parts = gcode_line.split()
+            new_parts = []
+            for part in parts:
+                if part.startswith('Z'):
+                    continue
+                new_parts.append(part)
+            return ' '.join(new_parts)
+        return gcode_line  
+
+    #Continuous jog    
+    def is_continue_jog(self, gcode_line):
+        if 'G90' not in gcode_line:
+            return False
+        has_x = 'X' in gcode_line
+        has_y = 'Y' in gcode_line
+        if (has_x and not has_y) or (has_y and not has_x):
+            return True
+        return False   
+
+
+    def parse_jog_command(self, commandstr): 
+        iret = 0  
+        iststr = 'ok'
+        # Convert commandstr to uppercase
+        logging.info("inputjog=%s",commandstr) 
+        commandstr = commandstr.upper()
+        if commandstr.startswith('$J='):
+            gcodestr = commandstr[3:].strip()
+            gcodestr = self.filter_Z_ZAcomd(gcodestr)
+            cjogf = self.is_continue_jog(gcodestr)
+            parts = gcodestr.split()
+            result = []
+            coords = []
+            for part in parts:
+                if part.startswith('G'):
+                    result.append(part)
+                else:
+                    coords.append(part)
+            iret = 1        
+            if coords : 
+                ginstr = ' '.join(coords)  
+                if not cjogf:
+                    result.append(f"G0 {ginstr}")
+                else:
+                    result.append(f"M286 {ginstr}")
+                    iret = 2
+
+            if result :  
+                iststr = '\n'.join(result)
+ 
+        return iret, iststr
+
+
+    def _handle_jogmove(self, web_request):
+        istcode,irunstr = self.parse_jog_command(web_request.get_str('script'))
+        if istcode > 0:
+            try:
+                if istcode == 1:
+                    self.gcode.run_script(irunstr) 
+                else:
+                    self.jog_runcmdstr = irunstr
+                    self.reactor.update_timer(self.jog_starttimer, self.reactor.NOW)
+                    logging.info("jog_starttimer") 
+            except Exception as e:
+                self.gcode.respond_info("info: %s" % str(e))
+
+
+    def jog_start_fun(self, eventtime):                
+        if self.jog_runcmdstr is not None:
+            try:
+                logging.info("jog_start_fun start") 
+                self.gcode.run_script(self.jog_runcmdstr) 
+                logging.info("jog_start_fun end") 
+            except Exception as e:
+                self.gcode.respond_info("info: %s" % str(e))
+            self.jog_runcmdstr = None
+        return self.reactor.NEVER
+
+
     def _handle_jogcancel(self, web_request):
         if self.jogworkmode > 0:                
             self.printer.send_event("jogging:trigger_to_stop", 0)    
+
 
 
     def handle_homing_move_end(self, hmove):
@@ -185,6 +278,7 @@ class Joggingrun:
         return phoming.probing_move_jog(self, pos, speed)
         
 
+
     def cmd_M286_JOG_XYZ(self, gcmd):
         axes = []
         for pos, axis in enumerate('XYZ'):
@@ -194,9 +288,29 @@ class Joggingrun:
             axes = [2]  
         dist = 0.0
         endval = 0
+
         #drip_speed = 20.0
         drip_speed = self.min_speed
         params = gcmd.get_command_parameters()
+
+        if 'X' in params:
+            logging.info("INX=%s",params['X']) 
+            x_str = params['X']
+            if not x_str:  # Check if empty string
+                xval = 0.0  # Default to 0 if empty
+            else:
+                xval = float(x_str)
+            endval = 0
+            if xval > 1:
+                endval = 1       
+        if 'Y' in params:
+            logging.info("INY=%s",params['Y'])             
+            #yval = int(params['Y']) 
+            yval = float(params['Y'])
+            endval = 0
+            if yval > 1:
+                endval = 1 
+       
         if 'E' in params:
             endval = int(params['E'])
         if 'D' in params:
