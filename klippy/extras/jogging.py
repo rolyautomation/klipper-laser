@@ -306,11 +306,15 @@ class Joggingrun:
         if 'Y' in params:
             logging.info("INY=%s",params['Y'])             
             #yval = int(params['Y']) 
-            yval = float(params['Y'])
+            y_str = params['Y']
+            if not y_str:  # Check if empty string
+                yval = 0.0  # Default to 0 if empty
+            else:
+                yval = float(y_str)
             endval = 0
             if yval > 1:
                 endval = 1 
-       
+ 
         if 'E' in params:
             endval = int(params['E'])
         if 'D' in params:
