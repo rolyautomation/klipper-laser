@@ -119,6 +119,9 @@ class TnreportStatus:
         reportstr  =  "not found"    
         found_key = None
         found_msg = None
+
+        msg = "%s:%d,%s" % ("overecode:",self.reportcode,self.reportstr)  
+        logging.info(f"{msg}")        
         for key, value in REPORTINFO_CODES.items():
             if value[0] == reportcode:
                 found_key = key
