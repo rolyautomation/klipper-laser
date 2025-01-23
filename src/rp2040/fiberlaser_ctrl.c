@@ -99,6 +99,15 @@ enum {
 #define  M_LOW_IO     (0)
 #define  M_MIN_DEDAYTIME_US    (1)
 
+#define  M_LOGLEVEL_INVERSION
+#ifdef   M_LOGLEVEL_INVERSION
+#define  M_HIGH_IO_X    (0)
+#define  M_LOW_IO_X     (1)
+#else
+#define  M_HIGH_IO_X    (1)
+#define  M_LOW_IO_X     (0)
+#endif
+
 #define  M_LATCH_BEFORE_WAIT_TM  (1)
 #define  M_LATCH_AFTER_WAIT_TM   (2)
 #define  M_LATCH_INTER_WAIT_TM   (2)
@@ -271,7 +280,7 @@ int handle_fiber_timeseq(struct stepper_fiber *s)
             {
                 if (M_WK_POWERON_STEP == workstep) 
                 {
-                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_MOEE_NUM, M_HIGH_IO);
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_MOEE_NUM, M_HIGH_IO_X);
                     s->time.waketime =  curtime +  timer_from_us(s->STA_EE_EM_TIME_us);
                     s->workstep = s->workstep - 1;
                     s->workflag = s->workflag | M_LASER_EE_FLAG; 
@@ -281,13 +290,13 @@ int handle_fiber_timeseq(struct stepper_fiber *s)
                 {
                     if (s->poweron_mode > 0)
                     {
-                        set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO);
+                        set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO_X);
                         s->workflag = s->workflag | M_LASER_EM_FLAG;
 
                     }
                     else
                     {
-                        set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO);
+                        set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO_X);
                         s->workflag = s->workflag &  (~M_LASER_EM_FLAG);  
 
                     }
@@ -375,7 +384,7 @@ int handle_fiber_timeseq(struct stepper_fiber *s)
             {
                 if (M_WK_POWEROFF_STEP == workstep) 
                 {   
-                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO);
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO_X);
                     s->time.waketime =  curtime +  timer_from_us(s->STA_EM_EE_TIME_us);
                     s->workstep = s->workstep - 1;
                     s->workflag = s->workflag &  (~M_LASER_EM_FLAG);
@@ -383,7 +392,7 @@ int handle_fiber_timeseq(struct stepper_fiber *s)
 
                 } else if ((M_WK_POWEROFF_STEP-1) == workstep)  
                 {
-                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_MOEE_NUM, M_LOW_IO);
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_MOEE_NUM, M_LOW_IO_X);
                     s->workstep = 0;
                     s->workflag = s->workflag & (~M_LASER_EE_FLAG);
                     s->workmode = M_WK_IDLE_MODE;
@@ -402,7 +411,7 @@ int handle_fiber_timeseq(struct stepper_fiber *s)
             break;
 
         case M_WK_LASERON_MODE:
-            set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO);
+            set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO_X);
             s->workstep = 0;
             s->workflag = s->workflag | M_LASER_EM_FLAG;
             s->workmode = M_WK_IDLE_MODE;
@@ -411,7 +420,7 @@ int handle_fiber_timeseq(struct stepper_fiber *s)
             break; 
 
         case M_WK_LASEROFF_MODE:
-            set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO);
+            set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO_X);
             s->workstep = 0;
             s->workflag = s->workflag &  (~M_LASER_EM_FLAG);
             s->workmode = M_WK_IDLE_MODE;
@@ -612,9 +621,17 @@ int fiber_laser_init(struct stepper_fiber *s)
     g_latch_time_d.gpio_base_pin = s->gpio_base_pin;
 
     set_manygpio_out(s->gpio_base_pin, M_POWER_IO_TOTAL, M_DEFAULT_POWER_VAL);
+
+    #ifdef   M_LOGLEVEL_INVERSION
+    set_agpio_out(s->gpio_base_pin+M_GPIO_LATCH_NUM, 1);
+    set_agpio_out(s->gpio_base_pin+M_GPIO_MOEE_NUM, 1);
+    set_agpio_out(s->gpio_base_pin+M_GPIO_BSEM_NUM, 1); 
+    #else
     set_agpio_out(s->gpio_base_pin+M_GPIO_LATCH_NUM, 0);
     set_agpio_out(s->gpio_base_pin+M_GPIO_MOEE_NUM, 0);
     set_agpio_out(s->gpio_base_pin+M_GPIO_BSEM_NUM, 0);
+    #endif   
+    
     set_agpio_out(s->gpio_base_pin+M_GPIO_POINTERL_NUM, 0);
     set_agpio_out(s->gpio_base_pin+M_GPIO_EMERGENCYOFF_NUM, 1);
 
@@ -786,7 +803,7 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
             {
                 if (((s->workflag & M_LASER_EM_FLAG) == 0 ) && (s->workflag & M_LASER_EE_FLAG))
                 {
-                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO);
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO_X);
                     s->workflag = s->workflag | M_LASER_EM_FLAG;     
                 }
            
@@ -795,7 +812,7 @@ int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, u
             {
                 if (((s->workflag & M_LASER_EM_FLAG) > 0 ) && (s->workflag & M_LASER_EE_FLAG))
                 {
-                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO);
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO_X);
                     s->workflag = s->workflag & (~M_LASER_EM_FLAG);
 
                 }
