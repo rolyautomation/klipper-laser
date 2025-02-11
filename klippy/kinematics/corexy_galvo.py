@@ -122,6 +122,11 @@ class CoreXYGalvoKinematics:
             'max_m_velocity', max_velocity, above=0., maxval=max_velocity)
         self.max_m_accel = config.getfloat(
             'max_m_accel', max_accel, above=0., maxval=max_accel)
+
+        self.max_a_velocity = config.getfloat(
+            'max_a_velocity', max_velocity, above=0., maxval=max_velocity)
+        self.max_a_accel = config.getfloat(
+            'max_a_accel', max_accel, above=0., maxval=max_accel)            
         
         #xyz
         #self.endstop_hit = [(0, 0)] * 3
@@ -323,8 +328,12 @@ class CoreXYGalvoKinematics:
         ''' 
         #if self.mech_enable_alone is not None and self.mech_enable_alone > 0:
         if self.mech_enable_alone > 0:
-            if  move.axes_d[0] or  move.axes_d[1] or move.axes_d[2] or move.axes_d[3]: 
-                move.limit_speed(self.max_m_velocity, self.max_m_accel)                   
+            if  move.axes_d[3]:
+                move.limit_speed(self.max_a_velocity, self.max_a_accel)
+            elif move.axes_d[0] or  move.axes_d[1]:
+                move.limit_speed(self.max_m_velocity, self.max_m_accel) 
+            #if  move.axes_d[0] or  move.axes_d[1] or move.axes_d[2] or move.axes_d[3]: 
+            #    move.limit_speed(self.max_m_velocity, self.max_m_accel)      
 
         if not move.axes_d[2]:
             # Normal XY move - use defaults
