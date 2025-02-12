@@ -182,6 +182,9 @@ shaper_a_calc_position(struct stepper_kinematics *sk, struct move *m
 
 }
 
+
+/*
+#if 0
 static double
 shaper_xa_calc_position(struct stepper_kinematics *sk, struct move *m
                         , double move_time)
@@ -196,7 +199,8 @@ shaper_xa_calc_position(struct stepper_kinematics *sk, struct move *m
         is->m.start_pos.a = calc_position(m, 'a', move_time, &is->sa);
     return is->orig_sk->calc_position_cb(is->orig_sk, &is->m, DUMMY_T);
 }
-
+#endif
+*/
 
 int __visible
 input_shaper_set_sk(struct stepper_kinematics *sk
@@ -209,10 +213,12 @@ input_shaper_set_sk(struct stepper_kinematics *sk
         is->sk.calc_position_cb = shaper_y_calc_position;
     else if (orig_sk->active_flags == AF_A)
         is->sk.calc_position_cb = shaper_a_calc_position;
+/*    
     else if (orig_sk->active_flags == (AF_X | AF_A))
         is->sk.calc_position_cb = shaper_xa_calc_position;
     else if (orig_sk->active_flags & (AF_A)) 
         is->sk.calc_position_cb = shaper_a_calc_position;
+*/        
     else if (orig_sk->active_flags & (AF_X | AF_Y))
         is->sk.calc_position_cb = shaper_xy_calc_position;
     else
