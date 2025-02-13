@@ -12,6 +12,7 @@ ACTIVE = 'ACTIVE'
 AXIS_A =  3
 
 
+
 class MultiMotorAxis:
     #VALID_MODES = [PRIMARY, COPY, MIRROR]
     def __init__(self, ma_config, rail_0, rail_1, rail_2, rail_3, axis):
@@ -92,6 +93,9 @@ class MultiMotorAxis:
                  for (i, ma) in enumerate(self.ma) }
         res.update({'index': self.cur_selindex } )
         return res
+
+    def get_curselindex(self):
+        return self.cur_selindex
 
     def get_kin_range(self, toolhead, mode):
         pos = toolhead.get_position()
