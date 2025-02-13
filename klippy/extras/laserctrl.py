@@ -11,7 +11,7 @@ LASER_T_OPTICAL_RED = 1
 class LaserCtrlInterface:
     def __init__(self, config):
         self.printer = config.get_printer()
-        self.name = config.get_name().split(' ')[-1]
+        #self.name = config.get_name().split(' ')[-1]
 
         self.cur_sellaser = 0
         self.opticalfiber_existf = 0
@@ -46,5 +46,9 @@ class LaserCtrlInterface:
         laser_status['laser_cursel'] = self.cur_sellaser
         return dict(laser_status)
 
-def load_config_prefix(config):
+
+def load_config(config):
     return LaserCtrlInterface(config)
+
+#def load_config_prefix(config):
+#   return LaserCtrlInterface(config)

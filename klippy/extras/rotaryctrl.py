@@ -22,8 +22,10 @@ R3_DOACTION_NO =  7
 class RotaryCtrlInterface:
     def __init__(self, config):
         self.printer = config.get_printer()
-        self.name = config.get_name().split(' ')[-1]
+        #self.name = config.get_name().split(' ')[-1]
+        self.name = 'rotary'
         self.last_rotarystate = [0, 0, 0, 0]
+
 
         #self.multimotor_existf = config.has_section('multimotor_axis')
         #if self.multimotor_existf :
@@ -123,10 +125,11 @@ class RotaryCtrlInterface:
     def R0_callback(self, eventtime, state):
         self.rotray_pkeystate[R0_IND] = state
         if state:
-            self.last_rotarystate[R0_IND] = not self.last_rotarystate[R0_IND]
-            actionid = self.R0_DOACTION_NO                
+            #self.last_rotarystate[R0_IND] = not self.last_rotarystate[R0_IND]
+            self.last_rotarystate[R0_IND] = (self.last_rotarystate[R0_IND] + 1) % 2
+            actionid = R0_DOACTION_NO                
             if self.last_rotarystate[R0_IND]:
-                actionid = self.R0_DOACTION_YES
+                actionid = R0_DOACTION_YES
             self.doaction_ins = actionid
             self.key_event_handle(actionid, eventtime)
 
@@ -134,20 +137,20 @@ class RotaryCtrlInterface:
     def R1_callback(self, eventtime, state):
         self.rotray_pkeystate[R1_IND] = state
         if state:
-            self.last_rotarystate[R1_IND] = not self.last_rotarystate[R1_IND]
-            actionid = self.R1_DOACTION_NO                
+            self.last_rotarystate[R1_IND] = (self.last_rotarystate[R1_IND] + 1) % 2
+            actionid = R1_DOACTION_NO                
             if self.last_rotarystate[R1_IND]:
-                actionid = self.R1_DOACTION_YES
+                actionid = R1_DOACTION_YES
             self.doaction_ins = actionid
             self.key_event_handle(actionid, eventtime)
 
     def R2_callback(self, eventtime, state):
         self.rotray_pkeystate[R2_IND] = state
         if state:
-            self.last_rotarystate[R2_IND] = not self.last_rotarystate[R2_IND]
-            actionid = self.R2_DOACTION_NO                
+            self.last_rotarystate[R2_IND] = (self.last_rotarystate[R2_IND] + 1) % 2
+            actionid = R2_DOACTION_NO                
             if self.last_rotarystate[R2_IND]:
-                actionid = self.R2_DOACTION_YES
+                actionid = R2_DOACTION_YES
             self.doaction_ins = actionid
             self.key_event_handle(actionid, eventtime)
 
@@ -155,14 +158,13 @@ class RotaryCtrlInterface:
     def R3_callback(self, eventtime, state):
         self.rotray_pkeystate[R3_IND] = state
         if state:
-            self.last_rotarystate[R3_IND] = not self.last_rotarystate[R3_IND]
-            actionid = self.R3_DOACTION_NO                
+            self.last_rotarystate[R3_IND] = (self.last_rotarystate[R3_IND] + 1) % 2
+            actionid = R3_DOACTION_NO                
             if self.last_rotarystate[R3_IND]:
-                actionid = self.R3_DOACTION_YES
+                actionid = R3_DOACTION_YES
             self.doaction_ins = actionid
             self.key_event_handle(actionid, eventtime)
             
-
 
     def register_switchbutton(self, config, name, callback, push_only=False):
         pin = config.get(name, None)
@@ -191,5 +193,6 @@ class RotaryCtrlInterface:
         return dict(rotary_status)
 
 
-def load_config_prefix(config):
+#def load_config_prefix(config):
+def load_config(config):
     return RotaryCtrlInterface(config)
