@@ -55,12 +55,12 @@ class FiberLaserLink:
 
 
     def _handle_connect_bind(self):
-            extruderpwm = self.printer.lookup_object('extruderpwm')
+            extruderpwm1 = self.printer.lookup_object('extruderpwm1')
             fiberlaser_oid =   self._oid
             mcu_fiberlaser =   self._mcu
             #pwm_oid = 0
             laser_type = 1
-            extruderpwm.set_extrdpwm_oid(fiberlaser_oid,mcu_fiberlaser,laser_type)
+            extruderpwm1.set_extrdpwm_oid(fiberlaser_oid,mcu_fiberlaser,laser_type)
 
 
     def _build_config(self):

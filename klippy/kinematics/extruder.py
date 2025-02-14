@@ -551,7 +551,12 @@ class PrinterExtruderPWM:
             toolhead.set_extruder(self, 0.)
             gcode.register_command("M104", self.cmd_M104)
             gcode.register_command("M109", self.cmd_M109)
-            gcode.register_command("TPSW", self.cmd_TPWMSW)
+            #gcode.register_command("TPSW", self.cmd_TPWMSW)
+
+        gcode.register_mux_command("TPSW_M", "LASER",
+                                   self.name, self.cmd_TPWMSW,
+                                   desc=self.cmd_TPWMSW_help)           
+
         gcode.register_mux_command("ACTIVATE_EXTRUDER", "EXTRUDER",
                                    self.name, self.cmd_ACTIVATE_EXTRUDER,
                                    desc=self.cmd_ACTIVATE_EXTRUDER_help)
@@ -562,9 +567,13 @@ class PrinterExtruderPWM:
         self._restartcmd_flag = False
         self._laser_type = 0
         self._pwm_prf = 0
-        gcode.register_command("RSYNCPOWER", self.cmd_RSYNCPOWER)
-        
+        gcode.register_mux_command("RSYNCPOWER_M", "LASER",
+                                   self.name, self.cmd_RSYNCPOWER,
+                                   desc=self.cmd_RSYNCPOWER_help)  
 
+       
+    #self.cmd_RSYNCPOWER_help = "RSYNCPOWER LASER=RSYNCPOWER 1"
+    cmd_RSYNCPOWER_help = "RSYNCPOWER LASER=RSYNCPOWER OR 1"
     def cmd_RSYNCPOWER(self, gcmd):
         syncpmode = gcmd.get_int('M',0, minval=0, maxval=10) 
         if syncpmode == 1:
@@ -574,7 +583,8 @@ class PrinterExtruderPWM:
             self._restartcmd_flag = False
         msg = "resp optmode=%s rflag=%s " % (self.optmode, self._restartcmd_flag)            
         gcmd.respond_info(msg)  
-         
+
+
 
     def update_move_time(self, flush_time, clear_history_time):
         #close#logging.info("update_move_time extruderpwm") 
@@ -735,6 +745,8 @@ class PrinterExtruderPWM:
             return 0.
         return self.extruder_stepper.find_past_position(print_time)
 
+
+    cmd_TPWMSW_help = "TPWMSW ON PAUSERESUME"
     def cmd_TPWMSW(self, gcmd):
         pwm_prf = gcmd.get_int('S', 0, minval=0, maxval=1)
         self.set_pauseresume_pwm(pwm_prf)
