@@ -20,12 +20,17 @@ class LaserCtrlInterface:
 
         self.gcode.register_command("QUERY_LASER", self.cmd_QUERY_LASER, desc=self.cmd_QUERY_LASER_help)  
         self.gcode.register_command("TEST_LASER", self.cmd_TEST_LASER)
+        self.gcode.register_command('CHG_LASER_TYPE', self.cmd_CHG_LASER_TYPE,
+                               desc=self.cmd_CHG_LASER_TYPE_help)  
+
+        self.chg_run_cmd = False                                       
                                               
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_laserctrl)     
 
     def _handle_connect_laserctrl(self):
         pass                                                   
+
 
     def cmd_TEST_LASER(self, gcmd):
         optical_existf  =  gcmd.get_int('E', 0, minval=0, maxval=1)        
@@ -39,6 +44,35 @@ class LaserCtrlInterface:
     cmd_QUERY_LASER_help = "Report on the state of laser controller"
     def cmd_QUERY_LASER(self, gcmd):
         gcmd.respond_info("support optical fiber:" + str(self.opticalfiber_existf) + ", current selected laser:" + str(self.cur_sellaser))  
+
+
+    cmd_CHG_LASER_TYPE_help = "change laser type  blue or red  "
+    def cmd_CHG_LASER_TYPE(self, gcmd): 
+        mtype = gcmd.get_int('S',0, minval=0, maxval=1)
+        if self.opticalfiber_existf == 0 and mtype > 0:
+            gcmd.respond_info("optical fiber not exist, can not change laser type")
+            return
+        if  self.cur_sellaser == mtype:
+            gcmd.respond_info("current laser type already:" + str(mtype))
+            return
+
+        if mtype > 0:
+            if not self.chg_run_cmd:
+                self.chg_run_cmd = True
+                self.gcode.run_script_from_command(
+                    "M118 change laser to optical fiber\n"
+                    )
+                self.chg_run_cmd = False            
+        else:
+            if not self.chg_run_cmd:
+                self.chg_run_cmd = True
+                self.gcode.run_script_from_command(
+                    "M118 change laser to blue\n"
+                    )
+                self.chg_run_cmd = False            
+        self.cur_sellaser = mtype
+        gcmd.respond_info("current laser type changed to:" + str(mtype))
+ 
 
     def get_status(self, eventtime=None):
         laser_status = {}
