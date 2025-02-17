@@ -29,8 +29,10 @@ class LaserCtrlInterface:
                                             self._handle_connect_laserctrl)     
 
     def _handle_connect_laserctrl(self):
-        pass                                                   
-
+        extruderpwm1 = self.printer.lookup_object('extruderpwm1')
+        if extruderpwm1 is not None:
+            self.opticalfiber_existf = 1    
+        pass                                                     
 
     def cmd_TEST_LASER(self, gcmd):
         optical_existf  =  gcmd.get_int('E', 0, minval=0, maxval=1)        
@@ -60,6 +62,7 @@ class LaserCtrlInterface:
             if not self.chg_run_cmd:
                 self.chg_run_cmd = True
                 self.gcode.run_script_from_command(
+                    "ACTIVATE_LASER LASER=extruderpwm1\n"
                     "M118 change laser to optical fiber\n"
                     )
                 self.chg_run_cmd = False            
@@ -67,13 +70,13 @@ class LaserCtrlInterface:
             if not self.chg_run_cmd:
                 self.chg_run_cmd = True
                 self.gcode.run_script_from_command(
+                    "ACTIVATE_LASER LASER=extruderpwm\n"
                     "M118 change laser to blue\n"
                     )
                 self.chg_run_cmd = False            
         self.cur_sellaser = mtype
         gcmd.respond_info("current laser type changed to:" + str(mtype))
  
-
     def get_status(self, eventtime=None):
         laser_status = {}
         laser_status['laser_opticalf'] = self.opticalfiber_existf

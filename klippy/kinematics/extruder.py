@@ -515,7 +515,7 @@ class PrinterExtruderPWM:
         #self.max_extrude_ratio = max_cross_section / self.filament_area
         #logging.info("Extruder max_extrude_ratio=%.6f", self.max_extrude_ratio)
         #new add  240904
-        
+
         def_max_extrude_ratio = 1
         toolhead = self.printer.lookup_object('toolhead')
         max_velocity, max_accel = toolhead.get_max_velocity()
@@ -552,8 +552,16 @@ class PrinterExtruderPWM:
             gcode.register_command("M104", self.cmd_M104)
             gcode.register_command("M109", self.cmd_M109)
             #gcode.register_command("TPSW", self.cmd_TPWMSW)
+            gcode.register_mux_command("TPSW", "LASER", None,
+                                       self.cmd_default_TPWMSW,
+                                       desc=self.cmd_TPWMSW_help)    
+            gcode.register_mux_command("RSYNCPOWER", "LASER", None,
+                                       self.cmd_default_RSYNCPOWER,
+                                       desc=self.cmd_RSYNCPOWER_help)                                         
 
-        gcode.register_mux_command("TPSW_M", "LASER",
+
+        #TPSW_M
+        gcode.register_mux_command("TPSW", "LASER",
                                    self.name, self.cmd_TPWMSW,
                                    desc=self.cmd_TPWMSW_help)           
 
@@ -561,19 +569,37 @@ class PrinterExtruderPWM:
                                    self.name, self.cmd_ACTIVATE_EXTRUDER,
                                    desc=self.cmd_ACTIVATE_EXTRUDER_help)
 
+        gcode.register_mux_command("ACTIVATE_LASER", "LASER",
+                                   self.name, self.cmd_ACTIVATE_LASER,
+                                   desc=self.cmd_ACTIVATE_LASER_help)                                   
+
         self._extrdpwm_oid = None
         logging.info("PrinterExtruderPWM end") 
         self.optmode = 1
         self._restartcmd_flag = False
         self._laser_type = 0
         self._pwm_prf = 0
-        gcode.register_mux_command("RSYNCPOWER_M", "LASER",
+        #RSYNCPOWER_M
+        gcode.register_mux_command("RSYNCPOWER", "LASER",
                                    self.name, self.cmd_RSYNCPOWER,
                                    desc=self.cmd_RSYNCPOWER_help)  
+
 
        
     #self.cmd_RSYNCPOWER_help = "RSYNCPOWER LASER=RSYNCPOWER 1"
     cmd_RSYNCPOWER_help = "RSYNCPOWER LASER=RSYNCPOWER OR 1"
+    def cmd_default_RSYNCPOWER(self, gcmd):
+        extruder = self.printer.lookup_object('toolhead').get_extruder()
+        if extruder.extruder_stepper is None:
+            raise gcmd.error("Active laser does not have a stepper on rsyncpower")
+        strapq = extruder.extruder_stepper.stepper.get_trapq()
+        if strapq is not extruder.get_trapq():
+            raise gcmd.error("Unable to infer active laser stepper on rsyncpower")
+        extruder.cmd_RSYNCPOWER(gcmd)
+        #logging.info("\nrsyncpower:%s\n", extruder.name) 
+        pass
+
+
     def cmd_RSYNCPOWER(self, gcmd):
         syncpmode = gcmd.get_int('M',0, minval=0, maxval=10) 
         if syncpmode == 1:
@@ -581,10 +607,9 @@ class PrinterExtruderPWM:
         elif syncpmode == 0:
             self.optmode = 1 
             self._restartcmd_flag = False
-        msg = "resp optmode=%s rflag=%s " % (self.optmode, self._restartcmd_flag)            
+        msg = "resp name=%s optmode=%s rflag=%s " % (self.name, self.optmode, self._restartcmd_flag)            
         gcmd.respond_info(msg)  
-
-
+        
 
     def update_move_time(self, flush_time, clear_history_time):
         #close#logging.info("update_move_time extruderpwm") 
@@ -747,9 +772,23 @@ class PrinterExtruderPWM:
 
 
     cmd_TPWMSW_help = "TPWMSW ON PAUSERESUME"
+    def cmd_default_TPWMSW(self, gcmd):
+        extruder = self.printer.lookup_object('toolhead').get_extruder()
+        if extruder.extruder_stepper is None:
+            raise gcmd.error("Active laser does not have a stepper on tpwmsw")
+        strapq = extruder.extruder_stepper.stepper.get_trapq()
+        if strapq is not extruder.get_trapq():
+            raise gcmd.error("Unable to infer active laser stepper on tpwmsw")
+        extruder.cmd_TPWMSW(gcmd)
+        #extruder.extruder_stepper.cmd_SET_PRESSURE_ADVANCE(gcmd)
+        pass
+
     def cmd_TPWMSW(self, gcmd):
         pwm_prf = gcmd.get_int('S', 0, minval=0, maxval=1)
         self.set_pauseresume_pwm(pwm_prf)
+        msg = "resp name=%s tpwmsw=%s " % (self.name, pwm_prf)            
+        gcmd.respond_info(msg)  
+
 
     def cmd_M104(self, gcmd, wait=False):
         # Set Extruder Temperature
@@ -782,8 +821,17 @@ class PrinterExtruderPWM:
         toolhead.set_extruder(self, self.last_position)
         self.printer.send_event("extruder:activate_extruder")
 
-
-
+    cmd_ACTIVATE_LASER_help = "Change the active laser"
+    def cmd_ACTIVATE_LASER(self, gcmd):
+        toolhead = self.printer.lookup_object('toolhead')
+        if toolhead.get_extruder() is self:
+            gcmd.respond_info("LASER %s already active" % (self.name,))
+            return
+        gcmd.respond_info("Activating LASER %s" % (self.name,))
+        toolhead.flush_step_generation()
+        toolhead.set_extruder(self, self.last_position)
+        self.printer.send_event("extruder:activate_extruder")        
+        
 def add_printer_objects(config):
     printer = config.get_printer()
     #logging.info("add_printer_objects") 
