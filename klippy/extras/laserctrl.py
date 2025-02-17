@@ -15,7 +15,9 @@ class LaserCtrlInterface:
 
         self.cur_sellaser = 0
         self.opticalfiber_existf = 0
-       
+        self.diode_high = 0
+
+
         self.gcode = self.printer.lookup_object('gcode')
 
         self.gcode.register_command("QUERY_LASER", self.cmd_QUERY_LASER, desc=self.cmd_QUERY_LASER_help)  
@@ -76,14 +78,23 @@ class LaserCtrlInterface:
                 self.chg_run_cmd = False            
         self.cur_sellaser = mtype
         gcmd.respond_info("current laser type changed to:" + str(mtype))
- 
+
+
+    def get_diode_high_status(self,eventtime):
+        diode_obj = self.printer.lookup_object('output_pin laserpoweren_level')
+        if diode_obj is not None:
+            diode_high_val = diode_obj.get_status(eventtime)['value']
+            self.diode_high = 1 if diode_high_val > 0 else 0
+    
     def get_status(self, eventtime=None):
+        self.get_diode_high_status(eventtime)
         laser_status = {}
-        laser_status['laser_opticalf'] = self.opticalfiber_existf
-        laser_status['laser_cursel'] = self.cur_sellaser
+        laser_status['fiber_available'] = self.opticalfiber_existf
+        laser_status['fiber_selected'] = self.cur_sellaser
+        laser_status['diode_high'] = self.diode_high        
         return dict(laser_status)
-
-
+        
+        
 def load_config(config):
     return LaserCtrlInterface(config)
 
