@@ -193,7 +193,35 @@ void  load_next_pwm_ctrl_data(uint32_t interval, int16_t  add, uint16_t count, u
 //#define M_POWER_VAL_LOWERLIMIT  (38)
 
 
+
 uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
+{
+
+    uint32_t result_value = 0;
+    uint32_t speed_pulse = g_pwm_ctrl_data.speed_pulse_ticks;
+    uint32_t pwmval = g_pwm_ctrl_data.pwmval;    
+    
+    if (inter_pulse_ticks == 0)
+    {
+        return(result_value);
+    } 
+      
+    if (speed_pulse >= inter_pulse_ticks) {
+        result_value = pwmval;
+    } else {
+        result_value = (uint32_t)(((uint64_t)pwmval * speed_pulse) / inter_pulse_ticks);
+    }
+    //min power 255*0.1=25.5
+    if((result_value < M_POWER_VAL_LOWERLIMIT) && (g_pwm_ctrl_data.pwmval > 0))
+    {
+        result_value = M_POWER_VAL_LOWERLIMIT;     
+    }
+    return(result_value);
+        
+}
+
+#if  0
+uint32_t cacl_power_var_value_float(uint32_t inter_pulse_ticks)
 {
     uint32_t result_value = 0;
     float  fa = 0;
@@ -270,6 +298,7 @@ uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
     return(result_value);
 
 }
+#endif
 
 //sts
 void report_speed_stauts_ontest(void)
