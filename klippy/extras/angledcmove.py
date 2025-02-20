@@ -630,6 +630,8 @@ class Angledcmove:
                                         desc=self.cmd_AS5600_INIT_help)
 
         self.gcode.register_command("ANGLE_LAST_VAL", self.cmd_ANGLE_LAST_VAL)  
+        self.gcode.register_command("LOAD_ANGLE_CONF", self.cmd_LOAD_ANGLE_CONF)   
+        self.gcode.register_command("READ_ANGLE_CONF", self.cmd_AS5600_INIT)                 
 
         self.gcode.register_command("DCM_MOVE", self.cmd_DCM_MOVE)  
         self.gcode.register_command("DCM_PINOUT", self.cmd_DCM_PINOUT) 
@@ -640,7 +642,8 @@ class Angledcmove:
 
         self.gcode.register_command("AS_DEBUG_READ", self.cmd_AS5600_DEBUG_READ)  
         self.gcode.register_command("AS_DEBUG_WRITE", self.cmd_AS5600_DEBUG_WRITE) 
-        self.gcode.register_command("SAVE_POS_AS", self.cmd_SAVE_POS_AS)  
+        self.gcode.register_command("SAVE_POS_AS", self.cmd_SAVE_POS_AS) 
+        self.gcode.register_command("UPDATE_POS_AS", self.cmd_UPDATE_POS_AS)           
         self.gcode.register_command("LOOK_POS_AS", self.cmd_LOOK_POS_AS) 
         self.gcode.register_command("FIND_POS_BYAS", self.cmd_FIND_POS_BYAS)   
         self.gcode.register_command("FIND_POS_BYAS_SA", self.cmd_FIND_POS_BYAS_SA) 
@@ -695,6 +698,10 @@ class Angledcmove:
         self.pwm_chg_status = 0
         self.gcmd = None
         self.dc_abm_running = False
+        self.toleranceval = config.getint('tolerance', DIFF_VAL)
+        logging.info("toleranceval=%d\n", self.toleranceval) 
+
+
 
 
     def cmd_SEL_ALG_FIND(self, gcmd):
@@ -789,6 +796,19 @@ class Angledcmove:
         msg = "%s=%d" % (pos_str,cur_angle)
         gcmd.respond_info(msg)
 
+    def cmd_UPDATE_POS_AS(self, gcmd):
+        pos = gcmd.get_int('P',1, minval=0, maxval=2)
+        #cur_angle = self.read_register_D16('REG_RAW_ANGLE')
+        cur_angle = gcmd.get_int("VAL", 0, minval=0, maxval=4095)  
+        pos_str = 'poshead'
+        if pos > 0 :
+            pos_str = 'posuse'
+        self.save_vars.cmd_PROG_VARIABLE(pos_str, repr(cur_angle))
+        self.load_value_pos()
+        msg = "%s=%d" % (pos_str,cur_angle)
+        gcmd.respond_info(msg)
+
+
     cmd_AS5600_DEBUG_READ_help = "Query register (for debugging)"
     def cmd_AS5600_DEBUG_READ(self, gcmd):
         regv = gcmd.get("REG", minval=0, maxval=255, parser=lambda x: int(x, 0))
@@ -837,8 +857,8 @@ class Angledcmove:
     cmd_AS5600_INIT_help = "Report on the state of as5600"
     def cmd_AS5600_INIT(self, gcmd):
 
-        self.write_register_D16('REG_ZPOS', 3)
-        self.write_register_D16('REG_MPOS', 0xff)
+        #self.write_register_D16('REG_ZPOS', 3)
+        #self.write_register_D16('REG_MPOS', 0xff)
         #self.write_register_D16('REG_MANG', 4095)
 
         self.cur_zpos = self.read_register_D16('REG_ZPOS')
@@ -854,6 +874,25 @@ class Angledcmove:
         msg = msg + "MAGN=" + hex(self.cur_magn) + ","  
         msg = msg + "MANG=" + hex(self.cur_vmang) + "," 
         gcmd.respond_info(self.name + ":" + msg)
+
+
+    def cmd_LOAD_ANGLE_CONF(self, gcmd): 
+        regind = gcmd.get_int("RIND", 0, minval=0, maxval=3)
+        val = gcmd.get_int("VAL", 0, minval=0, maxval=4095)   
+        rundo = 0 
+        if regind == 1:
+            self.write_register_D16('REG_ZPOS', val)   
+            rundo = 1  
+        elif regind == 2:
+            self.write_register_D16('REG_MPOS', val) 
+            rundo = 1                 
+        elif regind == 3:
+            self.write_register_D16('REG_MANG', val) 
+            rundo = 1                 
+        if rundo > 0:
+            gcmd.respond_info("sucess: %s %d" % (regind, val))
+        else:
+            gcmd.respond_info("error: %s %d" % (regind, val)) 
 
     def cmd_ANGLE_LAST_VAL(self, gcmd):
         self.check_magnet_status()
@@ -1014,10 +1053,12 @@ class Angledcmove:
     def decide_val_tolerance(self, curangle, destangle):
         accept_toler = 0
         diffval = abs(curangle - destangle)
-        if diffval < DIFF_VAL:
+        #if diffval < DIFF_VAL:
+        if diffval < self.toleranceval:
             accept_toler = 1
         diffval_1 =  ANGLE_MOD_VAL - diffval
-        if diffval_1 < DIFF_VAL:
+        #if diffval_1 < DIFF_VAL:
+        if diffval_1 < self.toleranceval:
             accept_toler = 1
         return accept_toler
         
