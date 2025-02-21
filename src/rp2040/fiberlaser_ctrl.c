@@ -99,7 +99,8 @@ enum {
 #define  M_LOW_IO     (0)
 #define  M_MIN_DEDAYTIME_US    (1)
 
-#define  M_LOGLEVEL_INVERSION
+//#define  M_LOGLEVEL_INVERSION
+//relase  version
 #ifdef   M_LOGLEVEL_INVERSION
 #define  M_HIGH_IO_X    (0)
 #define  M_LOW_IO_X     (1)
@@ -107,6 +108,7 @@ enum {
 #define  M_HIGH_IO_X    (1)
 #define  M_LOW_IO_X     (0)
 #endif
+
 
 #define  M_LATCH_BEFORE_WAIT_TM  (1)
 #define  M_LATCH_AFTER_WAIT_TM   (2)

@@ -156,7 +156,7 @@ class MFindPID:
 
 MAX_INTEGRAL = 100  
 MIN_INTEGRAL = -100 
-INTEGER_LIMIT =  50
+INTEGER_LIMIT =  20
 
 class ControlPID_MG:
     def __init__(self, Kp, Ki, Kd, max_dcspeed):
@@ -194,7 +194,14 @@ class ControlPID_MG:
         else:
             self.integral = 0 
         self.integral = max(MIN_INTEGRAL, min(MAX_INTEGRAL, self.integral))
-        self.actual_val=self.Kp*self.err+self.Ki*self.integral+self.Kd*(self.err-self.err_last)
+        if target_angle >= 2000:
+            factorP = self.Kp*self.err*1.8
+        else:
+            factorP = self.Kp*self.err
+        factorI = self.Ki*self.integral
+        factorD = self.Kd*(self.err-self.err_last)
+        self.actual_val= factorP + factorI + factorD
+        logging.info("Factor P=%s I=%s D=%s\n", factorP, factorI, factorD)
         self.err_last=self.err
         return self.actual_val        
 
@@ -682,7 +689,7 @@ class Angledcmove:
         #self.pid_normal = ControlPID_MG(0.21,0.80,0.01,0.45)
         #self.pid_normal = ControlPID_MG(0.21,0.07,0.01,0.45)
         #self.pid_normal = ControlPID_MG(0.21,0.00,0.01,0.45)
-        self.pid_normal = ControlPID_MG(0.21,0.02,0.01,0.45)        
+        self.pid_normal = ControlPID_MG(0.006,0.0,0.01,0.45)        
         self.force_exit = 0
         self.targer_angle = 0
         self.find_times = 0
@@ -691,14 +698,15 @@ class Angledcmove:
         self.stop_delay = 0.001
         #self.min_pwm_plus = 0.04
         #self.max_pwm_plus = 0.50 
-        self.min_pwm_plus = 0.50
-        self.max_pwm_plus = 0.80         
+        self.min_pwm_plus = 0.10
+        self.max_pwm_plus = 0.40         
         self.findpid_work = 0 
         self.finetuningmode = 0  
         self.pwm_chg_status = 0
         self.gcmd = None
         self.dc_abm_running = False
-        self.toleranceval = config.getint('tolerance', DIFF_VAL)
+        #self.toleranceval = config.getint('tolerance', DIFF_VAL)
+        self.toleranceval = 15
         logging.info("toleranceval=%d\n", self.toleranceval) 
 
 
@@ -980,9 +988,10 @@ class Angledcmove:
     #    self._callback = cb
     
     def set_pwm_co(self, read_time, co_value):
-        #co_value to pwm
-        adj_co = co_value/ANGLE_MOD_VAL
-        adj_val = max(self.min_pwm_plus, min(self.max_pwm_plus, adj_co))
+        # co_value to pwm
+        # adj_co = co_value/ANGLE_MOD_VAL
+        adj_co = co_value
+        adj_val = max(self.min_pwm_plus, min(self.max_pwm_plus, abs(adj_co)))
         valuea = valueb = 0.
         if co_value < 0:
             valuea = adj_val
@@ -1022,8 +1031,9 @@ class Angledcmove:
         self.last_angle_time = read_time 
         retst = self.decide_val_tolerance(angle_val, self.targer_angle)
         self.pwm_chg_status
-        #if retst > 0 :
-        if retst > 0 and self.pwm_chg_status == 0 and self.finetuningmode > 0:
+        if retst > 0 :
+        # if retst > 0 and self.pwm_chg_status == 0 and self.finetuningmode > 0:
+            logging.info("(%d)info last angle = %s\n", self.find_times, angle_val)
             return  retst
         #if self.find_times > FIND_MAX_TIMES:
         if self.find_times > FIND_MAX_TIMES_TST:
@@ -1036,7 +1046,8 @@ class Angledcmove:
         if abs(co) < APPROACH_TARGET:
             #retst = 3
             #return  retst 
-            self.finetuningmode = 1                       
+            pass
+            #self.finetuningmode = 1                       
         self.set_pwm_co(read_time, co)
         retst = 0
         return retst
