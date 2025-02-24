@@ -132,16 +132,17 @@ class CoreXYGalvoKinematics:
         self.max_h_accel = max_accel
 
         self.g0_velocity = config.getfloat(
-            'g0_velocity', 0, above=0., maxval=self.max_h_velocity)
+            'g0_velocity', 0, minval=0., maxval=self.max_h_velocity)
 
         self.g0_m_velocity = config.getfloat(
-            'g0_m_velocity', 0, above=0., maxval=self.max_m_velocity)
+            'g0_m_velocity', 0, minval=0., maxval=self.max_m_velocity)
         
         self.g0_a_velocity = config.getfloat(
-            'g0_a_velocity', 0, above=0., maxval=self.max_a_velocity)
+            'g0_a_velocity', 0, minval=0., maxval=self.max_a_velocity)
 
         self.g0_z_velocity = config.getfloat(
-            'g0_z_velocity', 0, above=0., maxval=self.max_z_velocity)        
+            'g0_z_velocity', 0, minval=0., maxval=self.max_z_velocity)  
+                  
 
 
         #xyz

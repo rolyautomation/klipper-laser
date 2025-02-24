@@ -56,7 +56,7 @@ class Move:
         
     def set_g0_move_speed(self, speed, accel):
         if self.pwmsw == 0 and speed > 0:
-            logging.info("\n G0 MOVE S:%s A:%s \n", speed, accel)  
+            logging.info("G0 MOVE S:%s A:%s v2:%s \n", speed, accel, self.max_cruise_v2)  
             self.max_cruise_v2 = speed**2
             self.min_move_t = self.move_d / speed
             self.accel = min(self.accel, accel)
