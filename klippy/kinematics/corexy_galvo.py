@@ -126,8 +126,24 @@ class CoreXYGalvoKinematics:
         self.max_a_velocity = config.getfloat(
             'max_a_velocity', max_velocity, above=0., maxval=max_velocity)
         self.max_a_accel = config.getfloat(
-            'max_a_accel', max_accel, above=0., maxval=max_accel)            
+            'max_a_accel', max_accel, above=0., maxval=max_accel)   
+
+        self.max_h_velocity = max_velocity
+        self.max_h_accel = max_accel
+
+        self.g0_velocity = config.getfloat(
+            'g0_velocity', 0, above=0., maxval=self.max_h_velocity)
+
+        self.g0_m_velocity = config.getfloat(
+            'g0_m_velocity', 0, above=0., maxval=self.max_m_velocity)
         
+        self.g0_a_velocity = config.getfloat(
+            'g0_a_velocity', 0, above=0., maxval=self.max_a_velocity)
+
+        self.g0_z_velocity = config.getfloat(
+            'g0_z_velocity', 0, above=0., maxval=self.max_z_velocity)        
+
+
         #xyz
         #self.endstop_hit = [(0, 0)] * 3
         self.limits = [(1.0, -1.0)] * (3+3)
@@ -327,11 +343,15 @@ class CoreXYGalvoKinematics:
                     move.limit_speed(self.max_g_velocity, self.max_g_accel)
         ''' 
         #if self.mech_enable_alone is not None and self.mech_enable_alone > 0:
+        if self.g0_velocity > 0:
+            move.set_g0_move_speed(self.g0_velocity, self.max_h_accel)
         if self.mech_enable_alone > 0:
             if  move.axes_d[3]:
                 move.limit_speed(self.max_a_velocity, self.max_a_accel)
+                move.set_g0_move_speed(self.g0_a_velocity, self.max_a_accel)
             elif move.axes_d[0] or  move.axes_d[1]:
                 move.limit_speed(self.max_m_velocity, self.max_m_accel) 
+                move.set_g0_move_speed(self.g0_m_velocity, self.max_m_accel)
             #if  move.axes_d[0] or  move.axes_d[1] or move.axes_d[2] or move.axes_d[3]: 
             #    move.limit_speed(self.max_m_velocity, self.max_m_accel)      
 

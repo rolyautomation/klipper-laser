@@ -1,4 +1,4 @@
-# laser controller interface
+# laser store interface
 #
 # Copyright (C) 2025-2028  jinqiang <jinqiang@ecomedge.io>
 #
@@ -8,7 +8,43 @@ import logging
 LASER_T_PWM_BLUE = 0
 LASER_T_OPTICAL_RED = 1
 
-class LaserCtrlInterface:
+'''
+[galvo_parameters fiber1064]
+rotation_angle: -0.0
+pitch_factor: 0.0
+b_scale_plus: -0.0457644
+b_scale_minus: -0.0358127
+c_scale_plus: -0.0275848
+c_scale_minus: -0.0348631
+b2: -0.00000998146
+b4: -0.00000927960
+b6: -0.00000844448
+b8: -0.00000770474
+c2: 0.0000186495
+c4: 0.0000183209
+c6: 0.0000183374
+c8: 0.0000191004
+
+[galvo_parameters diode450]
+rotation_angle: -0.0
+pitch_factor: 0.0
+b_scale_plus: 0.0283316
+b_scale_minus: 0.0403397
+c_scale_plus: 0.0251046
+c_scale_minus: 0.0155440
+b2: -0.0000103735
+b4: -0.0000100012
+b6: -0.00000984857
+b8: -0.00000864826
+c2: 0.0000255225
+c4: 0.0000239867
+c6: 0.0000245435
+c8: 0.0000245894
+
+'''
+
+
+class LaserStoreInterface:
     def __init__(self, config):
         self.printer = config.get_printer()
         #self.name = config.get_name().split(' ')[-1]
@@ -16,8 +52,7 @@ class LaserCtrlInterface:
         self.cur_sellaser = 0
         self.opticalfiber_existf = 0
         self.diode_high = 0
-        self.galvo_enabled = 0
- 
+
 
         self.gcode = self.printer.lookup_object('gcode')
 
@@ -92,13 +127,13 @@ class LaserCtrlInterface:
         laser_status = {}
         laser_status['fiber_available'] = self.opticalfiber_existf
         laser_status['fiber_selected'] = self.cur_sellaser
-        laser_status['diode_high'] = self.diode_high   
-        laser_status['galvo_enabled'] = self.galvo_enabled              
+        laser_status['diode_high'] = self.diode_high        
         return dict(laser_status)
         
         
 def load_config(config):
-    return LaserCtrlInterface(config)
+    return LaserStoreInterface(config)
 
 #def load_config_prefix(config):
 #   return LaserCtrlInterface(config)
+

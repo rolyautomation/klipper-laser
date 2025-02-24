@@ -53,6 +53,15 @@ class Move:
         self.delta_v2 = 2.0 * move_d * self.accel
         self.max_smoothed_v2 = 0.
         self.smooth_delta_v2 = 2.0 * move_d * toolhead.max_accel_to_decel
+        
+    def set_g0_move_speed(self, speed, accel):
+        if self.pwmsw == 0 and speed > 0:
+            logging.info("\n G0 MOVE S:%s A:%s \n", speed, accel)  
+            self.max_cruise_v2 = speed**2
+            self.min_move_t = self.move_d / speed
+            self.accel = min(self.accel, accel)
+            self.delta_v2 = 2.0 * self.move_d * self.accel
+            self.smooth_delta_v2 = min(self.smooth_delta_v2, self.delta_v2)
     def limit_speed(self, speed, accel):
         speed2 = speed**2
         if speed2 < self.max_cruise_v2:
