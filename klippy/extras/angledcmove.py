@@ -159,11 +159,13 @@ MIN_INTEGRAL = -100
 INTEGER_LIMIT =  20
 
 class ControlPID_MG:
-    def __init__(self, Kp, Ki, Kd, max_dcspeed):
+    def __init__(self, Kp, Ki, Kd, Kpup, tstlog_en, max_dcspeed):
         self.max_dcspeed = max_dcspeed
         self.Kp = Kp
         self.Ki = Ki
-        self.Kd = Kd        
+        self.Kd = Kd   
+        self.Kpup = Kpup
+        self.tstlog_en = tstlog_en
         self.prev_angle_time = 0.
         self.target_val=0.0
         self.actual_val=0.0
@@ -171,16 +173,7 @@ class ControlPID_MG:
         self.err_last = 0.0
         self.err_next = 0.0 
         self.integral = 0.0  
-    def angle_update_v00(self, read_time, angle, target_angle):
-        time_diff = read_time - self.prev_angle_time
-        # Calculate change of temperature
-        # Calculate accumulated temperature "error"
-        angle_err = target_angle - angle
-        self.err= angle_err
-        self.integral+=self.err
-        self.actual_val=self.Kp*self.err+self.Ki*self.integral+self.Kd*(self.err-self.err_last)
-        self.err_last=self.err
-        return self.actual_val
+        self.kp_sel  = 0
 
 
     def angle_update(self, read_time, angle, target_angle):
@@ -194,17 +187,23 @@ class ControlPID_MG:
         else:
             self.integral = 0 
         self.integral = max(MIN_INTEGRAL, min(MAX_INTEGRAL, self.integral))
-        if target_angle >= 2000:
-            factorP = self.Kp*self.err*1.8
+        #if target_angle >= 2000:
+        if self.kp_sel > 0:
+            #factorP = self.Kp*self.err*1.8
+            factorP = self.Kpup*self.err
         else:
             factorP = self.Kp*self.err
         factorI = self.Ki*self.integral
         factorD = self.Kd*(self.err-self.err_last)
         self.actual_val= factorP + factorI + factorD
-        logging.info("Factor P=%s I=%s D=%s\n", factorP, factorI, factorD)
+        if self.tstlog_en:
+            logging.info("Factor P=%s I=%s D=%s\n", factorP, factorI, factorD)
         self.err_last=self.err
-        return self.actual_val        
+        return self.actual_val   
 
+
+    def set_kp_sel(self, kp_sel):        
+        self.kp_sel = kp_sel
 
     def restart_init(self):
         self.target_val=0.0
@@ -213,6 +212,8 @@ class ControlPID_MG:
         self.err_last = 0.0
         self.err_next = 0.0 
         self.integral = 0.0         
+        self.kp_sel  = 0
+
 
 
 class MabControl_PIO:
@@ -662,9 +663,13 @@ class Angledcmove:
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_init)    
 
-        self.kp = config.getfloat('pid_Kp', 1.0)
-        self.ki = config.getfloat('pid_Ki', 0.1)
-        self.kd = config.getfloat('pid_Kd', 0.01)
+
+        self.kp = config.getfloat('pid_kp', 0.006)
+        self.ki = config.getfloat('pid_ki', 0.0)
+        self.kd = config.getfloat('pid_kd', 0.01)
+        self.kpup = config.getfloat('pid_kp_up', self.kp)      
+        self.toleranceval = config.getint('tolerance', DIFF_VAL)
+        self.tstlog_en = config.getint('tstlog_en', 0)              
         self.previous_error = 0
         self.integral = 0
         #self.last_time = time.time()
@@ -678,39 +683,38 @@ class Angledcmove:
         #self.normpid = MFindPID(0.28,0.07,0.03)
         self.normpid = MFindPID(0.25,0.07,0.03)
         self.incpid = MFindPID(0.21,0.80,0.01)
-
         #self.pidreptime = config.getint('pidreptimef',0.02,minval=0.01)
         self.pidreptime = config.getfloat('pidreptimef', 0.02, above=0.01, maxval=2)
         self.samptimer_fpos = self.reactor.register_timer(self.samp_fpos_fun) 
         self.sample_angle_value = 0 
         #self.lock = threading.Lock()  
         self.last_angle_val = 0. 
-        self.last_angle_time = 0.  
-        #self.pid_normal = ControlPID_MG(0.21,0.80,0.01,0.45)
-        #self.pid_normal = ControlPID_MG(0.21,0.07,0.01,0.45)
-        #self.pid_normal = ControlPID_MG(0.21,0.00,0.01,0.45)
-        self.pid_normal = ControlPID_MG(0.006,0.0,0.01,0.45)        
+        self.last_angle_time = 0.
+
+        #self.pid_normal = ControlPID_MG(0.006,0.0,0.01,0.45)   
+        self.pid_normal = ControlPID_MG(self.kp,self.ki,self.kd, self.kpup, self.tstlog_en, 0.45)     
         self.force_exit = 0
         self.targer_angle = 0
         self.find_times = 0
         self.pwm_dcwork_flag = 0
-        self.pwm_delay = 0.005
-        self.stop_delay = 0.001
-        #self.min_pwm_plus = 0.04
-        #self.max_pwm_plus = 0.50 
-        self.min_pwm_plus = 0.10
-        self.max_pwm_plus = 0.40         
+        self.pwm_delay = config.getfloat('pwm_delay', 0.005)
+        self.stop_delay = config.getfloat('stop_delay', 0.001) 
+
+        #self.min_pwm_plus = 0.10
+        #self.max_pwm_plus = 0.40  
+        self.min_pwm_plus = config.getfloat('min_pwm_val', 0.1)  
+        self.max_pwm_plus = config.getfloat('max_pwm_val', 0.4)       
         self.findpid_work = 0 
         self.finetuningmode = 0  
         self.pwm_chg_status = 0
         self.gcmd = None
         self.dc_abm_running = False
-        #self.toleranceval = config.getint('tolerance', DIFF_VAL)
-        self.toleranceval = 15
-        logging.info("toleranceval=%d\n", self.toleranceval) 
-
-
-
+        #self.toleranceval = 15
+        logging.info("kp=%s ki=%s kd=%s kpup=%s pidreptime=%s ", self.kp, self.ki, self.kd, self.kpup, self.pidreptime)  
+        logging.info("toleranceval=%d", self.toleranceval) 
+        if self.tstlog_en:
+            logging.info("minpwm=%s maxpwm=%s pwm_delay=%s stop_delay=%s \n", self.min_pwm_plus, self.max_pwm_plus, self.pwm_delay, self.stop_delay) 
+            
 
     def cmd_SEL_ALG_FIND(self, gcmd):
         selalgv = gcmd.get_int('S',0, minval=0, maxval=10) 
@@ -735,9 +739,11 @@ class Angledcmove:
     def cmd_FIND_POS_BYAS_SA(self, gcmd):  
         self.gcmd =  gcmd
         mpos = gcmd.get_int('M',1, minval=0, maxval=4095)  
+        sel = gcmd.get_int('S',0, minval=0, maxval=1) 
         if self.findpid_work == 0:
             self.set_targer_angle(mpos)
             self.pid_normal.restart_init()
+            self.pid_normal.set_kp_sel(sel)
             self.reactor.update_timer(self.samptimer_fpos, self.reactor.NOW)
             msghead = 'start find'
         else:
@@ -750,7 +756,7 @@ class Angledcmove:
         #mpos = gcmd.get_int('M',1, minval=0, maxval=4095)  
         #retst = self.find_angle_pos(mpos) 
         if self.findpid_work > 0:
-            self.force_exit = 0
+            self.force_exit = 1
             msghead =  'stop find ='   
         else:
             msghead =  'idle ='   
@@ -770,14 +776,17 @@ class Angledcmove:
         else:
             pos = gcmd.get_int('P',1, minval=0, maxval=2)
             destpos = self.poshead
+            kp_sel = 1
             if pos > 0 :
                 destpos = self.posuse
+                kp_sel = 0   
             msg = "%s=%d" % ('destp',destpos)  
             if self.findpid_work == 0:
                 self.set_targer_angle(destpos)
                 self.pid_normal.restart_init()
+                self.pid_normal.set_kp_sel(kp_sel)
                 self.reactor.update_timer(self.samptimer_fpos, self.reactor.NOW)
-                msghead = 'start find '
+                msghead = 'start find ' + "sel=%d" % (kp_sel, )
             else:
                 msghead =  'busy,find '            
             #retst = self.find_angle_pos(destpos) 
@@ -979,6 +988,7 @@ class Angledcmove:
         else:
             #stop find pos
             #stop pwm
+            self.force_exit = 0
             msg = "froce exit find:%s=%d" % ("result:",10)
             self.gcmd.respond_info(msg)             
             self.stop_dc_move_pwm(print_time)
@@ -1021,7 +1031,8 @@ class Angledcmove:
         pwm_time = read_time + self.pwm_delay
         print_time_move = self.toolhead.get_last_move_time()  
         print_time = min(pwm_time, print_time_move)   
-        logging.info("time=%s [%s:%s] \n",print_time, valuea, valueb)         
+        if self.tstlog_en:
+            logging.info("time=%s [%s:%s] \n",print_time, valuea, valueb)         
         self.dcmotor.dc_set_pin_speedmode(print_time, valuea, valueb)
 
     def angle_dadjust_callback(self, read_time, angle_val):
@@ -1030,10 +1041,10 @@ class Angledcmove:
         self.last_angle_val = angle_val
         self.last_angle_time = read_time 
         retst = self.decide_val_tolerance(angle_val, self.targer_angle)
-        self.pwm_chg_status
         if retst > 0 :
         # if retst > 0 and self.pwm_chg_status == 0 and self.finetuningmode > 0:
-            logging.info("(%d)info last angle = %s\n", self.find_times, angle_val)
+            if self.tstlog_en:
+                logging.info("(%d)info last angle = %s\n", self.find_times, angle_val)
             return  retst
         #if self.find_times > FIND_MAX_TIMES:
         if self.find_times > FIND_MAX_TIMES_TST:
@@ -1042,36 +1053,29 @@ class Angledcmove:
         self.pwm_dcwork_flag = 1  
         self.find_times +=1  
         co = self.pid_normal.angle_update(read_time,angle_val,self.targer_angle)  
-        logging.info("(%d)info [%s:%s] pidco=%s \n",self.find_times, angle_val, self.targer_angle, co) 
-        if abs(co) < APPROACH_TARGET:
+        if self.tstlog_en:
+            logging.info("(%d)info [%s:%s] pidco=%s \n",self.find_times, angle_val, self.targer_angle, co) 
+        #if abs(co) < APPROACH_TARGET:
             #retst = 3
             #return  retst 
-            pass
+            #pass
             #self.finetuningmode = 1                       
         self.set_pwm_co(read_time, co)
         retst = 0
         return retst
-        #with self.lock:
-            #time_diff = read_time - self.last_angle_time
-            #self.last_angle_val = temp
-            #self.last_angle_time = read_time
-            #self.control.temperature_update(read_time, temp, self.target_temp)
-            #temp_diff = temp - self.smoothed_temp
-            #adj_time = min(time_diff * self.inv_smooth_time, 1.)
-            #self.smoothed_temp += temp_diff * adj_time
-            #self.can_extrude = (self.smoothed_temp >= self.min_extrude_temp) 
 
     def decide_val_tolerance(self, curangle, destangle):
         accept_toler = 0
         diffval = abs(curangle - destangle)
-        #if diffval < DIFF_VAL:
         if diffval < self.toleranceval:
             accept_toler = 1
         diffval_1 =  ANGLE_MOD_VAL - diffval
-        #if diffval_1 < DIFF_VAL:
         if diffval_1 < self.toleranceval:
             accept_toler = 1
         return accept_toler
+
+
+
         
     def angel_transfrom_rtm(self, angle_value):   
         ret_sec = angle_value/ANGLE_MOD_VAL
