@@ -728,7 +728,20 @@ class Angledcmove:
 
     def _handle_connect_init(self):
         self.save_vars = self.printer.lookup_object('save_variables')
-        self.load_value_pos()   
+        self.load_value_pos()  
+        if self.posoffset > 0:
+            self.update_pos_offset()
+        else:
+            logging.info("no set pos offset=%s", self.posoffset)         
+
+
+    def update_pos_offset(self):   
+        #if self.posoffset > 0:
+        self.write_register_D16('REG_ZPOS', self.posoffset)  
+        logging.info("set pos offset=%s ", self.posoffset)  
+        #else:
+        #logging.info("no set pos offset=%s", self.posoffset)  
+
 
     def cmd_FIND_POS_BYAS(self, gcmd):   
         mpos = gcmd.get_int('M',1, minval=0, maxval=4095)  
@@ -796,11 +809,13 @@ class Angledcmove:
     def cmd_LOOK_POS_AS(self, gcmd):                 
         msg = "%s=%d" % ('poshead',self.poshead)
         msg = msg + ",%s=%d" % ('posuse',self.posuse)
+        msg = msg + ",%s=%d" % ('posoffset',self.posoffset)
         gcmd.respond_info(msg)
 
     def load_value_pos(self):
         self.poshead = self.save_vars.allVariables.get('poshead', 0)        
         self.posuse = self.save_vars.allVariables.get('posuse', 0)  
+        self.posoffset = self.save_vars.allVariables.get('posoffset', 0) 
 
     def cmd_SAVE_POS_AS(self, gcmd):
         pos = gcmd.get_int('P',1, minval=0, maxval=2)
@@ -812,16 +827,24 @@ class Angledcmove:
         self.load_value_pos()
         msg = "%s=%d" % (pos_str,cur_angle)
         gcmd.respond_info(msg)
+        
 
     def cmd_UPDATE_POS_AS(self, gcmd):
+        updateoffsetf = 0
         pos = gcmd.get_int('P',1, minval=0, maxval=2)
         #cur_angle = self.read_register_D16('REG_RAW_ANGLE')
         cur_angle = gcmd.get_int("VAL", 0, minval=0, maxval=4095)  
         pos_str = 'poshead'
-        if pos > 0 :
+        #if pos > 0 :
+        if pos ==  1 :
             pos_str = 'posuse'
+        elif pos ==  2 :  
+            pos_str = 'posoffset'
+            updateoffsetf = 1
         self.save_vars.cmd_PROG_VARIABLE(pos_str, repr(cur_angle))
         self.load_value_pos()
+        if updateoffsetf > 0:
+            self.update_pos_offset()
         msg = "%s=%d" % (pos_str,cur_angle)
         gcmd.respond_info(msg)
 
