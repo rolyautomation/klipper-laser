@@ -83,7 +83,11 @@ class LaserStoreInterface:
     def __init__(self, config):
         self.printer = config.get_printer()
         #self.name = config.get_name().split(' ')[-1]
-        self.filename = os.path.expanduser(config.get('filename'))
+        #self.filename = os.path.expanduser(config.get('filename'))
+        self.filename = None
+        fn = config.get('filename', None)
+        if fn is not None:
+            self.filename = os.path.expanduser(fn)        
 
         self.default_laser_parameters = {
             'galvo_params_diode': {
@@ -139,7 +143,10 @@ class LaserStoreInterface:
             #self.opticalfiber_existf = 1    
         #pass   
 
-    def load_param_from_file(self):   
+    def load_param_from_file(self):  
+        if self.filename is None:
+            self.laser_parameters = self.default_laser_parameters 
+            return          
         if os.path.exists(self.filename):
             with open(self.filename, 'r') as json_file:
                 try:
@@ -159,6 +166,9 @@ class LaserStoreInterface:
 
 
     def save_param_to_file(self):
+        if self.filename is None:
+            self.update_file = 0
+            return        
         if self.update_file > 0:
             with open(self.filename, 'w') as json_file:
                 json.dump(self.laser_parameters, json_file, indent=4)
@@ -212,7 +222,7 @@ class LaserStoreInterface:
 
     def get_status(self, eventtime=None):
         return dict(self.laser_parameters)
-        
+
 
 def load_config(config):
     return LaserStoreInterface(config)
