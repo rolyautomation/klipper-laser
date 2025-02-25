@@ -56,7 +56,7 @@ class Move:
         
     def set_g0_move_speed(self, speed, accel):
         # only G0 move
-        if  self.pwmmode is None or  self.pwmvalue is None:
+        if self.pwmmode is None or self.pwmvalue is None:
             return
         if self.pwmsw == 0 and speed > 0:
             #logging.info("G0 MOVE S:%s A:%s v2:%s \n", speed, accel, self.max_cruise_v2)  

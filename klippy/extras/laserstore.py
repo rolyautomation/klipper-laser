@@ -5,8 +5,9 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 #import logging
 import os, logging, ast
-#LASER_T_PWM_BLUE = 0
-#LASER_T_OPTICAL_RED = 1
+import json
+
+
 '''
 [galvo_parameters fiber1064]
 rotation_angle: -0.0
@@ -75,9 +76,7 @@ diode450_c8: 0.0000245894
 
 '''
 
-
-
-
+ITEM_LEN = 15
 
 
 class LaserStoreInterface:
@@ -86,7 +85,7 @@ class LaserStoreInterface:
         #self.name = config.get_name().split(' ')[-1]
         self.filename = os.path.expanduser(config.get('filename'))
 
-        self.laser_parameters = {
+        self.default_laser_parameters = {
             'galvo_params_diode': {
                 'rotation_angle': 0.0,
                 'pitch_factor': 0.0,
@@ -121,87 +120,103 @@ class LaserStoreInterface:
                 'c6': 0.0000245435,
                 'c8': 0.0000245894,
             }
-        }        
+        }  
 
+        self.keys_order = [ 'rotation_angle', 'pitch_factor', 'working_distance',  'b_scale_plus', 'b_scale_minus', 'c_scale_plus', 'c_scale_minus', 'b2', 'b4', 'b6', 'b8', 'c2', 'c4', 'c6', 'c8']  
 
-        self.cur_sellaser = 0
-        self.opticalfiber_existf = 0
-        self.diode_high = 0
+        self.update_file = 0
+        self.load_param_from_file()
+
         self.gcode = self.printer.lookup_object('gcode')
-
-        #self.gcode.register_command("QUERY_LASER", self.cmd_QUERY_LASER, desc=self.cmd_QUERY_LASER_help)  
-        #self.gcode.register_command("TEST_LASER", self.cmd_TEST_LASER)
-        #self.gcode.register_command('CHG_LASER_TYPE', self.cmd_CHG_LASER_TYPE,
-        #                       desc=self.cmd_CHG_LASER_TYPE_help)  
-
-        self.chg_run_cmd = False                                       
+        self.gcode.register_command("QUERY_LASER_STORE", self.cmd_QUERY_LASER_STORE, desc=self.cmd_QUERY_LASER_STORE_HELP)  
+        self.gcode.register_command('SET_LASER_STORE', self.cmd_SET_LASER_STORE, desc=self.cmd_SET_LASER_STORE_HELP) 
         #self.printer.register_event_handler("klippy:connect",
                                             #self._handle_connect_laserctrl) 
 
+    #def _handle_connect_laserctrl(self):
+        #extruderpwm1 = self.printer.lookup_object('extruderpwm1')
+        #if extruderpwm1 is not None:
+            #self.opticalfiber_existf = 1    
+        #pass   
 
+    def load_param_from_file(self):   
+        if os.path.exists(self.filename):
+            with open(self.filename, 'r') as json_file:
+                try:
+                    loaded_parameters = json.load(json_file)
+                    self.laser_parameters = loaded_parameters 
+                    #logging.info("laser_parameters: " + str(self.laser_parameters)) 
+                except json.JSONDecodeError:
+                    logging.error("Failed to decode JSON from file. The file may be empty or corrupted.")
+                    self.laser_parameters = self.default_laser_parameters
+                    self.update_file = 1
+                    self.save_param_to_file() 
 
-    def _handle_connect_laserctrl(self):
-        extruderpwm1 = self.printer.lookup_object('extruderpwm1')
-        if extruderpwm1 is not None:
-            self.opticalfiber_existf = 1    
-        pass                                                     
-
-    def cmd_TEST_LASER(self, gcmd):
-        optical_existf  =  gcmd.get_int('E', 0, minval=0, maxval=1)        
-        sel_val  =  gcmd.get_int('S', 0, minval=0, maxval=1) 
-        if optical_existf == 0:
-            sel_val = 0
-        self.opticalfiber_existf = optical_existf
-        self.cur_sellaser = sel_val
-        gcmd.respond_info("support optical fiber:" + str(self.opticalfiber_existf) + ", current selected laser:" + str(self.cur_sellaser))   
-
-    cmd_QUERY_LASER_help = "Report on the state of laser controller"
-    def cmd_QUERY_LASER(self, gcmd):
-        gcmd.respond_info("support optical fiber:" + str(self.opticalfiber_existf) + ", current selected laser:" + str(self.cur_sellaser))  
-
-
-    cmd_CHG_LASER_TYPE_help = "change laser type  blue or red  "
-    def cmd_CHG_LASER_TYPE(self, gcmd): 
-        mtype = gcmd.get_int('S',0, minval=0, maxval=1)
-        if self.opticalfiber_existf == 0 and mtype > 0:
-            gcmd.respond_info("optical fiber not exist, can not change laser type")
-            return
-        if  self.cur_sellaser == mtype:
-            gcmd.respond_info("current laser type already:" + str(mtype))
-            return
-
-        if mtype > 0:
-            if not self.chg_run_cmd:
-                self.chg_run_cmd = True
-                self.gcode.run_script_from_command(
-                    "ACTIVATE_LASER LASER=extruderpwm1\n"
-                    "M118 change laser to optical fiber\n"
-                    )
-                self.chg_run_cmd = False            
         else:
-            if not self.chg_run_cmd:
-                self.chg_run_cmd = True
-                self.gcode.run_script_from_command(
-                    "ACTIVATE_LASER LASER=extruderpwm\n"
-                    "M118 change laser to blue\n"
-                    )
-                self.chg_run_cmd = False            
-        self.cur_sellaser = mtype
-        gcmd.respond_info("current laser type changed to:" + str(mtype))
+            self.laser_parameters = self.default_laser_parameters 
+            self.update_file = 1 
+            self.save_param_to_file() 
 
 
-    def get_diode_high_status(self,eventtime):
-        diode_obj = self.printer.lookup_object('output_pin laserpoweren_level')
-        if diode_obj is not None:
-            diode_high_val = diode_obj.get_status(eventtime)['value']
-            self.diode_high = 1 if diode_high_val > 0 else 0
-    
+    def save_param_to_file(self):
+        if self.update_file > 0:
+            with open(self.filename, 'w') as json_file:
+                json.dump(self.laser_parameters, json_file, indent=4)
+            self.update_file = 0  
+
+
+    cmd_QUERY_LASER_STORE_HELP = "display  laser store  parameters value"
+    def cmd_QUERY_LASER_STORE(self, gcmd):
+        mindex = gcmd.get_int('S',0, minval=0, maxval=1)
+        if mindex == 0:
+            galvo_params = self.laser_parameters['galvo_params_diode'] 
+            msgh = "galvo_params_diode:"
+        else:
+            galvo_params = self.laser_parameters['galvo_params_fiber'] 
+            msgh = "galvo_params_fiber:"
+        gcmd.respond_info(msgh + str(galvo_params))   
+
+
+    KEY_DIODE_N = "DIODE"
+    KEY_FIBER_N = "FIBER"
+    cmd_SET_LASER_STORE_HELP = "set laser store parameters value"
+    def cmd_SET_LASER_STORE(self, gcmd): 
+        #pass
+        #name = gcmd.get('KEY').upper()
+        keyname = gcmd.get('K',None)
+        if keyname == None:
+            keyname = self.KEY_DIODE_N
+        keyname = keyname.upper()  
+        msgh = "galvo_params_" + keyname + ":"  
+        gval_string = gcmd.get('V',None)
+        if gval_string == None:
+            gcmd.respond_info(msgh + "no input value")  
+            return
+        if keyname  in [self.KEY_DIODE_N, self.KEY_FIBER_N]:
+            data_list = ast.literal_eval(gval_string)
+            logging.info("inputvalue: " + str(data_list))
+            keyname = keyname.lower()
+            if len(self.keys_order) == len(data_list):
+                #self.laser_parameters['galvo_params_' + keyname] = data_list
+                self.laser_parameters['galvo_params_' + keyname] = dict(zip(self.keys_order, data_list))    
+                self.update_file = 1
+                self.save_param_to_file()
+                gcmd.respond_info(keyname + " update done") 
+
+            else:
+                gcmd.respond_info(msgh + " input value num error, expect " + str(len(self.keys_order)))                 
+        else:
+            msgstr = "[" + self.KEY_DIODE_N + ", " + self.KEY_FIBER_N + "]"
+            gcmd.respond_info(keyname + " is not valid, expect: " + msgstr)    
+            return  
+
     def get_status(self, eventtime=None):
         return dict(self.laser_parameters)
         
-        
+
 def load_config(config):
     return LaserStoreInterface(config)
+
 
 #def load_config_prefix(config):
 #   return LaserCtrlInterface(config)

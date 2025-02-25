@@ -32,7 +32,7 @@ class LaserCtrlInterface:
                                             self._handle_connect_laserctrl)     
 
     def _handle_connect_laserctrl(self):
-        extruderpwm1 = self.printer.lookup_object('extruderpwm1')
+        extruderpwm1 = self.printer.lookup_object('extruderpwm1',None)
         if extruderpwm1 is not None:
             self.opticalfiber_existf = 1    
         pass                                                     
