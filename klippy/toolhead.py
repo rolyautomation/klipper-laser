@@ -55,6 +55,9 @@ class Move:
         self.smooth_delta_v2 = 2.0 * move_d * toolhead.max_accel_to_decel
         
     def set_g0_move_speed(self, speed, accel):
+        # only G0 move
+        if  self.pwmmode is None or  self.pwmvalue is None:
+            return
         if self.pwmsw == 0 and speed > 0:
             #logging.info("G0 MOVE S:%s A:%s v2:%s \n", speed, accel, self.max_cruise_v2)  
             self.max_cruise_v2 = speed**2
@@ -62,6 +65,7 @@ class Move:
             self.accel = min(self.accel, accel)
             self.delta_v2 = 2.0 * self.move_d * self.accel
             self.smooth_delta_v2 = min(self.smooth_delta_v2, self.delta_v2)
+
     def limit_speed(self, speed, accel):
         speed2 = speed**2
         if speed2 < self.max_cruise_v2:
@@ -570,7 +574,8 @@ class ToolHead:
         #for i in range(len(coord)):
             #if coord[i] is not None:
                 #curpos[i] = coord[i]
-        self.move(curpos, speed, 0, 0, 0)
+        #self.move(curpos, speed, 0, 0, 0)
+        self.move(curpos, speed)
         self.printer.send_event("toolhead:manual_move")
 
     def dwell(self, delay):
