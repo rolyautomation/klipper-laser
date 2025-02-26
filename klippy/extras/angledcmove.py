@@ -1009,10 +1009,19 @@ class Angledcmove:
         self.last_valueb = None        
 
     def samp_fpos_fun(self, eventtime):
+        if self.toolhead is None:
+            self.toolhead = self.printer.lookup_object('toolhead') 
+        self.toolhead.wait_moves()    
+        print_time_move = self.toolhead.get_last_move_time()    
+
         self.sample_angle_value = self.read_cur_angle_value()
-        self.findpid_work == 1
+        self.findpid_work = 1
         measured_time = self.reactor.monotonic()
         print_time = self.i2c.get_mcu().estimated_print_time(measured_time)
+        #buffer_time = 0.005  # 5毫秒的缓冲
+        #if print_time < print_time_move + buffer_time:
+        #    print_time = print_time_move + buffer_time   
+             
         if self.force_exit == 0:
             #retst = self._callback(print_time, self.sample_angle_value)
             retst = self.angle_dadjust_callback(print_time, self.sample_angle_value)

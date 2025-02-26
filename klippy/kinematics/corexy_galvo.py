@@ -345,11 +345,51 @@ class CoreXYGalvoKinematics:
             move.set_g0_move_speed(self.g0_velocity, self.max_h_accel)
         if self.mech_enable_alone > 0:
             if  move.axes_d[3]:
-                move.limit_speed(self.max_a_velocity, self.max_a_accel)
+                a_ratio = move.move_d / abs(move.axes_d[3])
+                s_a_v = self.max_a_velocity * a_ratio
+                s_a_a = self.max_a_accel * a_ratio
+                if move.axes_d[0] or move.axes_d[1]:
+                    if  s_a_v > self.max_m_velocity:
+                        s_a_v = self.max_m_velocity
+                    if  s_a_a > self.max_m_accel:
+                        s_a_a = self.max_m_accel
+                elif move.axes_d[4] or move.axes_d[5]: 
+                    if  s_a_v > self.max_h_velocity:
+                        s_a_v = self.max_h_velocity
+                    if  s_a_a > self.max_h_accel:
+                        s_a_a = self.max_h_accel
+                move.limit_speed(s_a_v, s_a_a)                        
+                #move.limit_speed(self.max_a_velocity, self.max_a_accel)
                 move.set_g0_move_speed(self.g0_a_velocity, self.max_a_accel)
-            elif move.axes_d[0] or  move.axes_d[1]:
-                move.limit_speed(self.max_m_velocity, self.max_m_accel) 
+            elif move.axes_d[0] or move.axes_d[1]:
+                x_ratio = 0
+                y_ratio = 0
+                if move.axes_d[0]:
+                    x_ratio = move.move_d / abs(move.axes_d[0]) 
+                if move.axes_d[1]:
+                    y_ratio = move.move_d / abs(move.axes_d[1])
+                if  move.axes_d[0] and move.axes_d[1]:   
+                    move.limit_speed(self.max_m_velocity, self.max_m_accel) 
+                elif  x_ratio :
+                    s_x_v = self.max_m_velocity * x_ratio
+                    s_x_a = self.max_m_accel * x_ratio    
+                    if move.axes_d[4] or move.axes_d[5]:
+                        if  s_x_v > self.max_h_velocity:
+                            s_x_v = self.max_h_velocity
+                        if  s_x_a > self.max_h_accel:
+                            s_x_a = self.max_h_accel                                            
+                    move.limit_speed(s_x_v, s_x_a)                        
+                elif  y_ratio :
+                    s_y_v = self.max_m_velocity * y_ratio
+                    s_y_a = self.max_m_accel * y_ratio  
+                    if move.axes_d[4] or move.axes_d[5]:
+                        if  s_y_v > self.max_h_velocity:
+                            s_y_v = self.max_h_velocity
+                        if  s_y_a > self.max_h_accel:
+                            s_y_a = self.max_h_accel                                            
+                    move.limit_speed(s_y_v, s_y_a)  
                 move.set_g0_move_speed(self.g0_m_velocity, self.max_m_accel)
+
             #if  move.axes_d[0] or  move.axes_d[1] or move.axes_d[2] or move.axes_d[3]: 
             #    move.limit_speed(self.max_m_velocity, self.max_m_accel)      
 
