@@ -9,7 +9,6 @@
 import os, logging, ast
 import json
 
-
 LASER_T_PWM_BLUE = 0
 LASER_T_OPTICAL_RED = 1
 
@@ -45,7 +44,7 @@ class LaserCtrlInterface:
         self.gcode.register_command('CHG_LASER_TYPE', self.cmd_CHG_LASER_TYPE,
                                desc=self.cmd_CHG_LASER_TYPE_help)  
         self.gcode.register_command("UPDATE_STORE_PARAM", self.cmd_UPDATE_STORE_PARAM)                               
-
+        self.gcode.register_command("RESUME_LASER_STATUS", self.cmd_RESUME_LASER_STATUS) 
 
         self.chg_run_cmd = False                                       
                                               
@@ -77,9 +76,25 @@ class LaserCtrlInterface:
                 if self.file_diode_high > 0:
                     self.open_diode_init = 1
             logging.info("open_fiber_init: " + str(self.open_fiber_init))         
-            logging.info("open_diode_init: " + str(self.open_diode_init))         
+            logging.info("open_diode_init: " + str(self.open_diode_init))  
 
 
+
+    def cmd_RESUME_LASER_STATUS(self, gcmd):                   
+        if self.filename is not None:
+                if self.open_fiber_init > 0 :
+                    self.gcode.run_script_from_command(
+                        "ACTIVATE_LASER LASER=extruderpwm1\n"
+                        "M118 chg laser to optical fiber in init\n"
+                        )
+                if self.open_diode_init > 0:
+                    self.gcode.run_script_from_command(
+                        "BLUE_SETPOW S=1 \n"
+                        "M118  set diode high in init\n"
+                        )
+
+
+    '''
     def check_param_init_file(self): 
         if self.filename is not None:
             if  self.laserctrl_param['csellaser'] != self.cur_sellaser: 
@@ -100,7 +115,7 @@ class LaserCtrlInterface:
                         "BLUE_SETPOW S=1 \n"
                         "M118  set diode high in init\n"
                         )
-
+    '''
 
     def load_param_from_file(self):  
         if self.filename is None:
@@ -207,7 +222,7 @@ class LaserCtrlInterface:
         laser_status['diode_high'] = self.diode_high   
         laser_status['galvo_enabled'] = self.galvo_enabled              
         return dict(laser_status)
-        
+
         
 def load_config(config):
     return LaserCtrlInterface(config)

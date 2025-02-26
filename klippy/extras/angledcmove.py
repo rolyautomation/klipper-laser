@@ -659,11 +659,13 @@ class Angledcmove:
         self.gcode.register_command("FIND_POS_BYAS_ST", self.cmd_FIND_POS_BYAS_ST)          
         self.gcode.register_command("SWINGARM_BYAS", self.cmd_SWINGARM_BYAS)  
         self.gcode.register_command("SEL_ALG_FIND", self.cmd_SEL_ALG_FIND)
+        self.gcode.register_command("SWINGARM_EN_SW", self.cmd_SWINGARM_EN_SW)        
 
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_init)    
 
 
+        self.swingarm_en = config.getint('swingarm_en', 1)   
         self.kp = config.getfloat('pid_kp', 0.006)
         self.ki = config.getfloat('pid_ki', 0.0)
         self.kd = config.getfloat('pid_kd', 0.01)
@@ -714,11 +716,10 @@ class Angledcmove:
         self.epsilon = 0.003
         #self.toleranceval = 15
         logging.info("kp=%s ki=%s kd=%s kpup=%s pidreptime=%s ", self.kp, self.ki, self.kd, self.kpup, self.pidreptime)  
-        logging.info("toleranceval=%d", self.toleranceval) 
+        logging.info("toleranceval=%d swingarm_en=%d", self.toleranceval,self.swingarm_en) 
         if self.tstlog_en:
             logging.info("minpwm=%s maxpwm=%s pwm_delay=%s stop_delay=%s \n", self.min_pwm_plus, self.max_pwm_plus, self.pwm_delay, self.stop_delay) 
             
-
     def cmd_SEL_ALG_FIND(self, gcmd):
         selalgv = gcmd.get_int('S',0, minval=0, maxval=10) 
         if selalgv == 1:
@@ -727,7 +728,17 @@ class Angledcmove:
             self.sel_alg = 0 
         msg = "sel alg=%s " % (self.sel_alg, )            
         gcmd.respond_info(msg)  
-                 
+
+
+    def cmd_SWINGARM_EN_SW(self, gcmd):
+        swen = gcmd.get_int('S',1, minval=0, maxval=10) 
+        if swen == 1:
+            self.swingarm_en = swen 
+        elif swen == 0:
+            self.swingarm_en = swen 
+        msg = "swing arm en=%s " % (self.swingarm_en, )            
+        gcmd.respond_info(msg)  
+
 
     def _handle_connect_init(self):
         self.save_vars = self.printer.lookup_object('save_variables')
@@ -787,6 +798,9 @@ class Angledcmove:
 
     def cmd_SWINGARM_BYAS(self, gcmd): 
         self.gcmd =  gcmd
+        if self.swingarm_en == 0:
+            logging.info("SWINGARM_BYAS in testmode")  
+            return
         if (self.poshead == self.posuse):
             msg = "not do Position verification"
         else:
