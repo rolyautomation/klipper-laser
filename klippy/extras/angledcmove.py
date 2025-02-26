@@ -709,6 +709,9 @@ class Angledcmove:
         self.pwm_chg_status = 0
         self.gcmd = None
         self.dc_abm_running = False
+        self.last_valuea = None
+        self.last_valueb = None
+        self.epsilon = 0.003
         #self.toleranceval = 15
         logging.info("kp=%s ki=%s kd=%s kpup=%s pidreptime=%s ", self.kp, self.ki, self.kd, self.kpup, self.pidreptime)  
         logging.info("toleranceval=%d", self.toleranceval) 
@@ -988,6 +991,8 @@ class Angledcmove:
     def set_targer_angle(self, targer_angle):
         self.targer_angle = targer_angle
         self.finetuningmode = 0
+        self.last_valuea = None
+        self.last_valueb = None        
 
     def samp_fpos_fun(self, eventtime):
         self.sample_angle_value = self.read_cur_angle_value()
@@ -1053,10 +1058,23 @@ class Angledcmove:
             self.toolhead = self.printer.lookup_object('toolhead')             
         pwm_time = read_time + self.pwm_delay
         print_time_move = self.toolhead.get_last_move_time()  
-        print_time = min(pwm_time, print_time_move)   
-        if self.tstlog_en:
-            logging.info("time=%s [%s:%s] \n",print_time, valuea, valueb)         
-        self.dcmotor.dc_set_pin_speedmode(print_time, valuea, valueb)
+        print_time = min(pwm_time, print_time_move)  
+        valuea = round(valuea, 3)
+        valueb = round(valueb, 3)
+
+        values_unchanged = (self.last_valuea is not None and self.last_valueb is not None and
+                   abs(self.last_valuea - valuea) < self.epsilon and
+                   abs(self.last_valueb - valueb) < self.epsilon)
+        if not values_unchanged:
+            if self.tstlog_en:
+                logging.info("time=%s [%s:%s] \n",print_time, valuea, valueb)         
+            self.dcmotor.dc_set_pin_speedmode(print_time, valuea, valueb)
+            self.last_valuea = valuea
+            self.last_valueb = valueb    
+                           
+        #if self.tstlog_en:
+        #    logging.info("time=%s [%s:%s] \n",print_time, valuea, valueb)         
+        #self.dcmotor.dc_set_pin_speedmode(print_time, valuea, valueb)
 
     def angle_dadjust_callback(self, read_time, angle_val):
         retst = 0
