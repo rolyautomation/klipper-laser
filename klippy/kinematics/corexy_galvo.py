@@ -6,7 +6,8 @@
 import logging, math
 import stepper
 from . import mmsa_modes
-CUR_SEL_A = 0
+#CUR_SEL_A = 0
+CUR_SEL_A = -1
 
 class CoreXYGalvoKinematics:
     def __init__(self, toolhead, config):

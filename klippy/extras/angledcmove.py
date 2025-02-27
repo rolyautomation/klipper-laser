@@ -714,6 +714,8 @@ class Angledcmove:
         self.last_valuea = None
         self.last_valueb = None
         self.epsilon = 0.003
+        self.try_maxtimes = config.getint('try_maxtimes', FIND_MAX_TIMES) 
+        
         #self.toleranceval = 15
         logging.info("kp=%s ki=%s kd=%s kpup=%s pidreptime=%s ", self.kp, self.ki, self.kd, self.kpup, self.pidreptime)  
         logging.info("toleranceval=%d swingarm_en=%d", self.toleranceval,self.swingarm_en) 
@@ -1111,7 +1113,7 @@ class Angledcmove:
                 logging.info("(%d)info last angle = %s\n", self.find_times, angle_val)
             return  retst
         #if self.find_times > FIND_MAX_TIMES:
-        if self.find_times > FIND_MAX_TIMES_TST:
+        if self.find_times > self.try_maxtimes:
             retst = 2
             return  retst 
         self.pwm_dcwork_flag = 1  

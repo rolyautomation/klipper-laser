@@ -3,7 +3,7 @@
 # Copyright (C) 2025-2028  jinqiang <jinqiang@ecomedge.io>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import logging
+import logging, ast
 
 R0_IND = 0
 R1_IND = 1
@@ -25,6 +25,7 @@ class RotaryCtrlInterface:
         #self.name = config.get_name().split(' ')[-1]
         self.name = 'rotary'
         self.last_rotarystate = [0, 0, 0, 0]
+        self.pre_rotarystate = [0, 0, 0, 0]
 
 
         #self.multimotor_existf = config.has_section('multimotor_axis')
@@ -55,14 +56,21 @@ class RotaryCtrlInterface:
         #                                self.cmd_QUERY_ROTARY,
         #                                desc=self.cmd_QUERY_ROTARY_help)
         self.gcode.register_command("QUERY_ROTARY", self.cmd_QUERY_ROTARY, desc=self.cmd_QUERY_ROTARY_help)  
-        self.gcode.register_command("TEST_ROTARY", self.cmd_TEST_ROTARY)
-                                              
+        #self.gcode.register_command("TEST_ROTARY", self.cmd_TEST_ROTARY)
+
+
+        self.gcode.register_command("SELECT_ROTARY", self.cmd_SELECT_ROTARY, desc=self.cmd_SELECT_ROTARY_help)
+        self.gcode.register_command("SET_ROTARY_ENABLE", self.cmd_SET_ROTARY_ENABLE, desc=self.cmd_SET_ROTARY_ENABLE_help) 
+
+
         self.register_switchbutton(config, 'R0_pin', self.R0_callback)
         self.register_switchbutton(config, 'R1_pin', self.R1_callback)
         self.register_switchbutton(config, 'R2_pin', self.R2_callback)
         self.register_switchbutton(config, 'R3_pin', self.R3_callback)
         self.rotray_pkeystate = [0, 0, 0, 0]
         self.doaction_ins = 0
+
+
 
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_rotaryctrl)     
@@ -71,19 +79,66 @@ class RotaryCtrlInterface:
     def _handle_connect_rotaryctrl(self):
         self.multimotor_axis_obj = self.printer.lookup_object('multimotor_axis')
         self.update_rotary_selectindex()
-        pass                                                   
+        pass 
+
+
+
 
     def update_rotary_selectindex(self):
         if self.multimotor_axis_obj is not None:
             self.cur_selindex = self.multimotor_axis_obj.get_curselindex()
         pass  
 
+    cmd_SELECT_ROTARY_help = "select rotary controller by enable status"
+    def cmd_SELECT_ROTARY(self, gcmd):
+        index = gcmd.get_int('NUM', minval=-1, maxval=10)
+        selectindex = 10
+        if index >= 0 and index < 4:
+            selectindex = index
+            if self.last_rotarystate[index] == 0:
+                selectindex = 9
+        elif index < 0:
+              selectindex = -1       
+        msgh = "rotary select index:%d" % (selectindex,)
+        if  selectindex == 10:
+            msgh = "input index out of range" 
+        elif selectindex == 9:  
+            msgh = "please enable the number=%d rotary  first" % (index,) 
+        else:
+            self.gcode.run_script_from_command(
+                "SET_MULTIMOTOR_AXIS NUM=%d \n" 
+                "M118  SELECT_ROTARY %d SUCCESS \n" 
+                % (selectindex, selectindex)
+                )            
+        gcmd.respond_info(msgh)   
+
+
+    cmd_SET_ROTARY_ENABLE_help = "set rotary enable status"
+    def cmd_SET_ROTARY_ENABLE(self, gcmd):
+        msgh = "setrotary:"
+        gval_string = gcmd.get('ARRAY',None)
+        if gval_string == None:
+            gcmd.respond_info(msgh + "no input value")  
+            return  
+        data_list = ast.literal_eval(gval_string)
+        logging.info("inputvalue: " + str(data_list))             
+        if 4 == len(data_list):
+            self.pre_rotarystate = self.last_rotarystate.copy()
+            self.last_rotarystate[0] = data_list[0]
+            self.last_rotarystate[1] = data_list[1]
+            self.last_rotarystate[2] = data_list[2]
+            self.last_rotarystate[3] = data_list[3]
+            self.update_action_by_status()
+            gcmd.respond_info(msgh + "success")  
+        else:
+            gcmd.respond_info(msgh + " input value num error, expect " + str(4))
+
+
     def cmd_TEST_ROTARY(self, gcmd):
         inputnum_val  =  gcmd.get_int('N', 0, minval=0, maxval=3)
         set_val  =  gcmd.get_int('V', 0, minval=0, maxval=1)   
         self.last_rotarystate[inputnum_val] = set_val   
         gcmd.respond_info(self.name + ":[" + str(self.last_rotarystate[0]) + str(self.last_rotarystate[1]) + str(self.last_rotarystate[2]) + str(self.last_rotarystate[3]) + "]")  
-
 
 
     cmd_QUERY_ROTARY_help = "Report on the state of rotary controller"
@@ -120,6 +175,63 @@ class RotaryCtrlInterface:
             self.inside_handlegcode = False            
         else:
             logging.exception("Script running repeat, check press speed")
+
+
+
+    def key_event_handle_softsync(self, actionid):
+        if not self.inside_handlegcode :
+            self.inside_handlegcode = True        
+            if actionid == R0_DOACTION_YES:
+                template = self.r0_on_template
+            elif actionid == R0_DOACTION_NO:
+                template = self.r0_off_template 
+            elif actionid == R1_DOACTION_YES:
+                template = self.r1_on_template
+            elif actionid == R1_DOACTION_NO:
+                template = self.r1_off_template
+            elif actionid == R2_DOACTION_YES:
+                template = self.r2_on_template
+            elif actionid == R2_DOACTION_NO:
+                template = self.r2_off_template
+            elif actionid == R3_DOACTION_YES:
+                template = self.r3_on_template
+            elif actionid == R3_DOACTION_NO:
+                template = self.r3_off_template
+            else:
+                template = self.abnormal_template
+            try:
+                #self.gcode.run_script(template.render())
+                self.gcode.run_script_from_command(template.render())
+            except:
+                logging.exception("Script running error key event handle in rotary ctrl softsync")
+            self.inside_handlegcode = False            
+        else:
+            logging.exception("Script running repeat, check press speed softsync")
+
+
+
+    def update_action_by_status(self):
+        if self.pre_rotarystate[0] != self.last_rotarystate[0]:
+            actionid = R0_DOACTION_NO                
+            if self.last_rotarystate[0]:
+                actionid = R0_DOACTION_YES
+            self.key_event_handle_softsync(actionid)  
+        if self.pre_rotarystate[1] != self.last_rotarystate[1]:
+            actionid = R1_DOACTION_NO                
+            if self.last_rotarystate[1]:
+                actionid = R1_DOACTION_YES
+            self.key_event_handle_softsync(actionid)     
+        if self.pre_rotarystate[2] != self.last_rotarystate[2]:
+            actionid = R2_DOACTION_NO                
+            if self.last_rotarystate[2]:
+                actionid = R2_DOACTION_YES
+            self.key_event_handle_softsync(actionid)     
+        if self.pre_rotarystate[3] != self.last_rotarystate[3]:
+            actionid = R3_DOACTION_NO                
+            if self.last_rotarystate[3]:
+                actionid = R3_DOACTION_YES
+            self.key_event_handle_softsync(actionid)                             
+        pass 
 
 
     def R0_callback(self, eventtime, state):
@@ -188,8 +300,8 @@ class RotaryCtrlInterface:
     def get_status(self, eventtime=None):
         rotary_status = {}
         self.update_rotary_selectindex()
-        rotary_status['rotary_status'] = [ self.last_rotarystate[0], self.last_rotarystate[1], self.last_rotarystate[2], self.last_rotarystate[3] ]
-        rotary_status['rotary_cursel'] = self.cur_selindex
+        rotary_status['rotary_enabled'] = [ self.last_rotarystate[0], self.last_rotarystate[1], self.last_rotarystate[2], self.last_rotarystate[3] ]
+        rotary_status['rotary_selected'] = self.cur_selindex
         return dict(rotary_status)
 
 
