@@ -358,7 +358,8 @@ class CoreXYGalvoKinematics:
                         s_a_v = self.max_h_velocity
                     if  s_a_a > self.max_h_accel:
                         s_a_a = self.max_h_accel
-                move.limit_speed(s_a_v, s_a_a)                        
+                move.limit_speed(s_a_v, s_a_a) 
+                #logging.info("s_a_v=%s s_a_a=%s a_ratio=%s\n",s_a_v,s_a_a,a_ratio)                         
                 #move.limit_speed(self.max_a_velocity, self.max_a_accel)
                 move.set_g0_move_speed(self.g0_a_velocity, self.max_a_accel)
             elif move.axes_d[0] or move.axes_d[1]:
@@ -378,7 +379,8 @@ class CoreXYGalvoKinematics:
                             s_x_v = self.max_h_velocity
                         if  s_x_a > self.max_h_accel:
                             s_x_a = self.max_h_accel                                            
-                    move.limit_speed(s_x_v, s_x_a)                        
+                    move.limit_speed(s_x_v, s_x_a) 
+                    #logging.info("s_x_v=%s s_x_a=%s x_ratio=%s\n",s_x_v,s_x_a,x_ratio)                         
                 elif  y_ratio :
                     s_y_v = self.max_m_velocity * y_ratio
                     s_y_a = self.max_m_accel * y_ratio  
