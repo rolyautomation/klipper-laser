@@ -659,7 +659,10 @@ class Angledcmove:
         self.gcode.register_command("FIND_POS_BYAS_ST", self.cmd_FIND_POS_BYAS_ST)          
         self.gcode.register_command("SWINGARM_BYAS", self.cmd_SWINGARM_BYAS)  
         self.gcode.register_command("SEL_ALG_FIND", self.cmd_SEL_ALG_FIND)
-        self.gcode.register_command("SWINGARM_EN_SW", self.cmd_SWINGARM_EN_SW)        
+        self.gcode.register_command("SWINGARM_EN_SW", self.cmd_SWINGARM_EN_SW)   
+
+        self.gcode.register_command("SWINGARM_WAITM", self.cmd_SWINGARM_WAITM)              
+
 
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_init)    
@@ -707,6 +710,7 @@ class Angledcmove:
         self.min_pwm_plus = config.getfloat('min_pwm_val', 0.1)  
         self.max_pwm_plus = config.getfloat('max_pwm_val', 0.4)       
         self.findpid_work = 0 
+        self.findpid_startworkf = 0
         self.finetuningmode = 0  
         self.pwm_chg_status = 0
         self.gcmd = None
@@ -718,7 +722,7 @@ class Angledcmove:
         
         #self.toleranceval = 15
         logging.info("kp=%s ki=%s kd=%s kpup=%s pidreptime=%s ", self.kp, self.ki, self.kd, self.kpup, self.pidreptime)  
-        logging.info("toleranceval=%d swingarm_en=%d", self.toleranceval,self.swingarm_en) 
+        logging.info("toleranceval=%d swingarm_en=%d try_maxtimes=%d", self.toleranceval, self.swingarm_en, self.try_maxtimes) 
         if self.tstlog_en:
             logging.info("minpwm=%s maxpwm=%s pwm_delay=%s stop_delay=%s \n", self.min_pwm_plus, self.max_pwm_plus, self.pwm_delay, self.stop_delay) 
             
@@ -797,6 +801,53 @@ class Angledcmove:
         msg = "status:wokr=%d,last=%d,targer=%d" % (self.findpid_work,self.last_angle_val, self.targer_angle)
         gcmd.respond_info(msg) 
 
+    WM_TIME_MS = 100
+    def cmd_SWINGARM_WAITM(self, gcmd):
+        mode = gcmd.get_int('M', 0, minval=0, maxval=2)
+        wait_timecount = 0
+        if self.toolhead is None:
+            self.toolhead = self.printer.lookup_object('toolhead')         
+        start_times = self.reactor.monotonic()
+        while True:
+            if mode > 0 :
+                if self.findpid_work > 0:
+                    wait_timecount += 1
+                    self.toolhead.dwell(self.WM_TIME_MS/1000)
+                    '''
+                    self.gcode.run_script_from_command(
+                        "G4 P%d \n" 
+                        % (self.WM_TIME_MS, )
+                        )  
+                    #break
+                    '''
+                else:
+                    break
+            else:
+                if self.findpid_work == 0:
+                    cureventtime = self.reactor.monotonic()
+                    print_time, est_print_time, lookahead_empty = self.toolhead.check_busy(
+                        cureventtime)
+                    idle_time = est_print_time - print_time
+                    logging.info("idle_time=%s val=%s", idle_time, lookahead_empty)
+                    if not lookahead_empty or idle_time < 1.:
+                        wait_timecount += 1
+                        self.toolhead.dwell(self.WM_TIME_MS/1000)
+                        '''
+                        self.gcode.run_script_from_command(
+                            "G4 P%d \n" 
+                            % (self.WM_TIME_MS, )
+                            ) 
+                        '''
+                    else:
+                        break 
+                else:
+                    break 
+
+                       
+        end_times = self.reactor.monotonic()
+        msg = "stm=%s, etm=%s, mode=%s,waittmc=%d" % (start_times,end_times, mode, wait_timecount)
+        gcmd.respond_info(msg) 
+        pass
 
     def cmd_SWINGARM_BYAS(self, gcmd): 
         self.gcmd =  gcmd
@@ -814,11 +865,12 @@ class Angledcmove:
                 kp_sel = 0   
             msg = "%s=%d" % ('destp',destpos)  
             if self.findpid_work == 0:
+                self.findpid_startworkf = 1
                 self.set_targer_angle(destpos)
                 self.pid_normal.restart_init()
                 self.pid_normal.set_kp_sel(kp_sel)
                 self.reactor.update_timer(self.samptimer_fpos, self.reactor.NOW)
-                msghead = 'start find ' + "sel=%d" % (kp_sel, )
+                msghead = 'start find ' + "sel=%d " % (kp_sel, )
             else:
                 msghead =  'busy,find '            
             #retst = self.find_angle_pos(destpos) 
@@ -1003,6 +1055,7 @@ class Angledcmove:
             self.dcmotor.dc_set_pin_speedmode(print_time, valuea, valueb) 
             self.finetuningmode = 0
             self.pwm_chg_status = 0
+        self.findpid_startworkf = 0
 
     def set_targer_angle(self, targer_angle):
         self.targer_angle = targer_angle
@@ -1013,9 +1066,8 @@ class Angledcmove:
     def samp_fpos_fun(self, eventtime):
         if self.toolhead is None:
             self.toolhead = self.printer.lookup_object('toolhead') 
-        self.toolhead.wait_moves()    
+        #self.toolhead.wait_moves()    
         print_time_move = self.toolhead.get_last_move_time()    
-
         self.sample_angle_value = self.read_cur_angle_value()
         self.findpid_work = 1
         measured_time = self.reactor.monotonic()
@@ -1023,7 +1075,6 @@ class Angledcmove:
         #buffer_time = 0.005  # 5毫秒的缓冲
         #if print_time < print_time_move + buffer_time:
         #    print_time = print_time_move + buffer_time   
-             
         if self.force_exit == 0:
             #retst = self._callback(print_time, self.sample_angle_value)
             retst = self.angle_dadjust_callback(print_time, self.sample_angle_value)
