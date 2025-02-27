@@ -719,12 +719,15 @@ class Angledcmove:
         self.last_valueb = None
         self.epsilon = 0.003
         self.try_maxtimes = config.getint('try_maxtimes', FIND_MAX_TIMES) 
+        self.idle_waittimes = config.getint('idle_waittimes', 2)         
         
         #self.toleranceval = 15
         logging.info("kp=%s ki=%s kd=%s kpup=%s pidreptime=%s ", self.kp, self.ki, self.kd, self.kpup, self.pidreptime)  
         logging.info("toleranceval=%d swingarm_en=%d try_maxtimes=%d", self.toleranceval, self.swingarm_en, self.try_maxtimes) 
         if self.tstlog_en:
             logging.info("minpwm=%s maxpwm=%s pwm_delay=%s stop_delay=%s \n", self.min_pwm_plus, self.max_pwm_plus, self.pwm_delay, self.stop_delay) 
+            logging.info("emptyqueuetimes=%s\n", self.idle_waittimes) 
+            
             
     def cmd_SEL_ALG_FIND(self, gcmd):
         selalgv = gcmd.get_int('S',0, minval=0, maxval=10) 
@@ -810,7 +813,7 @@ class Angledcmove:
         start_times = self.reactor.monotonic()
         while True:
             if mode > 0 :
-                if self.findpid_work > 0:
+                if self.findpid_startworkf > 0:
                     wait_timecount += 1
                     self.toolhead.dwell(self.WM_TIME_MS/1000)
                     '''
@@ -823,14 +826,17 @@ class Angledcmove:
                 else:
                     break
             else:
-                if self.findpid_work == 0:
+                if self.findpid_startworkf == 0:
                     cureventtime = self.reactor.monotonic()
                     print_time, est_print_time, lookahead_empty = self.toolhead.check_busy(
                         cureventtime)
                     idle_time = est_print_time - print_time
-                    logging.info("idle_time=%s val=%s", idle_time, lookahead_empty)
-                    if not lookahead_empty or idle_time < 1.:
-                        wait_timecount += 1
+                    if self.tstlog_en:
+                        logging.info("idle_time=%s val=%s", idle_time, lookahead_empty)
+                    #if not lookahead_empty or idle_time < 1.:
+                    if not lookahead_empty:
+                        #wait_timecount += 1
+                        wait_timecount = 0
                         self.toolhead.dwell(self.WM_TIME_MS/1000)
                         '''
                         self.gcode.run_script_from_command(
@@ -838,16 +844,19 @@ class Angledcmove:
                             % (self.WM_TIME_MS, )
                             ) 
                         '''
-                    else:
+                    elif wait_timecount > self.idle_waittimes or idle_time > 1.:
                         break 
+                    else:
+                        wait_timecount += 1
+                        self.toolhead.dwell(self.WM_TIME_MS/1000)
                 else:
                     break 
 
-                       
         end_times = self.reactor.monotonic()
         msg = "stm=%s, etm=%s, mode=%s,waittmc=%d" % (start_times,end_times, mode, wait_timecount)
         gcmd.respond_info(msg) 
         pass
+
 
     def cmd_SWINGARM_BYAS(self, gcmd): 
         self.gcmd =  gcmd
