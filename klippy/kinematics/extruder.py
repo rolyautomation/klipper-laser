@@ -398,9 +398,16 @@ class ExtruderStepperPWM:
                                              % (extstepper_name,))  
 
 
+
+    def configminpower_stepper_pwm(self, min_power=0):
+        if (self.stepper is not None):
+            self.stepper.setminpower_stepper_pwm(min_power)
+
+
     def set_pauseresumeflag_pwm(self, pwm_prf=0):
         if (self.stepper is not None):
             self.stepper.pauseresumep_stepper_pwm(pwm_prf)
+
 
     #def update_mcu_clock_freq(self):
         # Fetch the latest clock frequency from the MCU
@@ -530,7 +537,11 @@ class PrinterExtruderPWM:
         self.instant_corner_v = config.getfloat(
             'instantaneous_corner_velocity', 1., minval=0.)
 
-        logging.info("PrinterExtruderPWM =%.6f", self.max_e_velocity) 
+        laser_minpower = config.getfloat(
+            'laser_minpower', 0., minval=0., maxval=250.)   
+        self.lasermin_power = int(laser_minpower + 0.5)   
+
+        logging.info("PrinterExtruderPWM =%.6f,%d", self.max_e_velocity,self.lasermin_power) 
 
         # Setup extruder trapq (trapezoidal motion queue)
         ffi_main, ffi_lib = chelper.get_ffi()
@@ -579,6 +590,7 @@ class PrinterExtruderPWM:
         self._restartcmd_flag = False
         self._laser_type = 0
         self._pwm_prf = 0
+        self.last_min_power = 0 
         #RSYNCPOWER_M
         gcode.register_mux_command("RSYNCPOWER", "LASER",
                                    self.name, self.cmd_RSYNCPOWER,
@@ -622,6 +634,8 @@ class PrinterExtruderPWM:
         #    sts.update(self.extruder_stepper.get_status(eventtime))
         sts = {
                'laser_type': self._laser_type,
+               'laser_onf': self._pwm_prf,
+               'laser_minp':  self.last_min_power,               
                'extpwm': 'no info'
                }
         #printer[printer.toolhead.extruder].laser_type       
@@ -635,10 +649,22 @@ class PrinterExtruderPWM:
                 self._extrdpwm_oid = pwm_oid
                 self._laser_type =  laser_type
                 logging.info("rev bind pwm: %i,%s", pwm_oid,self._laser_type)
+                self.configminpower_stepper_pwm()
                 pass
         else:
             logging.info("laser type : %i", self._laser_type)
             pass
+
+    def configminpower_stepper_pwm(self): 
+        self.extruder_stepper.configminpower_stepper_pwm(self.lasermin_power) 
+        self.last_min_power = self.lasermin_power 
+
+
+    def configminpower_stepper_pwm_cmd(self, min_power=0): 
+        if self.last_min_power != min_power:
+            self.extruder_stepper.configminpower_stepper_pwm(min_power)           
+            self.last_min_power = min_power
+
 
     def set_pauseresume_pwm(self,pwm_prf=0):
         if (self._pwm_prf != pwm_prf):

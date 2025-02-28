@@ -84,6 +84,7 @@ struct stepper_pwm {
     uint8_t  oid_pwm_flag;
     uint8_t  laser_type; 
     uint8_t  pauseresume_sw;
+    uint8_t  min_power_value;
     #endif
     uint32_t position;
     struct move_queue_head mq;
@@ -114,11 +115,14 @@ struct pwm_ctrl_s_t {
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
     uint8_t  oid_pwm_flag;  
     uint8_t  laser_type; 
+    uint8_t  min_power_value;
 
     //uint32_t cur_pwm_val;
     uint32_t last_pwm_val;
 
     uint8_t  pauseresume_sw;
+
+
 
 
 };
@@ -168,6 +172,13 @@ void set_pwm_pause_resume_flag(uint8_t pauseresume_sw)
 
 }
 
+
+void set_pwm_min_power_value(uint8_t min_power_value)
+{
+    g_pwm_ctrl_data.min_power_value = min_power_value;
+
+}
+
 void  load_next_pwm_ctrl_data(uint32_t interval, int16_t  add, uint16_t count, uint8_t  mode, uint8_t  pwm_on_off, uint16_t pwmval, uint32_t speed_pulse_ticks)
 {
       
@@ -212,12 +223,18 @@ uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
         result_value = (uint32_t)(((uint64_t)pwmval * speed_pulse) / inter_pulse_ticks);
     }
     //min power 255*0.1=25.5
+    /*
     if((result_value < M_POWER_VAL_LOWERLIMIT) && (g_pwm_ctrl_data.pwmval > 0))
     {
         result_value = M_POWER_VAL_LOWERLIMIT;     
     }
+    */
+    if((result_value < g_pwm_ctrl_data.min_power_value) && (g_pwm_ctrl_data.pwmval > 0))
+    {
+        result_value = g_pwm_ctrl_data.min_power_value;     
+    }   
     return(result_value);
-        
+            
 }
 
 #if  0
@@ -637,6 +654,7 @@ command_config_stepper_pwm(uint32_t *args)
     #ifdef M_PWM_OUT_EN 
     set_pwm_ctrl_data(0, 0, 0);
     set_pwm_pause_resume_flag(0);
+    set_pwm_min_power_value(0);
     #endif
     s->dir_pin = gpio_out_setup(args[2], 0);
     s->position = -POSITION_BIAS;
@@ -782,6 +800,30 @@ command_pauseresume_oid_stepper_pwm(uint32_t *args)
 
 }
 DECL_COMMAND(command_pauseresume_oid_stepper_pwm, "pauseresume_pwm oid=%c sw=%c");
+
+
+
+
+void
+command_setminpower_oid_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    //uint8_t min_power_value =  0;
+
+    //min_power_value = args[1];
+    irq_disable();
+    s->min_power_value = args[1];
+    irq_enable();
+    //#ifdef M_PWM_OUT_EN 
+    set_pwm_min_power_value(s->min_power_value);
+    //output("testsetminp:[%u]",g_pwm_ctrl_data.min_power_value); 
+    
+    //#endif
+
+}
+DECL_COMMAND(command_setminpower_oid_stepper_pwm, "setminpower oid=%c pv=%c");
+
+
 
 
 void

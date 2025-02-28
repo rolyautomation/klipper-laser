@@ -44,6 +44,7 @@ class MCU_stepper:
         #self._bindpwm_cmd_tag = None
         self._bindpwm_cmd  = None
         self._pauseresumepwm_cmd = None
+        self._setminpower_cmd = None
         self._active_callbacks = []
         ffi_main, ffi_lib = chelper.get_ffi()
         self._stepqueue = ffi_main.gc(ffi_lib.stepcompress_alloc(oid),
@@ -130,7 +131,10 @@ class MCU_stepper:
                     "bind_oid_pwm oid=%c pwmoid=%c ltype=%c")    
 
                 self._pauseresumepwm_cmd =  self._mcu.lookup_command(
-                    "pauseresume_pwm oid=%c sw=%c")                                     
+                    "pauseresume_pwm oid=%c sw=%c")  
+
+                self._setminpower_cmd =  self._mcu.lookup_command(
+                    "setminpower oid=%c pv=%c")                                                        
 
                 step_cmd_tag = self.convert_tag_to_signed(step_cmd_tag)
                 dir_cmd_tag = self.convert_tag_to_signed(dir_cmd_tag)
@@ -281,6 +285,11 @@ class MCU_stepper:
     def pauseresumep_stepper_pwm(self, pwm_prf=0):
         if (self._pauseresumepwm_cmd is not None):
             self._pauseresumepwm_cmd.send([self._oid,pwm_prf])  
+
+    def setminpower_stepper_pwm(self, min_power=0):
+        if (self._setminpower_cmd is not None):
+            self._setminpower_cmd.send([self._oid,min_power])  
+                        
 
     def _query_mcu_position(self):
         if self._mcu.is_fileoutput():
