@@ -1073,10 +1073,10 @@ class Angledcmove:
         self.last_valueb = None        
 
     def samp_fpos_fun(self, eventtime):
-        if self.toolhead is None:
-            self.toolhead = self.printer.lookup_object('toolhead') 
+        #if self.toolhead is None:
+            #self.toolhead = self.printer.lookup_object('toolhead') 
         #self.toolhead.wait_moves()    
-        print_time_move = self.toolhead.get_last_move_time()    
+        #print_time_move = self.toolhead.get_last_move_time()    
         self.sample_angle_value = self.read_cur_angle_value()
         self.findpid_work = 1
         measured_time = self.reactor.monotonic()
@@ -1142,11 +1142,14 @@ class Angledcmove:
         if self.toolhead is None:
             self.toolhead = self.printer.lookup_object('toolhead')             
         pwm_time = read_time + self.pwm_delay
-        print_time_move = self.toolhead.get_last_move_time()  
-        print_time = min(pwm_time, print_time_move)  
+        print_time = pwm_time
+        #print_time_move = self.toolhead.get_last_move_time()  
+        #if self.tstlog_en:
+            #pass
+            #logging.info("ptime=%s ptimem=%s \n",pwm_time, print_time_move)        
+        #print_time = min(pwm_time, print_time_move)  
         valuea = round(valuea, 3)
         valueb = round(valueb, 3)
-
         values_unchanged = (self.last_valuea is not None and self.last_valueb is not None and
                    abs(self.last_valuea - valuea) < self.epsilon and
                    abs(self.last_valueb - valueb) < self.epsilon)
