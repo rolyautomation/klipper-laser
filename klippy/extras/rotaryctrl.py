@@ -26,7 +26,13 @@ class RotaryCtrlInterface:
         self.name = 'rotary'
         self.last_rotarystate = [0, 0, 0, 0]
         self.pre_rotarystate = [0, 0, 0, 0]
-
+        self.toolhead = None
+        self.astepdict = {}        
+        self.asteplist = []
+        self.ardistllist = []
+        self.arsprllist = []
+        self.anum = 0
+        self.epsilon = 0.0001
 
         #self.multimotor_existf = config.has_section('multimotor_axis')
         #if self.multimotor_existf :
@@ -61,6 +67,8 @@ class RotaryCtrlInterface:
 
         self.gcode.register_command("SELECT_ROTARY", self.cmd_SELECT_ROTARY, desc=self.cmd_SELECT_ROTARY_help)
         self.gcode.register_command("SET_ROTARY_ENABLE", self.cmd_SET_ROTARY_ENABLE, desc=self.cmd_SET_ROTARY_ENABLE_help) 
+        self.gcode.register_command("M520", self.cmd_M520_ACIRCUM, desc=self.cmd_M520_ACIRCUM_help)
+
 
 
         self.register_switchbutton(config, 'R0_pin', self.R0_callback)
@@ -76,12 +84,26 @@ class RotaryCtrlInterface:
                                             self._handle_connect_rotaryctrl)     
 
 
+
     def _handle_connect_rotaryctrl(self):
-        self.multimotor_axis_obj = self.printer.lookup_object('multimotor_axis')
+        self.multimotor_axis_obj = self.printer.lookup_object('multimotor_axis',None)
         self.update_rotary_selectindex()
-        pass 
-
-
+        if self.toolhead is None:
+            self.toolhead = self.printer.lookup_object('toolhead')
+        #self.toolhead.flush_step_generation()
+        kin = self.toolhead.get_kinematics()
+        allsteppers = kin.get_steppers()
+        aaxis_str = "_a"
+        for s in allsteppers :
+            stepper_name = s.get_name()
+            if aaxis_str in stepper_name:
+                #self.astepdict[stepper_name] = s
+                self.asteplist.append(s)
+                rotation_dist, steps_per_rotation = s.get_rotation_distance()
+                self.ardistllist.append(rotation_dist)
+                #self.arsprllist.append(steps_per_rotation)
+        self.anum = len(self.ardistllist)
+        #pass 
 
 
     def update_rotary_selectindex(self):
@@ -139,6 +161,36 @@ class RotaryCtrlInterface:
         set_val  =  gcmd.get_int('V', 0, minval=0, maxval=1)   
         self.last_rotarystate[inputnum_val] = set_val   
         gcmd.respond_info(self.name + ":[" + str(self.last_rotarystate[0]) + str(self.last_rotarystate[1]) + str(self.last_rotarystate[2]) + str(self.last_rotarystate[3]) + "]")  
+
+
+    cmd_M520_ACIRCUM_help = "set rotary a axis circum"
+    def cmd_M520_ACIRCUM(self, gcmd):
+        #if self.toolhead is None:
+            #self.toolhead = self.printer.lookup_object('toolhead')
+        #self.toolhead.flush_step_generation()
+        #logging.info("step_list" + str(self.astepdict))   
+        #logging.info("ardist_list" + str(self.ardistllist))  
+        #logging.info("anum:" + str(self.anum)) 
+        #logging.info("arspr_list" + str(self.arsprllist))   
+
+        acircumval = gcmd.get_float('S', 0., minval=0.)
+        msgh = "M520 S" + str(acircumval) + " "
+        if self.cur_selindex >= 0 and self.cur_selindex < self.anum:
+            s = self.asteplist[self.cur_selindex]
+            rotation_dist, rd_notuse = s.get_rotation_distance()
+            if acircumval < self.epsilon:
+                acircumval = self.ardistllist[self.cur_selindex]
+            if abs(acircumval-rotation_dist) > self.epsilon:
+                self.toolhead.flush_step_generation()
+                s.set_rotation_distance(acircumval)
+                msgh = "M520 S" + str(acircumval) + " done" 
+            else:
+                msgh = "current value is equal to setting value[%s == %s]" % (acircumval, rotation_dist)          
+        elif self.cur_selindex < 0:
+            msgh = "please select rotary by SELECT_ROTARY first"
+        else:
+            msgh = "input index out of range[%d > %d]" % (self.cur_selindex, self.anum)
+        gcmd.respond_info(msgh)  
 
 
     cmd_QUERY_ROTARY_help = "Report on the state of rotary controller"
