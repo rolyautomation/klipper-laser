@@ -905,6 +905,18 @@ int  setup_pio_pwm_old(uint pin, uint32_t period,uint32_t level)
 
 }
 
+// Modify period and level
+int  modify_pio_pwm_param( uint32_t period, uint32_t level)
+{
+    int iret = 0;
+    PIO pio = M_SEL_PIO_PSYNC;
+    int sm = M_SEL_SM_PSYNC;  
+
+    pio_pwm_set_period(pio, sm, period);
+    pio_pwm_set_level(pio, sm, level);
+    return(iret);
+    
+}
 
 //#define LATCH_CLK_DIV 20.f
 //#define LATCH_CLK_DIV   (62.5f)   //1us

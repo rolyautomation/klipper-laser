@@ -54,6 +54,10 @@ enum {
 //pin23
 #define  M_GPIO_EMERGENCYOFF_NUM    (13)
 
+
+
+//#define  MCU_ALARM_FUNC_EN           (0)
+#define  MCU_ALARM_FUNC_EN           (0)
 //pin16
 #define  M_GPIO_IN_ALARM16_NUM       (14)
 //pin21
@@ -61,6 +65,7 @@ enum {
 
 
 //Emission Modulation(booster,Laser Modulation), Emission Enable(Master Oscillator)
+
 
 #define  M_WK_IDLE_MODE         (0)
 #define  M_WK_CHGPOWER_MODE     (1)
@@ -637,8 +642,10 @@ int fiber_laser_init(struct stepper_fiber *s)
     set_agpio_out(s->gpio_base_pin+M_GPIO_POINTERL_NUM, 0);
     set_agpio_out(s->gpio_base_pin+M_GPIO_EMERGENCYOFF_NUM, 1);
 
+    #if MCU_ALARM_FUNC_EN
     set_agpio_in(s->gpio_base_pin+M_GPIO_IN_ALARM16_NUM);
-    set_agpio_in(s->gpio_base_pin+M_GPIO_IN_ALARM21_NUM);    
+    set_agpio_in(s->gpio_base_pin+M_GPIO_IN_ALARM21_NUM);  
+    #endif      
     //PRR
     //setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level);
     setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level, s->gpio_base_pin, s->gpio_base_pin+M_GPIO_LATCH_NUM);
@@ -686,6 +693,28 @@ stepper_oid_lookup_fiber(uint8_t oid)
 {
     return oid_lookup(oid, command_config_stepper_fiber);
 }
+
+
+
+void
+command_modify_psync_param_fiber(uint32_t *args)
+{
+
+    //uint8_t recoid = args[0];
+    struct stepper_fiber *s = stepper_oid_lookup_fiber(args[0]);
+
+    irq_disable();
+    s->period  = args[1];
+    s->level   = args[2];
+    irq_enable();
+    modify_pio_pwm_param(s->period, s->level);
+     
+
+}
+
+DECL_COMMAND(command_modify_psync_param_fiber,
+             "modify_psync_param oid=%c psp=%u psd=%u");    
+
 
 
 
@@ -1028,6 +1057,7 @@ command_stepper_get_position_fiber(uint32_t *args)
     struct stepper_fiber *s = stepper_oid_lookup_fiber(oid);
 
     s->workflag  = s->workflag & (~(M_ST_PIN16_BIT+M_ST_PIN21_BIT));
+    #if MCU_ALARM_FUNC_EN
     if(1 == get_agpio_in(s->gpio_base_pin+M_GPIO_IN_ALARM16_NUM))
     {
         s->workflag  = s->workflag | M_ST_PIN16_BIT;
@@ -1036,6 +1066,7 @@ command_stepper_get_position_fiber(uint32_t *args)
     {
          s->workflag  = s->workflag | M_ST_PIN21_BIT;
     } 
+    #endif
     irq_disable();
     uint32_t val = s->workflag ;
     irq_enable();

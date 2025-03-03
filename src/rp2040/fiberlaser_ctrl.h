@@ -20,6 +20,8 @@ int  setup_pio_pwm_old(unsigned int  pin, uint32_t period,uint32_t level);
 
 int  set_power_value(uint8_t x);
 int  setup_pio_pwm(unsigned int pwmpin, uint32_t period,uint32_t level, unsigned int pin_start, unsigned int pin_latch);
+int  modify_pio_pwm_param( uint32_t period, uint32_t level);
+
 
 void change_pwm_duty(uint32_t level);
 
