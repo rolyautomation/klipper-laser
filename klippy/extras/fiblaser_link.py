@@ -44,11 +44,21 @@ class FiberLaserLink:
                                 self.cmd_RCMD_FIBER_LASER,
                                 desc=self.cmd_RCMD_FIBER_LASER_help)
 
+        gcode.register_command('SET_PSYNC_PARAM',
+                                self.cmd_SET_PSYNC_PARAM,
+                                desc=self.cmd_SET_PSYNC_PARAM_help) 
+
+        gcode.register_command('TEST_PSYNC_PARAM',
+                                self.cmd_TEST_PSYNC_PARAM,
+                                desc=self.cmd_TEST_PSYNC_PARAM_help)  
+                                                          
+
         gcode.register_command("QUERY_FIBER_LASER", self.cmd_QUERY_FIBER_LASER,
                                desc=self.cmd_QUERY_FIBER_LASER_help)
                                                           
                      
         self._last_clock = 0
+        self._lastprr_clock = 0
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_bind)
 
@@ -75,6 +85,8 @@ class FiberLaserLink:
         self._fiblaser_cmds_cmd = self._mcu.lookup_command(
             "queue_step_fiber oid=%c cmdmod=%c pwmv=%hu", cq=self._cmd_queue)  
 
+        self._modify_psync_param_cmd = self._mcu.lookup_command(
+            "modify_psync_param oid=%c psp=%u psd=%u", cq=self._cmd_queue)  
 
         self._getfiberst_cmds_cmd = self._mcu.lookup_query_command(
             "stepper_get_fiber oid=%c",
@@ -110,7 +122,54 @@ class FiberLaserLink:
         toolhead.register_lookahead_callback(
             lambda print_time: self._run_cmd_send(print_time, self._runmode, self._pwm_sval))
         #self._run_cmd_send(, self._runmode, self._pwm_sval)
-                
+
+    #125M/3 = 41.6MHZ    41600/62 = 671   41600/27=1541
+    #prr 27~62 khz, duty:0.1~0.9
+    cmd_SET_PSYNC_PARAM_help =  "set psync param  PRR"   
+    M_BASEHZ = 41600
+    M_PRR_MINHZ = 1541
+    M_PRR_MAXHZ = 671
+    def cmd_SET_PSYNC_PARAM(self, gcmd):
+        psyncp  = gcmd.get_int('P', 833, minval=1)
+        #psyncduty  =  gcmd.get_int('L', 416, minval=1)
+        psyncdutyf = gcmd.get_float('LF', 0.5, minval=0.1, maxval=0.9) 
+
+        msgh = "PRR:"
+        if psyncp < self.M_PRR_MINHZ and psyncp > self.M_PRR_MAXHZ:
+           psyncduty = int(round(psyncp*psyncdutyf+0.5))
+           toolhead = self.printer.lookup_object('toolhead')
+           toolhead.register_lookahead_callback(
+               lambda print_time: self._run_prr_send(print_time, psyncp, psyncduty))
+           gcmd.respond_info(msgh + "SET_PSYNC_PARAM, P=%d,LF=%d" % (psyncp, psyncduty))
+
+        else:
+           gcmd.respond_info(msgh + "input psync period error, expect [%d~%d]" % (self.M_PRR_MINHZ, self.M_PRR_MAXHZ))        
+
+
+    cmd_TEST_PSYNC_PARAM_help =  "test psync param  PRR"   
+    def cmd_TEST_PSYNC_PARAM(self, gcmd):
+        psyncp  = gcmd.get_int('P', 833, minval=1)
+        #psyncduty  =  gcmd.get_int('L', 416, minval=1)
+        psyncdutyf = gcmd.get_float('LF', 0.5, minval=0.0, maxval=1) 
+        msgh = "TESTPRR:"
+        if psyncp > 0:
+           psyncduty = int(round(psyncp*psyncdutyf+0.5))
+           toolhead = self.printer.lookup_object('toolhead')
+           toolhead.register_lookahead_callback(
+               lambda print_time: self._run_prr_send(print_time, psyncp, psyncduty))
+           gcmd.respond_info(msgh + "TEST_PSYNC_PARAM, P=%d,LF=%d" % (psyncp, psyncduty))
+
+        else:
+           gcmd.respond_info(msgh + "input psync period error:[%d]" % (psyncp,))  
+
+
+    def _run_prr_send(self, print_time, psyncp, psyncduty):
+        clock = self._mcu.print_time_to_clock(print_time)
+        self._modify_psync_param_cmd.send([self._oid, psyncp, psyncduty],
+                           minclock=self._lastprr_clock, reqclock=clock)
+        self._lastprr_clock = clock 
+        #logging.info("SET_PSYNC_PARAM, P=%d,LF=%d" % (psyncp, psyncduty))
+
 
     def _run_cmd_send(self, print_time, runmode, pwm_sval):
         clock = self._mcu.print_time_to_clock(print_time)
