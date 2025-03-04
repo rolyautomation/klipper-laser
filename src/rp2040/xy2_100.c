@@ -10,6 +10,8 @@ void tight_loop_contents(void) {}
 
 //#include "xy2_100.pio.h"
 #define  M_XY2_100_V02   02
+#define  M_SIMPLIFIED_ALG  01
+
 
 #define  M_NO_SDK_ONWIN
 #ifdef   M_NO_SDK_ONWIN
@@ -18,8 +20,9 @@ void  open_piomodulclk(void);
 
 
 
-
 #ifdef  M_XY2_100_V02
+
+
 
 //#define M_DEBUG_INFO_XY   1
 #ifdef  M_DEBUG_INFO_XY
@@ -63,6 +66,230 @@ int xy2_debug_info(const char* fmt, ...)
 #define M_IO_CK_SYNC_BASE (2)
 #define M_IO_XY_BASE      (0)
 #endif
+
+
+
+#if  M_SIMPLIFIED_ALG
+
+
+uint16_t get_parity_bit(uint16_t value) {
+    value ^= value >> 8;
+    value ^= value >> 4;
+    value ^= value >> 2;
+    value ^= value >> 1;
+    return value & 1;
+}
+
+
+uint32_t interleave_bits(uint16_t a, uint16_t b) {
+    uint32_t a32 = a;
+    uint32_t b32 = b;
+    
+    // Spread out bits of a
+    a32 = (a32 | (a32 << 8)) & 0x00FF00FF;
+    a32 = (a32 | (a32 << 4)) & 0x0F0F0F0F;
+    a32 = (a32 | (a32 << 2)) & 0x33333333;
+    a32 = (a32 | (a32 << 1)) & 0x55555555;
+    
+    // Spread out bits of b
+    b32 = (b32 | (b32 << 8)) & 0x00FF00FF;
+    b32 = (b32 | (b32 << 4)) & 0x0F0F0F0F;
+    b32 = (b32 | (b32 << 2)) & 0x33333333;
+    b32 = (b32 | (b32 << 1)) & 0x55555555;
+    
+    // Combine results  yx
+    return a32 | (b32 << 1);
+}
+
+
+uint32_t comb_senddata_xy_format(uint16_t x_d, uint16_t y_d)
+{
+
+    uint32_t  result = 0;  
+    uint16_t x_d_org, y_d_org;  
+    x_d_org = x_d & 0xFFFE;
+    y_d_org = y_d & 0xFFFE;
+    x_d_org |= get_parity_bit(x_d);
+    y_d_org |= get_parity_bit(y_d);
+    result = interleave_bits(x_d_org, y_d_org);
+    return(result);
+  
+}
+
+
+// 1: full
+unsigned char pio_fifo_status(void)
+{
+
+    PIO pio = M_SEL_PIO;
+	uint sm_xy2m  = M_SEL_SM;	  
+    unsigned char  ist = pio_sm_is_tx_fifo_full(pio, sm_xy2m);
+    return (ist);
+
+}
+
+
+void pio_put_onedata(uint32_t data)
+{
+
+    PIO pio = M_SEL_PIO;
+	uint sm_xy2m  = M_SEL_SM;	
+    pio_sm_put(pio, sm_xy2m,data);
+
+
+}
+
+uint8_t upadte_new_onedata(uint16_t posX, uint16_t posY)
+{
+       uint8_t  iret = 0;
+       iret = pio_fifo_status();
+       if (iret == 0)
+       {
+            pio_put_onedata(comb_senddata_xy_format(posX, posY));            
+       }
+       return(iret);
+       
+}
+
+
+int send_xy_data(uint16_t posX, uint16_t posY, unsigned char mode)
+{
+	int iret = 0;
+    static uint32_t data_snd= 0;
+    if (mode == 0)
+	{
+        data_snd = comb_senddata_xy_format(posX, posY);
+        pio_put_onedata(data_snd);   
+		
+	}
+	return iret;
+	
+}
+
+
+// -------------------- //
+// xy2_100_piocode_fifo //
+// -------------------- //
+#define xy2_100_piocode_fifo_wrap_target 0
+#define xy2_100_piocode_fifo_wrap 15
+
+static const uint16_t xy2_100_piocode_fifo_program_instructions[] = {
+            //     .wrap_target
+    0x9880, //  0: pull   noblock         side 3     
+    0xb827, //  1: mov    x, osr          side 3     
+    0xf84e, //  2: set    y, 14           side 3     
+    0xf900, //  3: set    pins, 0         side 3 [1] 
+    0xf100, //  4: set    pins, 0         side 2 [1] 
+    0xf900, //  5: set    pins, 0         side 3 [1] 
+    0xf100, //  6: set    pins, 0         side 2 [1] 
+    0xf903, //  7: set    pins, 3         side 3 [1] 
+    0xf103, //  8: set    pins, 3         side 2 [1] 
+    0x7902, //  9: out    pins, 2         side 3 [1] 
+    0x1189, // 10: jmp    y--, 9          side 2 [1] 
+    0xf900, // 11: set    pins, 0         side 3 [1] 
+    0xf100, // 12: set    pins, 0         side 2 [1] 
+    0x6902, // 13: out    pins, 2         side 1 [1] 
+    0xa142, // 14: nop                    side 0 [1] 
+    0xb942, // 15: nop                    side 3 [1] 
+            //     .wrap
+};
+
+#if !PICO_NO_HARDWARE
+static const struct pio_program xy2_100_piocode_fifo_program = {
+    .instructions = xy2_100_piocode_fifo_program_instructions,
+    .length = 16,
+    .origin = -1,
+};
+
+static inline pio_sm_config xy2_100_piocode_fifo_program_get_default_config(uint offset) {
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_wrap(&c, offset + xy2_100_piocode_fifo_wrap_target, offset + xy2_100_piocode_fifo_wrap);
+    sm_config_set_sideset(&c, 2, false, false);
+    return c;
+}
+#endif
+
+
+
+void xy2_100_piocode_fifo_program_init(PIO pio, uint sm, uint offset,uint clk_base, uint xy_base) {
+
+   pio_sm_config c = xy2_100_piocode_fifo_program_get_default_config(offset);
+
+   //sm_config_set_in_pins(&c, pin_sio0);
+   sm_config_set_set_pins(&c, xy_base, 2);
+
+   sm_config_set_out_pins(&c, xy_base, 2);
+   sm_config_set_out_shift(&c, false, false, 0);
+   //sm_config_set_in_shift(&c, false, false, 0);
+   sm_config_set_sideset_pins(&c, clk_base);
+
+   sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);  //add deep fifo
+
+   //sm_config_set_in_pins(&c, PIN_CLOCK);
+   pio_sm_set_consecutive_pindirs(pio, sm, clk_base, 2, true);
+   pio_sm_set_consecutive_pindirs(pio, sm, xy_base, 2, true);
+
+   pio_sm_set_pins_with_mask(pio, sm, (3u << clk_base), (3u << clk_base) | (3u << xy_base));
+
+
+   //pio_sm_set_pins_with_mask(pio, sm, 0, (1u << pin_sck) | (1u << pin_mosi));
+   //pio_sm_set_pindirs_with_mask(pio, sm, (1u << pin_sck) | (1u << pin_mosi), (1u << pin_sck)
+   // | (1u << pin_mosi) | (1u << pin_miso));  
+
+   pio_gpio_init(pio, clk_base);
+   pio_gpio_init(pio, clk_base+1);
+   pio_gpio_init(pio, xy_base);
+   pio_gpio_init(pio, xy_base+1);      
+
+   //sm_config_set_clkdiv(&c, 31.25f);
+   //sm_config_set_clkdiv(&c, 62.5f);    //cycle 2us,500k
+   sm_config_set_clkdiv(&c, 15.625f);  //cycle .5us, 2M
+
+   pio_sm_init(pio, sm, offset, &c);
+
+
+
+}
+
+
+
+
+int config_xy2_pio_xypos(unsigned int  ck_sync_base, unsigned int xy_base, uint16_t posX, uint16_t posY)
+{
+
+    int iret = 0;
+	PIO pio = M_SEL_PIO;
+	uint sm_xy2m  = M_SEL_SM;
+
+#ifdef   M_NO_SDK_ONWIN
+    open_piomodulclk();
+#endif	
+
+    if(ck_sync_base == xy_base)
+    {
+    
+		ck_sync_base = M_IO_CK_SYNC_BASE;
+        xy_base  = M_IO_XY_BASE;
+		
+
+    }
+	
+    uint offset_xy2m = pio_add_program(pio, &xy2_100_piocode_fifo_program);
+    xy2_100_piocode_fifo_program_init(pio, sm_xy2m, offset_xy2m,ck_sync_base,xy_base);
+    upadte_new_onedata(posX, posY);
+    pio_sm_set_enabled(pio, sm_xy2m, true);
+	return(iret);
+	
+		
+
+}
+
+
+
+
+
+
+#else //M_SIMPLIFIED_ALG
 
 
 #define M_TEST_SCAN_MODE  1
@@ -243,7 +470,6 @@ static inline pio_sm_config xy2_100_piocode_program_get_default_config(uint offs
     return c;
 }
 
-
 #endif
 
 
@@ -403,6 +629,8 @@ void run_pio_isr_reg(void)
 
 
 }
+
+#endif  //M_SIMPLIFIED_ALG
 
 
 #else   //M_XY2_100_V02

@@ -38,6 +38,10 @@
 #define  M_TEST_VIR_STEP_GPIO   (1)
 
 #define  M_FIFO_ISR_WORK_EN     (1)
+//old version
+//#define  M_FIFO_MODE_EN       (0)
+#define  M_FIFO_MODE_EN         (1)
+
 #define  M_LINK_GALVO_EN        (1)
 #define  M_COUNT_MUL_TWO        (1)
 
@@ -611,6 +615,172 @@ reschedule_min:
 
 #ifdef  M_FIFO_ISR_WORK_EN
 
+#if     M_FIFO_MODE_EN
+
+
+struct mvirxy_sync_pio_t {
+    uint32_t position;
+    uint8_t  gpiono;
+    uint8_t  flag;
+};
+
+typedef struct mvirxy_sync_pio_t mvirxy_sync_pio_t;
+
+struct ring_pio_t {
+
+  mvirxy_sync_pio_t  * p_sync_pio;
+  uint32_t     coord_factor;
+  uint8_t      mirror_type;
+};
+
+
+struct ring_pio_t   * gp_ring_pio_mang = NULL;
+mvirxy_sync_pio_t     g_sync_pio_data[2] = { {.flag=0,},{.flag=0,}};
+
+
+
+int  set_record_axis_info(uint8_t  gpio_step_num)
+{
+     int iret = 0;
+     int i = 0;
+     uint8_t   temp;
+
+     for(i=0;i < 2; i++)
+     {
+        if (g_sync_pio_data[i].flag == 0)
+        {
+            g_sync_pio_data[i].flag = 1;
+            g_sync_pio_data[i].gpiono = gpio_step_num;
+            //g_sync_pio_data[i].position = -POSITION_BIAS;
+            g_sync_pio_data[i].position = 0;
+            break;
+        }
+
+     }
+     if ((g_sync_pio_data[0].flag) && (g_sync_pio_data[1].flag))
+     {
+         if (g_sync_pio_data[0].gpiono  >  g_sync_pio_data[1].gpiono) 
+         {
+            temp = g_sync_pio_data[0].gpiono;
+            g_sync_pio_data[0].gpiono = g_sync_pio_data[1].gpiono;
+            g_sync_pio_data[1].gpiono = temp;
+            
+         }  
+                
+     }
+     return(iret);
+
+ 
+}
+
+
+static uint32_t
+stepper_get_position_vir_funxy(uint32_t position_in, uint16_t count,uint8_t mode)
+{
+    uint32_t position = position_in;
+    // If stepper is mid-move, subtract out steps not yet taken
+    //if (HAVE_SINGLE_SCHEDULE && s->flags & SF_SINGLE_SCHED)
+    if (mode == 0)
+        position -= count;
+    else
+        position -= count / 2;
+    // The top bit of s->position is an optimized reverse direction flag
+    if (position & 0x80000000)
+        position  = -position;
+
+    position = position - POSITION_BIAS;
+    return position;
+
+}
+
+
+
+int  update_vir_postion_info(uint8_t  gpio_step_num, uint32_t position, uint16_t count, uint8_t mode)
+{
+
+     int iret = 0;
+     int i = 0;
+     uint32_t posX_32 = 0;
+     uint32_t posY_32 = 0;     
+     uint16_t posX = 0;
+     uint16_t posY = 0;
+     int todoflag = 1;
+     uint32_t realposition = 0; 
+     unsigned char  bitv = gp_ring_pio_mang->coord_factor;
+     uint8_t mirror_type = gp_ring_pio_mang->mirror_type;
+     for(i=0; i < 2; i++)
+     {
+
+        if (g_sync_pio_data[i].gpiono == gpio_step_num)
+        {
+            //g_sync_pio_data[i].position = position;
+            realposition = stepper_get_position_vir_funxy(position,count,mode);
+            if (g_sync_pio_data[i].position == realposition)
+            {
+                todoflag = 0;
+            }
+            g_sync_pio_data[i].position = realposition;
+            break;
+        }
+
+
+     }
+
+     if (todoflag == 0)
+     {
+        iret = 1;
+        return(iret);
+     }
+
+     //very important to G28 bug
+     if (g_sync_pio_data[0].position  & 0x80000000)
+     {
+         g_sync_pio_data[0].position = -g_sync_pio_data[0].position;
+     }
+
+     if (g_sync_pio_data[1].position & 0x80000000)
+     {
+         g_sync_pio_data[1].position = -g_sync_pio_data[1].position;
+     }
+     
+         
+     //todo after
+     #if 0
+     posX = g_sync_pio_data[0].position & 0xFFFF;
+     posY = g_sync_pio_data[1].position & 0xFFFF;    
+     #endif 
+     posX_32 = g_sync_pio_data[0].position << bitv ;
+     posY_32 = g_sync_pio_data[1].position << bitv ;  
+     posX = posX_32  & 0xFFFF;
+     posY = posY_32  & 0xFFFF;     
+     if (  (posX_32 >> 16)   > 0)
+            posX = 0xFFFF;
+     if (  (posY_32 >> 16)   > 0)
+            posY = 0xFFFF;    
+     // mirror transfer
+     if (mirror_type == 1)  
+     {
+            posX =  posX^0xFFFF;
+
+     } else if (mirror_type == 2)  
+     {
+            posY =  posY^0xFFFF;
+
+     } else if (mirror_type == 3)  
+     {
+            posX =  posX^0xFFFF;
+            posY =  posY^0xFFFF;            
+     }
+
+     upadte_new_onedata(posX, posY);
+     return(iret);
+
+
+          
+}
+
+
+#else //M_FIFO_MODE_EN
 
 typedef uint32_t ring_data_t;
 typedef uint16_t hdata_t;
@@ -964,6 +1134,7 @@ void  close_pio_isr(void)
 }
 
 #endif
+#endif
 
 
 struct xy2_stepper {
@@ -1010,6 +1181,16 @@ command_config_xy2_stepper(uint32_t *args)
 	s->xy2_x_pos = args[3];
 	s->xy2_y_pos = args[4];
 
+#if M_FIFO_MODE_EN 
+    gp_ring_pio_mang = alloc_chunk(sizeof(*gp_ring_pio_mang));
+    gp_ring_pio_mang->p_sync_pio = g_sync_pio_data;
+    gp_ring_pio_mang->coord_factor = args[5];
+    gp_ring_pio_mang->mirror_type  = args[6];
+
+    //move_queue_setup(&s->mq, sizeof(struct xy2_stepper_move));
+    s->time.func = xy2_stepper_event_tm;    
+
+#else
     ring_data_t * buff  = alloc_chunk(sizeof(ring_data_t)*M_BUF_SIZE_LEN);
     gp_ring_pio_mang = alloc_chunk(sizeof(*gp_ring_pio_mang));
 
@@ -1023,12 +1204,20 @@ command_config_xy2_stepper(uint32_t *args)
 
     //move_queue_setup(&s->mq, sizeof(struct xy2_stepper_move));
     s->time.func = xy2_stepper_event_tm;
+#endif
+
 	//to do xy2
-    config_xy2_pio(s->clk_pin_no, s->xbase_pin_no);
 #ifdef  M_FIFO_ISR_WORK_EN
+#if     M_FIFO_MODE_EN
+    config_xy2_pio_xypos(s->clk_pin_no, s->xbase_pin_no,s->xy2_x_pos, s->xy2_y_pos);
+    //upadte_new_onedata(s->xy2_x_pos, s->xy2_y_pos);
+#else
+    config_xy2_pio(s->clk_pin_no, s->xbase_pin_no);
     upadte_new_onedata_first(s->xy2_x_pos,s->xy2_y_pos);
     open_pio_isr();
+#endif    
 #else
+    config_xy2_pio(s->clk_pin_no, s->xbase_pin_no);
 	send_xy_data(s->xy2_x_pos, s->xy2_y_pos, 0);
 	s->time.waketime = timer_read_time()+ timer_from_us(10000);
 	sched_add_timer(&s->time);    
@@ -1127,8 +1316,12 @@ command_xy2_set_position(uint32_t *args)
             
         }
 		// write buff
-#ifdef  M_FIFO_ISR_WORK_EN    
+#ifdef  M_FIFO_ISR_WORK_EN   
+#if     M_FIFO_MODE_EN
         upadte_new_onedata(s->xy2_x_pos, s->xy2_y_pos);
+#else
+        upadte_new_onedata(s->xy2_x_pos, s->xy2_y_pos);
+#endif        
 #else
 		send_xy_data(s->xy2_x_pos, s->xy2_y_pos, 0);
 #endif        
@@ -1156,8 +1349,9 @@ xy2_stepper_shutdown(void)
 		#endif
     }
 #ifdef  M_FIFO_ISR_WORK_EN 
+#if M_FIFO_MODE_EN == 0
     close_pio_isr();
-
+#endif    
 #endif
 
 }
