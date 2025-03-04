@@ -109,8 +109,8 @@ uint32_t comb_senddata_xy_format(uint16_t x_d, uint16_t y_d)
     uint16_t x_d_org, y_d_org;  
     x_d_org = x_d & 0xFFFE;
     y_d_org = y_d & 0xFFFE;
-    x_d_org |= get_parity_bit(x_d);
-    y_d_org |= get_parity_bit(y_d);
+    x_d_org |= get_parity_bit(x_d_org);
+    y_d_org |= get_parity_bit(y_d_org);
     result = interleave_bits(x_d_org, y_d_org);
     return(result);
   
