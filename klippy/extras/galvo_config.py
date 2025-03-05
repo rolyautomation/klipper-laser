@@ -4,6 +4,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 #from . import fan
+import logging
 
 class GalvoConfigCtrl:
     #cmd_SET_GALVO_POS_help = "Sets the pos of a galvo"
@@ -58,8 +59,16 @@ class GalvoConfigCtrl:
                                desc=self.cmd_QUERY_POS_GALVO_VIR_help)    
 
         gcode.register_command("RESET_POS_GALVO_VIR", self.cmd_RESET_POS_GALVO_VIR,
-                               desc=self.cmd_RESET_POS_GALVO_VIR_help)                                                             
-                                                               
+                               desc=self.cmd_RESET_POS_GALVO_VIR_help)  
+
+        self.stepper_list = []
+        stepper_list = config.getlists('stepper_list', default=[], seps=(',', '\n'))
+        if stepper_list and len(stepper_list) == 1 and isinstance(stepper_list[0], tuple):
+            self.stepper_list = list(stepper_list[0])
+        #self.stepper_list = list(stepper_list)
+        self.printer.register_event_handler("klippy:mcu_identify",
+                                            self._handle_mcu_identify_stepper)   
+                                                          
         self._last_clock = 0
         self._x_pos_rd = 0
         self._y_pos_rd = 0
@@ -99,6 +108,17 @@ class GalvoConfigCtrl:
     def get_mcu(self):
         return self._mcu
 
+    def _handle_mcu_identify_stepper(self):
+        logging.info("galvo_config:hmi_stepper:%s", str(self.stepper_list))   
+        # Lookup stepper object
+        force_move = self.printer.lookup_object("force_move")
+        for stepper_name in self.stepper_list:
+            stepper = force_move.lookup_stepper_ext(stepper_name)
+            if stepper is not None:
+                # Note pulse duration and step_both_edge optimizations available
+                stepper.setup_default_pulse_duration(.000000100, True)
+            else:
+                logging.info("galvo_config:stepper:%s not found", stepper_name)    
 
 
     def cmd_SET_POS_GALVO(self, gcmd):

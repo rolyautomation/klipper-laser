@@ -55,6 +55,10 @@ class ForceMove:
         if name not in self.steppers:
             raise self.printer.config_error("Unknown stepper %s" % (name,))
         return self.steppers[name]
+    def lookup_stepper_ext(self, name):
+        if name not in self.steppers:
+            return None
+        return self.steppers[name]        
     def _force_enable(self, stepper):
         toolhead = self.printer.lookup_object('toolhead')
         print_time = toolhead.get_last_move_time()
