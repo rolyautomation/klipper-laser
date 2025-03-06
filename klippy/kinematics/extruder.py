@@ -539,7 +539,7 @@ class PrinterExtruderPWM:
 
         laser_minpower = config.getfloat(
             'laser_minpower', 0., minval=0., maxval=250.)   
-        self.lasermin_power = int(laser_minpower + 0.5)   
+        self.lasermin_power = int(laser_minpower) if laser_minpower == 0 else int(laser_minpower + 0.5)   
 
         logging.info("PrinterExtruderPWM =%.6f,%d", self.max_e_velocity,self.lasermin_power) 
 
@@ -656,9 +656,9 @@ class PrinterExtruderPWM:
             pass
 
     def configminpower_stepper_pwm(self): 
-        self.extruder_stepper.configminpower_stepper_pwm(self.lasermin_power) 
-        self.last_min_power = self.lasermin_power 
-
+        if self.lasermin_power > 0:
+            self.extruder_stepper.configminpower_stepper_pwm(self.lasermin_power) 
+            self.last_min_power = self.lasermin_power 
 
     def configminpower_stepper_pwm_cmd(self, min_power=0): 
         if self.last_min_power != min_power:
