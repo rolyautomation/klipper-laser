@@ -539,10 +539,12 @@ class PrinterExtruderPWM:
 
         laser_minpower = config.getfloat(
             'laser_minpower', 0., minval=0., maxval=250.)   
-        self.lasermin_power = int(laser_minpower) if laser_minpower == 0 else int(laser_minpower + 0.5)   
+        if abs(laser_minpower) < 1e-3:
+            self.lasermin_power = 0
+        else:
+            self.lasermin_power = int(laser_minpower + 0.5)  
 
         logging.info("PrinterExtruderPWM =%.6f,%d", self.max_e_velocity,self.lasermin_power) 
-
         # Setup extruder trapq (trapezoidal motion queue)
         ffi_main, ffi_lib = chelper.get_ffi()
         self.trapq = ffi_main.gc(ffi_lib.trapq_alloc(), ffi_lib.trapq_free)
