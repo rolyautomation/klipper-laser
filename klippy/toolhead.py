@@ -53,6 +53,7 @@ class Move:
         self.delta_v2 = 2.0 * move_d * self.accel
         self.max_smoothed_v2 = 0.
         self.smooth_delta_v2 = 2.0 * move_d * toolhead.max_accel_to_decel
+        #logging.info("start")
         
     def set_g0_move_speed(self, speed, accel):
         # only G0 move
@@ -74,6 +75,8 @@ class Move:
         self.accel = min(self.accel, accel)
         self.delta_v2 = 2.0 * self.move_d * self.accel
         self.smooth_delta_v2 = min(self.smooth_delta_v2, self.delta_v2)
+        #logging.info("saccel=%s accel=%s speed=%s",self.accel,accel,speed)
+
     def move_error(self, msg="Move out of range"):
         ep = self.end_pos
         #m = "%s: %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[3])
