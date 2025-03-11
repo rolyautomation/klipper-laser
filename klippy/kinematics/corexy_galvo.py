@@ -117,7 +117,7 @@ class CoreXYGalvoKinematics:
             'max_g_accel', None, above=0.)  
         '''  
         self.mech_enable_alone = config.getfloat(
-            'mech_enable_alone', 0, above=0.)
+            'mech_enable_alone', 0, minval=0.)
 
         self.max_m_velocity = config.getfloat(
             'max_m_velocity', max_velocity, above=0., maxval=max_velocity)
@@ -375,21 +375,23 @@ class CoreXYGalvoKinematics:
                 elif  x_ratio :
                     s_x_v = self.max_m_velocity * x_ratio
                     s_x_a = self.max_m_accel * x_ratio    
-                    if move.axes_d[4] or move.axes_d[5]:
-                        if  s_x_v > self.max_h_velocity:
-                            s_x_v = self.max_h_velocity
-                        if  s_x_a > self.max_h_accel:
-                            s_x_a = self.max_h_accel                                            
+                    # if move.axes_d[4] or move.axes_d[5]:
+                    #     pass
+                        # if  s_x_v > self.max_h_velocity:
+                        #     s_x_v = self.max_h_velocity
+                        # if  s_x_a > self.max_h_accel:
+                        #     s_x_a = self.max_h_accel                                            
                     move.limit_speed(s_x_v, s_x_a) 
                     #logging.info("s_x_v=%s s_x_a=%s x_ratio=%s\n",s_x_v,s_x_a,x_ratio)                         
                 elif  y_ratio :
                     s_y_v = self.max_m_velocity * y_ratio
                     s_y_a = self.max_m_accel * y_ratio  
-                    if move.axes_d[4] or move.axes_d[5]:
-                        if  s_y_v > self.max_h_velocity:
-                            s_y_v = self.max_h_velocity
-                        if  s_y_a > self.max_h_accel:
-                            s_y_a = self.max_h_accel                                            
+                    # if move.axes_d[4] or move.axes_d[5]:
+                    #     pass
+                        # if  s_y_v > self.max_h_velocity:
+                        #     s_y_v = self.max_h_velocity
+                        # if  s_y_a > self.max_h_accel:
+                        #     s_y_a = self.max_h_accel                                            
                     move.limit_speed(s_y_v, s_y_a)  
                 move.set_g0_move_speed(self.g0_m_velocity, self.max_m_accel)
 

@@ -26,7 +26,13 @@ class Move:
         self.is_kinematic_move = True
         #include  e axis
         self.axes_d = axes_d = [end_pos[i] - start_pos[i] for i in (0, 1, 2, 3, 4, 5, 6)]
-        self.move_d = move_d = math.sqrt(sum([d*d for d in axes_d[:6]]))
+        #self.move_d = move_d = math.sqrt(sum([d*d for d in axes_d[:6]]))
+        #self.move_d = move_d = math.sqrt(sum([(axes_d[0] + axes_d[4]) * (axes_d[0] + axes_d[4]), (axes_d[1] + axes_d[5]) * (axes_d[1] + axes_d[5]), (axes_d[2] * axes_d[2])]))
+        self.move_d = move_d = math.sqrt(sum([(axes_d[0] + axes_d[4]) * (axes_d[0] + axes_d[4]), 
+                                              (axes_d[1] + axes_d[5]) * (axes_d[1] + axes_d[5]), 
+                                              (axes_d[2] * axes_d[2]),
+                                              (axes_d[3] * axes_d[3])
+                                              ]))
         if move_d < .000000001:
             # Extrude only move
             self.end_pos = (start_pos[0], start_pos[1], start_pos[2],
@@ -90,12 +96,25 @@ class Move:
         # Find max velocity using "approximated centripetal velocity"
         axes_r = self.axes_r
         prev_axes_r = prev_move.axes_r
-        junction_cos_theta = -(axes_r[0] * prev_axes_r[0]
-                               + axes_r[1] * prev_axes_r[1]
+
+        # junction_cos_theta = -(axes_r[0] * prev_axes_r[0]
+        #                        + axes_r[1] * prev_axes_r[1]
+        #                        + axes_r[2] * prev_axes_r[2]
+        #                        + axes_r[0+3] * prev_axes_r[0+3]
+        #                        + axes_r[1+3] * prev_axes_r[1+3]
+        #                        + axes_r[2+3] * prev_axes_r[2+3] )
+
+        # junction_cos_theta = -((axes_r[0] + axes_r[4]) * (prev_axes_r[0] + prev_axes_r[4])
+        #                        + (axes_r[1] + axes_r[5]) * (prev_axes_r[1] + prev_axes_r[5])
+        #                        + axes_r[2] * prev_axes_r[2])   
+
+        junction_cos_theta = -((axes_r[0] + axes_r[4]) * (prev_axes_r[0] + prev_axes_r[4])
+                               + (axes_r[1] + axes_r[5]) * (prev_axes_r[1] + prev_axes_r[5])
                                + axes_r[2] * prev_axes_r[2]
-                               + axes_r[0+3] * prev_axes_r[0+3]
-                               + axes_r[1+3] * prev_axes_r[1+3]
-                               + axes_r[2+3] * prev_axes_r[2+3] )
+                               + axes_r[3] * prev_axes_r[3])                                 
+
+        #logging.info("axes_r=%s prev_axes_r=%s  jcos=%s", axes_r, prev_axes_r, junction_cos_theta)                       
+                             
         if junction_cos_theta > 0.999999:
             return
         junction_cos_theta = max(junction_cos_theta, -0.999999)
