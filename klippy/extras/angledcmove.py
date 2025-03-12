@@ -660,6 +660,7 @@ class Angledcmove:
         self.gcode.register_command("SWINGARM_BYAS", self.cmd_SWINGARM_BYAS)  
         self.gcode.register_command("SEL_ALG_FIND", self.cmd_SEL_ALG_FIND)
         self.gcode.register_command("SWINGARM_EN_SW", self.cmd_SWINGARM_EN_SW)   
+        self.gcode.register_command("CLEAR_SWINGARMPOS", self.cmd_CLEAR_SWINGARMPOS)         
 
         self.gcode.register_command("SWINGARM_WAITM", self.cmd_SWINGARM_WAITM)              
 
@@ -711,6 +712,7 @@ class Angledcmove:
         self.max_pwm_plus = config.getfloat('max_pwm_val', 0.4)       
         self.findpid_work = 0 
         self.findpid_startworkf = 0
+        self.find_pos_direction = 0
         self.finetuningmode = 0  
         self.pwm_chg_status = 0
         self.gcmd = None
@@ -719,7 +721,9 @@ class Angledcmove:
         self.last_valueb = None
         self.epsilon = 0.003
         self.try_maxtimes = config.getint('try_maxtimes', FIND_MAX_TIMES) 
-        self.idle_waittimes = config.getint('idle_waittimes', 2)         
+        self.idle_waittimes = config.getint('idle_waittimes', 2)   
+        self.swingarm_curpos = -1  
+        self.sarm_curpos_file = -1              
         
         #self.toleranceval = 15
         logging.info("kp=%s ki=%s kd=%s kpup=%s pidreptime=%s ", self.kp, self.ki, self.kd, self.kpup, self.pidreptime)  
@@ -875,6 +879,7 @@ class Angledcmove:
             msg = "%s=%d" % ('destp',destpos)  
             if self.findpid_work == 0:
                 self.findpid_startworkf = 1
+                self.find_pos_direction = pos
                 self.set_targer_angle(destpos)
                 self.pid_normal.restart_init()
                 self.pid_normal.set_kp_sel(kp_sel)
@@ -891,11 +896,24 @@ class Angledcmove:
         msg = msg + ",%s=%d" % ('posuse',self.posuse)
         msg = msg + ",%s=%d" % ('posoffset',self.posoffset)
         gcmd.respond_info(msg)
+        
+    def cmd_CLEAR_SWINGARMPOS(self, gcmd):                 
+        self.save_vars.cmd_PROG_VARIABLE('swingarm_curpos', repr(-1))
+        self.load_value_pos()
+        gcmd.respond_info("Swingarm position cleared")
+
 
     def load_value_pos(self):
         self.poshead = self.save_vars.allVariables.get('poshead', 0)        
         self.posuse = self.save_vars.allVariables.get('posuse', 0)  
         self.posoffset = self.save_vars.allVariables.get('posoffset', 0) 
+        self.sarm_curpos_file = self.save_vars.allVariables.get('swingarm_curpos', -1) 
+        self.swingarm_curpos = self.sarm_curpos_file 
+
+    def update_swingarm_curpos_file(self): 
+        if self.swingarm_curpos != self.sarm_curpos_file:
+            self.save_vars.cmd_PROG_VARIABLE('swingarm_curpos', repr(self.swingarm_curpos))
+            self.sarm_curpos_file = self.swingarm_curpos
 
     def cmd_SAVE_POS_AS(self, gcmd):
         pos = gcmd.get_int('P',1, minval=0, maxval=2)
@@ -1065,6 +1083,7 @@ class Angledcmove:
             self.finetuningmode = 0
             self.pwm_chg_status = 0
         self.findpid_startworkf = 0
+        self.update_swingarm_curpos_file()
 
     def set_targer_angle(self, targer_angle):
         self.targer_angle = targer_angle
@@ -1102,6 +1121,7 @@ class Angledcmove:
             #stop find pos
             #stop pwm
             self.force_exit = 0
+            self.swingarm_curpos = -1
             msg = "froce exit find:%s=%d" % ("result:",10)
             self.gcmd.respond_info(msg)             
             self.stop_dc_move_pwm(print_time)
@@ -1174,10 +1194,12 @@ class Angledcmove:
         # if retst > 0 and self.pwm_chg_status == 0 and self.finetuningmode > 0:
             if self.tstlog_en:
                 logging.info("(%d)info last angle = %s\n", self.find_times, angle_val)
+            self.swingarm_curpos = self.find_pos_direction
             return  retst
         #if self.find_times > FIND_MAX_TIMES:
         if self.find_times > self.try_maxtimes:
             retst = 2
+            self.swingarm_curpos = -1
             return  retst 
         self.pwm_dcwork_flag = 1  
         self.find_times +=1  
@@ -1554,7 +1576,9 @@ class Angledcmove:
     def get_status(self, eventtime=None):
         return {
                 'mstatus': self.magnet_status,
-                'val': self.last_angle                
+                'val': self.last_angle,
+                'sarm_cpos': self.swingarm_curpos,
+                'fworkflag': self.findpid_startworkf                
                 }
 
 
