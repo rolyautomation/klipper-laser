@@ -46,7 +46,7 @@ class GCodeMove:
             func = getattr(self, 'cmd_' + cmd)
             desc = getattr(self, 'cmd_' + cmd + '_help', None)
             gcode.register_command(cmd, func, False, desc)
-        #gcode.register_command('G0', self.cmd_G1)
+        gcode.register_command('G0', self.cmd_G0) 
         gcode.register_command('M114', self.cmd_M114, True)
         gcode.register_command('GET_POSITION', self.cmd_GET_POSITION, True,
                                desc=self.cmd_GET_POSITION_help)
@@ -67,10 +67,7 @@ class GCodeMove:
         self.pwm_work_mode_use = 0
         self.pwm_work_curpower_use = 0  
         self.pwm_work_ponoff_use = 0
-        gcode.register_command('G0', self.cmd_G0_LASER)   
-        #gcode.register_command('M3', self.cmd_M3_LASER)  
-        #gcode.register_command('M4', self.cmd_M4_LASER)  
-        #gcode.register_command('M5', self.cmd_M5_LASER)             
+  
         gcode.register_command('M301', self.cmd_M3_LASER)  
         gcode.register_command('M302', self.cmd_M4_LASER)  
         gcode.register_command('M303', self.cmd_M5_LASER)  
@@ -245,7 +242,7 @@ class GCodeMove:
         #self.reint_speedpower_factor()
         # safe , close pwm by macro
 
-    def cmd_G0_LASER(self, gcmd):
+    def cmd_G0(self, gcmd):
         #self.pwm_work_mode_use =  PWM_MODE_IDLE
         self.pwm_work_mode_use =  self.pwm_work_mode
         params = gcmd.get_command_parameters()  
@@ -261,7 +258,7 @@ class GCodeMove:
         #next G1 use change power
         #self.pwm_work_curpower_use =  0
         self.pwm_work_ponoff_use = 0
-        self.cmd_G1_Prefun(gcmd)  
+        self.cmd_G1_underlying(gcmd)  
 
 
     def is_fire_gfs_command(self, params):
@@ -275,9 +272,6 @@ class GCodeMove:
             svarstr = params['S']
             ncmd = "M305"
             self.gcode_fs.run_script_from_command(f"M305 S{svarstr}")
-            #gfs_gcmd = self.gcode_fs.create_gcode_command(ncmd, ncmd, {"S":svarstr})
-            #if self.gcode_fs.cmd_M305 is not None:
-            #    self.gcode_fs.cmd_M305(gfs_gcmd)
             logging.info("[%s F%s S%s]",ncmd, params['F'], svarstr)  
         return bret
         
@@ -302,10 +296,10 @@ class GCodeMove:
             self.pwm_work_curpower = v  
         self.pwm_work_curpower_use =  self.pwm_work_curpower 
         self.pwm_work_ponoff_use = 1                    
-        self.cmd_G1_Prefun(gcmd)     
+        self.cmd_G1_underlying(gcmd)     
 
     # G-Code movement commands
-    def cmd_G1_Prefun(self, gcmd):
+    def cmd_G1_underlying(self, gcmd):
         # Move
 
         if self.galvo_coord_confactor is None:
@@ -386,13 +380,6 @@ class GCodeMove:
 
         self.adj_power_pwm  =  self.adj_power_factor(self.pwm_work_curpower_use)
         self.adj_speed_mmsec  =  self.adj_speed_factor(self.speed)
-        #logging.info("adjvalue: [%s,%s]to[%s,%s]\n",self.speed, self.pwm_work_curpower_use,
-                #self.adj_speed_mmsec, self.adj_power_pwm)    
-
-        #close#logging.info("\npwm: pwm_work_curpower_use=%s pwm_work_mode_use=%s move_e_axis_d=%s ponoff=%s\n",
-                #self.pwm_work_curpower_use, self.pwm_work_mode_use, move_e_axis_d, self.pwm_work_ponoff_use)     
-        #self.move_with_transform(self.last_position, self.speed)
-        #self.move_with_transform(self.last_position, self.speed, self.pwm_work_mode_use, self.pwm_work_curpower_use, self.pwm_work_ponoff_use)
         self.move_with_transform(self.last_position, self.adj_speed_mmsec, self.pwm_work_mode_use, self.adj_power_pwm, self.pwm_work_ponoff_use)  
             
         

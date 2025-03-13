@@ -13,7 +13,7 @@ import mcu, chelper, kinematics.extruder
 # Class to track each move request
 class Move:
     def __init__(self, toolhead, start_pos, end_pos, speed, pwmmode=None, pwmvalue=None, pwmsw=0):
-        self.pwmmode =  pwmmode
+        self.pwmmode = pwmmode
         self.pwmvalue = pwmvalue
         self.pwmsw = pwmsw
         self.toolhead = toolhead
@@ -24,14 +24,12 @@ class Move:
         self.timing_callbacks = []
         velocity = min(speed, toolhead.max_velocity)
         self.is_kinematic_move = True
-        #include  e axis
+        #include E axis
         self.axes_d = axes_d = [end_pos[i] - start_pos[i] for i in (0, 1, 2, 3, 4, 5, 6)]
-        #self.move_d = move_d = math.sqrt(sum([d*d for d in axes_d[:6]]))
-        #self.move_d = move_d = math.sqrt(sum([(axes_d[0] + axes_d[4]) * (axes_d[0] + axes_d[4]), (axes_d[1] + axes_d[5]) * (axes_d[1] + axes_d[5]), (axes_d[2] * axes_d[2])]))
-        self.move_d = move_d = math.sqrt(sum([(axes_d[0] + axes_d[4]) * (axes_d[0] + axes_d[4]), 
-                                              (axes_d[1] + axes_d[5]) * (axes_d[1] + axes_d[5]), 
-                                              (axes_d[2] * axes_d[2]),
-                                              (axes_d[3] * axes_d[3])
+        self.move_d = move_d = math.sqrt(sum([(axes_d[0] + axes_d[4])**2, 
+                                              (axes_d[1] + axes_d[5])**2, 
+                                              axes_d[2]**2,
+                                              axes_d[3]**2
                                               ]))
         if move_d < .000000001:
             # Extrude only move
@@ -59,19 +57,15 @@ class Move:
         self.delta_v2 = 2.0 * move_d * self.accel
         self.max_smoothed_v2 = 0.
         self.smooth_delta_v2 = 2.0 * move_d * toolhead.max_accel_to_decel
-        #logging.info("start")
         
-    def set_g0_move_speed(self, speed, accel):
-        # only G0 move
+    def set_speed_for_g0(self):
+        g0_speed = self.toolhead.g0_bc_velocity
+        # This is to prevent editing homing speed (Move object created without G0/G1)
         if self.pwmmode is None or self.pwmvalue is None:
             return
-        if self.pwmsw == 0 and speed > 0:
-            #logging.info("G0 MOVE S:%s A:%s v2:%s \n", speed, accel, self.max_cruise_v2)  
-            self.max_cruise_v2 = speed**2
-            self.min_move_t = self.move_d / speed
-            self.accel = min(self.accel, accel)
-            self.delta_v2 = 2.0 * self.move_d * self.accel
-            self.smooth_delta_v2 = min(self.smooth_delta_v2, self.delta_v2)
+        if g0_speed > 0:
+            self.max_cruise_v2 = g0_speed**2
+            self.min_move_t = self.move_d / g0_speed
 
     def limit_speed(self, speed, accel):
         speed2 = speed**2
@@ -81,13 +75,26 @@ class Move:
         self.accel = min(self.accel, accel)
         self.delta_v2 = 2.0 * self.move_d * self.accel
         self.smooth_delta_v2 = min(self.smooth_delta_v2, self.delta_v2)
-        #logging.info("saccel=%s accel=%s speed=%s",self.accel,accel,speed)
-
+        
+        # Make sure speed is not higher than g0 speed
+        if not self.pwmsw and self.pwmmode is not None:
+            if self.axes_d[0] or self.axes_d[1]:
+                g0_speed2 = self.toolhead.g0_xy_velocity**2
+                if g0_speed2 < self.max_cruise_v2:
+                    self.max_cruise_v2 = g0_speed2
+                    self.min_move_t = self.move_d / self.toolhead.g0_xy_velocity
+            if self.axes_d[3]:
+                g0_speed2 = self.toolhead.g0_a_velocity**2
+                if g0_speed2 < self.max_cruise_v2:
+                    self.max_cruise_v2 = g0_speed2
+                    self.min_move_t = self.move_d / self.toolhead.g0_a_velocity
+    
     def move_error(self, msg="Move out of range"):
         ep = self.end_pos
         #m = "%s: %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[3])
         m = "%s: %.3f %.3f %.3f %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[0+3], ep[1+3], ep[2+3], ep[3+3])
         return self.toolhead.printer.command_error(m)
+    
     def calc_junction(self, prev_move):
         if not self.is_kinematic_move or not prev_move.is_kinematic_move:
             return
@@ -96,25 +103,10 @@ class Move:
         # Find max velocity using "approximated centripetal velocity"
         axes_r = self.axes_r
         prev_axes_r = prev_move.axes_r
-
-        # junction_cos_theta = -(axes_r[0] * prev_axes_r[0]
-        #                        + axes_r[1] * prev_axes_r[1]
-        #                        + axes_r[2] * prev_axes_r[2]
-        #                        + axes_r[0+3] * prev_axes_r[0+3]
-        #                        + axes_r[1+3] * prev_axes_r[1+3]
-        #                        + axes_r[2+3] * prev_axes_r[2+3] )
-
-        # junction_cos_theta = -((axes_r[0] + axes_r[4]) * (prev_axes_r[0] + prev_axes_r[4])
-        #                        + (axes_r[1] + axes_r[5]) * (prev_axes_r[1] + prev_axes_r[5])
-        #                        + axes_r[2] * prev_axes_r[2])   
-
         junction_cos_theta = -((axes_r[0] + axes_r[4]) * (prev_axes_r[0] + prev_axes_r[4])
                                + (axes_r[1] + axes_r[5]) * (prev_axes_r[1] + prev_axes_r[5])
                                + axes_r[2] * prev_axes_r[2]
-                               + axes_r[3] * prev_axes_r[3])                                 
-
-        #logging.info("axes_r=%s prev_axes_r=%s  jcos=%s", axes_r, prev_axes_r, junction_cos_theta)                       
-                             
+                               + axes_r[3] * prev_axes_r[3])
         if junction_cos_theta > 0.999999:
             return
         junction_cos_theta = max(junction_cos_theta, -0.999999)
@@ -135,6 +127,7 @@ class Move:
         self.max_smoothed_v2 = min(
             self.max_start_v2
             , prev_move.max_smoothed_v2 + prev_move.smooth_delta_v2)
+    
     def set_junction(self, start_v2, cruise_v2, end_v2):
         # Determine accel, cruise, and decel portions of the move distance
         half_inv_accel = .5 / self.accel
@@ -271,17 +264,19 @@ class ToolHead:
         self.max_accel = config.getfloat('max_accel', above=0.)
         min_cruise_ratio = 0.5
         if config.getfloat('minimum_cruise_ratio', None) is None:
-            req_accel_to_decel = config.getfloat('max_accel_to_decel', None,
-                                                 above=0.)
+            req_accel_to_decel = config.getfloat('max_accel_to_decel', None, above=0.)
             if req_accel_to_decel is not None:
                 config.deprecate('max_accel_to_decel')
-                min_cruise_ratio = 1. - min(1., (req_accel_to_decel
-                                                 / self.max_accel))
-        self.min_cruise_ratio = config.getfloat('minimum_cruise_ratio',
-                                                min_cruise_ratio,
-                                                below=1., minval=0.)
-        self.square_corner_velocity = config.getfloat(
-            'square_corner_velocity', 5., minval=0.)
+                min_cruise_ratio = 1. - min(1., (req_accel_to_decel / self.max_accel))
+        self.min_cruise_ratio = config.getfloat('minimum_cruise_ratio',min_cruise_ratio, below=1., minval=0.)
+        self.square_corner_velocity = config.getfloat('square_corner_velocity', 5., minval=0.)
+        
+        # G0 moves have set velocities. Grab them
+        self.g0_bc_velocity = config.getfloat('g0_speed_galvo', 0, minval=0.)
+        self.g0_xy_velocity = config.getfloat('g0_speed_xy', 0, minval=0.)
+        self.g0_a_velocity = config.getfloat('g0_speed_a', 0, minval=0.)
+        self.g0_z_velocity = config.getfloat('g0_speed_z', 0, minval=0.)
+        
         self.junction_deviation = self.max_accel_to_decel = 0.
         self._calc_junction_deviation()
         # Input stall detection
@@ -788,3 +783,4 @@ class ToolHead:
 def add_printer_objects(config):
     config.get_printer().add_object('toolhead', ToolHead(config))
     kinematics.extruder.add_printer_objects(config)
+
