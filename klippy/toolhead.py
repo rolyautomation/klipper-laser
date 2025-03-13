@@ -80,12 +80,12 @@ class Move:
         if not self.pwmsw and self.pwmmode is not None:
             if self.axes_d[0] or self.axes_d[1]:
                 g0_speed2 = self.toolhead.g0_xy_velocity**2
-                if g0_speed2 < self.max_cruise_v2:
+                if g0_speed2 < self.max_cruise_v2 and g0_speed2 > 0:
                     self.max_cruise_v2 = g0_speed2
                     self.min_move_t = self.move_d / self.toolhead.g0_xy_velocity
             if self.axes_d[3]:
                 g0_speed2 = self.toolhead.g0_a_velocity**2
-                if g0_speed2 < self.max_cruise_v2:
+                if g0_speed2 < self.max_cruise_v2 and g0_speed2 > 0:
                     self.max_cruise_v2 = g0_speed2
                     self.min_move_t = self.move_d / self.toolhead.g0_a_velocity
     
