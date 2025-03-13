@@ -24,12 +24,18 @@ class Move:
         self.timing_callbacks = []
         velocity = min(speed, toolhead.max_velocity)
         self.is_kinematic_move = True
-        #include E axis
+        # include E axis
         self.axes_d = axes_d = [end_pos[i] - start_pos[i] for i in (0, 1, 2, 3, 4, 5, 6)]
-        self.move_d = move_d = math.sqrt(sum([(axes_d[0] + axes_d[4])**2, 
+        # We pick the maximum between B/C and X/Y moves if they are not in the same direction
+        if axes_d[0] * axes_d[4] < 0 or axes_d[1] * axes_d[5] < 0:
+            xy_move_d = math.sqrt(sum([axes_d[0]**2, axes_d[1]**2, axes_d[2]**2, axes_d[3]**2]))
+            bc_move_d = math.sqrt(sum([axes_d[4]**2, axes_d[5]**2, axes_d[2]**2, axes_d[3]**2]))
+            self.move_d = move_d = max(xy_move_d, bc_move_d)
+        # Otherwise we add X/B and Y/C together
+        else:
+            self.move_d = move_d = math.sqrt(sum([(axes_d[0] + axes_d[4])**2, 
                                               (axes_d[1] + axes_d[5])**2, 
-                                              axes_d[2]**2,
-                                              axes_d[3]**2
+                                              axes_d[2]**2, axes_d[3]**2
                                               ]))
         if move_d < .000000001:
             # Extrude only move
@@ -76,18 +82,24 @@ class Move:
         self.delta_v2 = 2.0 * self.move_d * self.accel
         self.smooth_delta_v2 = min(self.smooth_delta_v2, self.delta_v2)
         
+        # Guard against changing homing speed (Move object created without G0/G1)
+        if self.pwmmode is None or self.pwmvalue is None:
+            return
+        
         # Make sure speed is not higher than g0 speed
-        if not self.pwmsw and self.pwmmode is not None:
+        if not self.pwmsw:
             if self.axes_d[0] or self.axes_d[1]:
                 g0_speed2 = self.toolhead.g0_xy_velocity**2
-                if g0_speed2 < self.max_cruise_v2 and g0_speed2 > 0:
+                # Guard against g0_xy_velocity = 0 (missing in config file)
+                if g0_speed2 > 0 and g0_speed2 < self.max_cruise_v2:
                     self.max_cruise_v2 = g0_speed2
                     self.min_move_t = self.move_d / self.toolhead.g0_xy_velocity
             if self.axes_d[3]:
                 g0_speed2 = self.toolhead.g0_a_velocity**2
-                if g0_speed2 < self.max_cruise_v2 and g0_speed2 > 0:
+                if g0_speed2 > 0 and g0_speed2 < self.max_cruise_v2:
                     self.max_cruise_v2 = g0_speed2
                     self.min_move_t = self.move_d / self.toolhead.g0_a_velocity
+            # logging.info("Final G0 move speed^2 is:%s, and acceleration is :%s.\n", self.max_cruise_v2, self.accel)
     
     def move_error(self, msg="Move out of range"):
         ep = self.end_pos
@@ -398,7 +410,7 @@ class ToolHead:
                     move.axes_r[0+3], move.axes_r[1+3], move.axes_r[2+3],
                     move.start_v, move.cruise_v, move.accel, 0)
                 #logging.info("\nmove speed S:%s V:%s E:%s A:%s\n", move.start_v, move.cruise_v, move.end_v, move.accel)  
-                #logging.info("\nmove time T:%s a:%s c:%s d:%s\n", next_move_time, move.accel_t, move.cruise_t,move.decel_t)  
+                #logging.info("\nmove time T:%s a:%s c:%s d:%s\n", next_move_time, move.accel_t, move.cruise_t,move.decel_t)
             if move.axes_d[3+3]:
                 self.extruder.move(next_move_time, move)
             next_move_time = (next_move_time + move.accel_t
@@ -783,4 +795,4 @@ class ToolHead:
 def add_printer_objects(config):
     config.get_printer().add_object('toolhead', ToolHead(config))
     kinematics.extruder.add_printer_objects(config)
-
+    
