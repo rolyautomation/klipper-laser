@@ -320,6 +320,18 @@ def main():
     else:
         logging.getLogger().setLevel(debuglevel)
     logging.info("Starting Klippy...")
+
+    autoselcfile = importlib.import_module('.autoselcfile', 'extras')
+    autoselcfile.FUN_GPIO_EN = 1
+    iret = autoselcfile.open_rpi_gpio6()
+    logging.info("rpi_gpio6_runstate:%d",iret)
+    newfn = autoselcfile.get_autoselcfile()
+    if len(newfn) > 0:
+        start_args['config_file'] = newfn
+        logging.info("ASelConfigFile: %s" % (newfn,))
+    else:
+        logging.info("config_file: %s" % (start_args['config_file'],))
+
     git_info = util.get_git_version()
     git_vers = git_info["version"]
     extra_files = [fname for code, fname in git_info["file_status"]

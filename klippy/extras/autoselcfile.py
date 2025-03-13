@@ -17,7 +17,7 @@ UDEV_PATH  =  '/dev/serial/by-id/'
 FIBER_STR = "mfiber"  
 offset_filelist = 2
 DEBUG_LOG = 0
-FUN_GPIO_EN = 1
+FUN_GPIO_EN = 0
 
 
 def fiber_is_exist():  
@@ -59,6 +59,7 @@ def read_data_from_disk_file(filename):
                 
 
 def get_autoselcfile():
+    #open_rpi_gpio6()
     allvars = {}
     allvars = read_data_from_disk_file(DEFAULT_USERFILE)
     yaxis_origin_val = allvars.get(YAXIS_STR, 0)
@@ -92,6 +93,7 @@ def get_autoselcfile():
 
 
 def open_rpi_gpio6():
+    iret = 0
     if FUN_GPIO_EN > 0:
         import RPi.GPIO as GPIO
         # Disable warnings
@@ -103,7 +105,8 @@ def open_rpi_gpio6():
         GPIO.setup(6, GPIO.OUT)
         # Set GPIO pin 6 high
         GPIO.output(6, GPIO.HIGH)
-    pass    
+        iret = 1
+    return iret
 
 class AutoSelectConfigFile:
     def __init__(self, config):
@@ -113,7 +116,8 @@ class AutoSelectConfigFile:
         gcode.register_command("LOOK_AUTOSELECT_CONFIG", self.cmd_LOOK_AUTOSELECT_CONFIG)
         gcode.register_command("SET_YAXIS_ORIGIN", self.cmd_SET_YAXIS_ORIGIN)         
         self.filename = ""
-        self.uservariety_vars = -1
+        self.uservariety_vars = None
+        self.yaxis_origin_val = 0
         self.printer.register_event_handler("klippy:connect",
                                     self._handle_connect_init) 
 
