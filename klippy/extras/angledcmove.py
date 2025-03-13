@@ -618,6 +618,7 @@ class Angledcmove:
         self.name = config.get_name().split(' ')[-1]
         self.reactor = self.printer.get_reactor()
         self.save_vars = None
+        self.uservariety_vars = None
 
         #self.toolhead = self.printer.lookup_object('toolhead')
         self.toolhead = None
@@ -754,7 +755,12 @@ class Angledcmove:
 
 
     def _handle_connect_init(self):
-        self.save_vars = self.printer.lookup_object('save_variables')
+        self.save_vars = self.printer.lookup_object('save_variables',None)
+        self.uservariety_vars = self.printer.lookup_object('data_persistence uservariety',None)
+        self.load_value_swingarmpos()
+        if self.save_vars is None:
+            msg = "please add save variables config"
+            raise self.printer.command_error(msg)
         self.load_value_pos()  
         if self.posoffset > 0:
             self.update_pos_offset()
@@ -897,23 +903,36 @@ class Angledcmove:
         msg = msg + ",%s=%d" % ('posoffset',self.posoffset)
         gcmd.respond_info(msg)
         
-    def cmd_CLEAR_SWINGARMPOS(self, gcmd):                 
-        self.save_vars.cmd_PROG_VARIABLE('swingarm_curpos', repr(-1))
-        self.load_value_pos()
-        gcmd.respond_info("Swingarm position cleared")
+    def cmd_CLEAR_SWINGARMPOS(self, gcmd):  
+        if self.uservariety_vars is not None:                       
+            self.uservariety_vars.cmd_PROG_VARIABLE('swingarm_curpos', repr(-1))
+            self.load_value_swingarmpos()
+            gcmd.respond_info("Swingarm position cleared")
+        else:
+            gcmd.respond_info("cleared fail,no uservariety_vars")
 
 
     def load_value_pos(self):
         self.poshead = self.save_vars.allVariables.get('poshead', 0)        
         self.posuse = self.save_vars.allVariables.get('posuse', 0)  
         self.posoffset = self.save_vars.allVariables.get('posoffset', 0) 
-        self.sarm_curpos_file = self.save_vars.allVariables.get('swingarm_curpos', -1) 
-        self.swingarm_curpos = self.sarm_curpos_file 
+        #self.sarm_curpos_file = self.save_vars.allVariables.get('swingarm_curpos', -1) 
+        #self.swingarm_curpos = self.sarm_curpos_file 
+
+    def load_value_swingarmpos(self): 
+        if self.uservariety_vars is not None:
+            self.sarm_curpos_file = self.uservariety_vars.allVariables.get('swingarm_curpos', -1) 
+            self.swingarm_curpos = self.sarm_curpos_file 
+        else:
+            self.swingarm_curpos = self.sarm_curpos_file = -1                   
 
     def update_swingarm_curpos_file(self): 
-        if self.swingarm_curpos != self.sarm_curpos_file:
-            self.save_vars.cmd_PROG_VARIABLE('swingarm_curpos', repr(self.swingarm_curpos))
-            self.sarm_curpos_file = self.swingarm_curpos
+        if self.uservariety_vars is not None:        
+            if self.swingarm_curpos != self.sarm_curpos_file:
+                self.uservariety_vars.cmd_PROG_VARIABLE('swingarm_curpos', repr(self.swingarm_curpos))
+                self.sarm_curpos_file = self.swingarm_curpos
+        else:
+            self.swingarm_curpos = -1   
 
     def cmd_SAVE_POS_AS(self, gcmd):
         pos = gcmd.get_int('P',1, minval=0, maxval=2)
