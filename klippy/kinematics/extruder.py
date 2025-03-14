@@ -408,7 +408,6 @@ class ExtruderStepperPWM:
         if (self.stepper is not None):
             self.stepper.pauseresumep_stepper_pwm(pwm_prf)
 
-
     #def update_mcu_clock_freq(self):
         # Fetch the latest clock frequency from the MCU
     #    extstepper_mcu = self.stepper.get_mcu()
@@ -418,22 +417,15 @@ class ExtruderStepperPWM:
         self._step_dist_tick  =  self.stepper.get_step_dist()
 
     def cacl_step_dist_tick(self,curspeed=1):
-        self._step_dist_tick  =  self.stepper.get_step_dist()
+        self._step_dist_tick = self.stepper.get_step_dist()
         _step_dist_time = self._step_dist_tick/curspeed
         extstepper_mcu = self.stepper.get_mcu()
-        #_mcu_tick_clock = extstepper_mcu.print_time_to_clock(1.0)
         _mcu_tick_clock = extstepper_mcu.seconds_to_clock(1.0)
-        #_mcu_tick_value =  _step_dist_time*_mcu_tick_clock
-        _mcu_tick_value =  _step_dist_time*_mcu_tick_clock*2
-        #close#logging.info("step_dist:[%s,%s,%s,:%s,%s]", curspeed,self._step_dist_tick, _step_dist_time,_mcu_tick_clock,_mcu_tick_value)
-        #self.update_mcu_clock_freq()
-        #logging.info("get_mcuclock:[%d]", self.mcu_clock_freq_value)
-        #logging.info("step_dist1:[%d]", _mcu_tick_clock)
+        _mcu_tick_value = _step_dist_time*_mcu_tick_clock*2
         if (_mcu_tick_clock > 13000000):
             raise self.printer.command_error("'%d' clock freq is error,please check."
                                              % (_mcu_tick_clock,))  
         return(_mcu_tick_value)
-
 
     def _set_pressure_advance(self, pressure_advance, smooth_time):
         old_smooth_time = self.pressure_advance_smooth_time
@@ -728,11 +720,13 @@ class PrinterExtruderPWM:
                 % (area, self.max_extrude_ratio * self.filament_area))
         '''
 
+    # Dummy function that always returns the max V-squared value
     def calc_junction(self, prev_move, move):
         diff_r = move.axes_r[3+3] - prev_move.axes_r[3+3]
         if diff_r:
             return (self.instant_corner_v / abs(diff_r))**2
         return move.max_cruise_v2
+    
     def move(self, print_time, move):
         axis_r = move.axes_r[3+3]
         accel = move.accel * axis_r
@@ -740,37 +734,13 @@ class PrinterExtruderPWM:
         cruise_v = move.cruise_v * axis_r
         max_cruise_v =  move.max_cruise_v2 ** 0.5
         
-   
         can_pressure_advance = False
-        #pwmmode = 1.0*move.pwmmode
-        #pwmvalue = 1.0*move.pwmvalue   
-        #pwmmode = 1.0*getattr(move, 'pwmmode', 0)
-        #pwmvalue = 1.0*getattr(move, 'pwmvalue', 0)
         pwmmode = 1.0*(move.pwmmode or 0)
         pwmvalue = 1.0*(move.pwmvalue or 0)
-        pwmsw    = 1.0*(move.pwmsw or 0)
-        #close#logging.info("\npwmE: pwm_work_curpower_use=%s pwm_work_mode_use=%s pwmsw=%s\n",
-                #pwmvalue, pwmmode, pwmsw)  
+        pwmsw = 1.0*(move.pwmsw or 0)
 
-        scf = (move.start_v/max_cruise_v)*pwmvalue
-        ccf = (move.cruise_v/max_cruise_v)*pwmvalue
-        ecf = (move.end_v/max_cruise_v)*pwmvalue
-        spwmv = pwmvalue     
-        cpwmv = pwmvalue   
-        epwmv = ecf     
-        if( pwmmode == 2 ):
-               spwmv = scf
-               cpwmv = ccf
-               epwmv = ecf   
-
-        if(epwmv < MIN_PWM_ZERO_VAL):
-            epwmv = 0               
-
-        #logging.info("\npwm Sp:%s V:%s E:%s A:%s\n", move.start_v, move.cruise_v, move.end_v, move.accel)  
-        #logging.info("\npwm time T:%s a:%s c:%s d:%s\n", print_time, move.accel_t, move.cruise_t,move.decel_t)  
-        #logging.info("\npwm S:%s V:%s E:%s M:%s\n", spwmv, cpwmv, epwmv, max_cruise_v)  
-        #move.cruise_v
         speed_pulse_ticks = self.cacl_step_dist_tick(max_cruise_v)
+                        
         if (speed_pulse_ticks is None):
             speed_pulse_ticks = 1500 
         restartcmd_flag  = not self._restartcmd_flag
@@ -780,11 +750,6 @@ class PrinterExtruderPWM:
         else :
             self._restartcmd_flag = restartcmd_flag                    
 
-        #pwmvalue 
-        #pwmmode
-        #if axis_r > 0. and (move.axes_d[0] or move.axes_d[1]):
-            #can_pressure_advance = True
-        # Queue movement (x is extruder movement, y is pressure advance flag)
         self.trapq_append(self.trapq, print_time,
                           move.accel_t, move.cruise_t, move.decel_t,
                           move.start_pos[3+3], 0., 0.,
@@ -792,12 +757,13 @@ class PrinterExtruderPWM:
                           1., can_pressure_advance, restartcmd_flag,
                           pwmmode, pwmvalue, speed_pulse_ticks,
                           start_v, cruise_v, accel, 1)
+        
         self.last_position = move.end_pos[3+3]
+        
     def find_past_position(self, print_time):
         if self.extruder_stepper is None:
             return 0.
         return self.extruder_stepper.find_past_position(print_time)
-
 
     cmd_TPWMSW_help = "TPWMSW ON PAUSERESUME"
     def cmd_default_TPWMSW(self, gcmd):

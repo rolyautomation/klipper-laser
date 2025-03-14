@@ -119,9 +119,12 @@ class Move:
                                + (axes_r[1] + axes_r[5]) * (prev_axes_r[1] + prev_axes_r[5])
                                + axes_r[2] * prev_axes_r[2]
                                + axes_r[3] * prev_axes_r[3])
+               
         if junction_cos_theta > 0.999999:
             return
-        junction_cos_theta = max(junction_cos_theta, -0.999999)
+        if (junction_cos_theta < -0.998): junction_cos_theta = -0.999999
+        else: junction_cos_theta = max(junction_cos_theta, -0.999999)
+        
         sin_theta_d2 = math.sqrt(0.5*(1.0-junction_cos_theta))
         R_jd = sin_theta_d2 / (1. - sin_theta_d2)
         # Approximated circle must contact moves no further away than mid-move
@@ -136,6 +139,7 @@ class Move:
             move_centripetal_v2, prev_move_centripetal_v2,
             extruder_v2, self.max_cruise_v2, prev_move.max_cruise_v2,
             prev_move.max_start_v2 + prev_move.delta_v2)
+                
         self.max_smoothed_v2 = min(
             self.max_start_v2
             , prev_move.max_smoothed_v2 + prev_move.smooth_delta_v2)
@@ -409,8 +413,6 @@ class ToolHead:
                     move.axes_r[0], move.axes_r[1], move.axes_r[2],
                     move.axes_r[0+3], move.axes_r[1+3], move.axes_r[2+3],
                     move.start_v, move.cruise_v, move.accel, 0)
-                #logging.info("\nmove speed S:%s V:%s E:%s A:%s\n", move.start_v, move.cruise_v, move.end_v, move.accel)  
-                #logging.info("\nmove time T:%s a:%s c:%s d:%s\n", next_move_time, move.accel_t, move.cruise_t,move.decel_t)
             if move.axes_d[3+3]:
                 self.extruder.move(next_move_time, move)
             next_move_time = (next_move_time + move.accel_t
@@ -521,45 +523,31 @@ class ToolHead:
         start_pos_use = tuple(start_pos_in)
         end_pos_use  = tuple(end_pos_in)
         axes_d = [end_pos_use[i] - start_pos_use[i] for i in (0, 1, 2, 3, 4, 5, 6)]
-        move_d = math.sqrt(sum([d*d for d in axes_d[:6]]))
+         # We pick the maximum between B/C and X/Y moves if they are not in the same direction
+        if axes_d[0] * axes_d[4] < 0 or axes_d[1] * axes_d[5] < 0:
+            xy_move_d = math.sqrt(sum([axes_d[0]**2, axes_d[1]**2, axes_d[2]**2, axes_d[3]**2]))
+            bc_move_d = math.sqrt(sum([axes_d[4]**2, axes_d[5]**2, axes_d[2]**2, axes_d[3]**2]))
+            move_d = max(xy_move_d, bc_move_d)
+        # Otherwise we add X/B and Y/C together
+        else:
+            move_d = math.sqrt(sum([(axes_d[0] + axes_d[4])**2, 
+                                              (axes_d[1] + axes_d[5])**2, 
+                                              axes_d[2]**2, axes_d[3]**2
+                                              ]))
         if move_d < .000000001:
             move_d = 0.01
-            #move_d = 0.
         else:  
-            #move_d =  move_d/2  #test is ok
-            #move_d =  move_d/4
-            #move_d =  move_d
-            move_d =  self.powervary_factor*move_d
+            move_d = self.powervary_factor * move_d
         return(move_d)
-
-    def predict_move_distance_max(self,newpos):
-        start_pos_in = self.commanded_pos
-        end_pos_in   = newpos
-        start_pos_use = tuple(start_pos_in)
-        end_pos_use  = tuple(end_pos_in)
-        axes_d = [abs(end_pos_use[i] - start_pos_use[i]) for i in (0, 1, 2, 3, 4, 5, 6)]
-        move_d = max(axes_d)
-        if move_d < .000000001:
-            move_d = 0.01
-            #move_d = 0.
-        else:  
-            #move_d =  move_d/2  #test is ok
-            #move_d =  move_d/4
-            #move_d =  move_d
-            move_d =  self.powervary_factor*move_d
-        return(move_d)    
 
     def predict_move_distance(self,newpos):
         resd = 0.01
         if self.powervary_mode > 0 :
-            resd = self.predict_move_distance_max(newpos)    
+            resd = self.predict_move_distance_old(newpos)    
         else:
             resd = self.predict_move_distance_old(newpos)
-        #resd = self.predict_move_distance_old(newpos)    
-        #resd = self.predict_move_distance_max(newpos)
         return(resd)
-        
-        
+         
     def soft_homing_BC_AXIS(self):
         self.kin.soft_homing_BC_AXIS()
     def get_position(self):
@@ -579,7 +567,6 @@ class ToolHead:
             return
         if move.is_kinematic_move:
             self.kin.check_move(move)
-        #if move.axes_d[3]:
         if move.axes_d[3+3]:    
             self.extruder.check_move(move)
         self.commanded_pos[:] = move.end_pos
@@ -795,4 +782,4 @@ class ToolHead:
 def add_printer_objects(config):
     config.get_printer().add_object('toolhead', ToolHead(config))
     kinematics.extruder.add_printer_objects(config)
-    
+   

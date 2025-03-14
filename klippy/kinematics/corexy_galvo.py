@@ -106,32 +106,18 @@ class CoreXYGalvoKinematics:
 
         # Setup boundary checks
         max_velocity, max_accel = toolhead.get_max_velocity()
-        self.max_z_velocity = config.getfloat(
-            'max_z_velocity', max_velocity, above=0., maxval=max_velocity)
-        self.max_z_accel = config.getfloat(
-            'max_z_accel', max_accel, above=0., maxval=max_accel)
-        
-        self.mech_enable_alone = config.getfloat(
-            'mech_enable_alone', 0, above=0.)
-
-        self.max_m_velocity = config.getfloat(
-            'max_m_velocity', max_velocity, above=0., maxval=max_velocity)
-        self.max_m_accel = config.getfloat(
-            'max_m_accel', max_accel, above=0., maxval=max_accel)
-
-        self.max_a_velocity = config.getfloat(
-            'max_a_velocity', max_velocity, above=0., maxval=max_velocity)
-        self.max_a_accel = config.getfloat(
-            'max_a_accel', max_accel, above=0., maxval=max_accel)   
+        self.max_z_velocity = config.getfloat('max_z_velocity', max_velocity, above=0., maxval=max_velocity)
+        self.max_z_accel = config.getfloat('max_z_accel', max_accel, above=0., maxval=max_accel)
+        self.mech_enable_alone = config.getfloat('mech_enable_alone', 0, above=0.)
+        self.max_m_velocity = config.getfloat('max_m_velocity', max_velocity, above=0., maxval=max_velocity)
+        self.max_m_accel = config.getfloat('max_m_accel', max_accel, above=0., maxval=max_accel)
+        self.max_a_velocity = config.getfloat('max_a_velocity', max_velocity, above=0., maxval=max_velocity)
+        self.max_a_accel = config.getfloat('max_a_accel', max_accel, above=0., maxval=max_accel)   
 
         self.max_h_velocity = max_velocity
         self.max_h_accel = max_accel
-        #xyz
-        #self.endstop_hit = [(0, 0)] * 3
         self.limits = [(1.0, -1.0)] * (3+3)
-        #ranges = [r.get_range() for r in self.rails]
-        #self.axes_min = toolhead.Coord(*[r[0] for r in ranges], e=0.)
-        #self.axes_max = toolhead.Coord(*[r[1] for r in ranges], e=0.)
+
 
     def get_steppers(self):
         return [s for rail in self.rails for s in rail.get_steppers()]
@@ -142,15 +128,10 @@ class CoreXYGalvoKinematics:
     def calc_position(self, stepper_positions):
         pos = [stepper_positions[rail.get_name()] for rail in self.rails]
         x = 0.5 * (pos[0] + pos[1])
-        y = 0.5 * (pos[0] - pos[1])
-        #return [0.5 * (pos[0] + pos[1]), 0.5 * (pos[0] - pos[1]), pos[2]]
-        #bx = math.tan(pos[0]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
-        #cy = math.tan(pos[1]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
-        #bx = math.tan(pos[4]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
-        #cy = math.tan(pos[5]-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo     
+        y = 0.5 * (pos[0] - pos[1])   
         bx = (pos[4]/self._magnify_factor-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
-        cy = (pos[5]/self._magnify_factor-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo             
-        #return [bx, cy, pos[2]]
+        cy = (pos[5]/self._magnify_factor-self._hradiation_angle)*self._focus_distance + self._half_distance_galvo
+        
         if ( self.ma_module is not None and 0 != self.ma_module.get_curma_index() ):
             offp = self.ma_module.get_curma_index()
             return [x, y, pos[2], pos[5+offp], bx, cy]
@@ -325,20 +306,21 @@ class CoreXYGalvoKinematics:
             a_ratio = move.move_d / abs(move.axes_d[3])
             s_a_v = self.max_a_velocity * a_ratio
             s_a_a = self.max_a_accel * a_ratio
-            move.limit_speed(s_a_v, s_a_a)     
+            move.limit_speed(s_a_v, s_a_a)
         elif move.axes_d[0] or move.axes_d[1]:
             x_ratio = 0
             y_ratio = 0
             if move.axes_d[0]:
-                x_ratio = move.move_d / abs(move.axes_d[0]) 
+                x_ratio = move.move_d / abs(move.axes_d[0])
             if move.axes_d[1]:
                 y_ratio = move.move_d / abs(move.axes_d[1])
-            if move.axes_d[0] and move.axes_d[1]:   
+            
+            if move.axes_d[0] and move.axes_d[1]:
                 move.limit_speed(self.max_m_velocity, self.max_m_accel) 
             elif x_ratio :
                 s_x_v = self.max_m_velocity * x_ratio
                 s_x_a = self.max_m_accel * x_ratio                                             
-                move.limit_speed(s_x_v, s_x_a) 
+                move.limit_speed(s_x_v, s_x_a)
             elif y_ratio :
                 s_y_v = self.max_m_velocity * y_ratio
                 s_y_a = self.max_m_accel * y_ratio                                             

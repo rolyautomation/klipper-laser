@@ -6,7 +6,7 @@
 import logging
 
 
-# Enum
+# PWM mode enumerations
 #Close
 PWM_MODE_IDLE = 0
 #Continuous
@@ -200,6 +200,7 @@ class GCodeMove:
             adj_power_value = 255
         return adj_power_value  
 
+    # To allow for adjustable speed while job is running
     def adj_speed_factor(self, speed_mmsec): 
         adj_speed_value =  speed_mmsec*self.laser_speed_factor/self.laser_adj_ref
         return adj_speed_value
@@ -380,6 +381,10 @@ class GCodeMove:
 
         self.adj_power_pwm  =  self.adj_power_factor(self.pwm_work_curpower_use)
         self.adj_speed_mmsec  =  self.adj_speed_factor(self.speed)
+        # Quick refersher:
+        # pwm_work_mode_use: 0, 1, 2 --> M5, M3, M4
+        # adj_power_pwm: S value from G-code file
+        # pwm_work_ponoff_use: 0, 1 --> effectively distinguishes between G0 and G1        
         self.move_with_transform(self.last_position, self.adj_speed_mmsec, self.pwm_work_mode_use, self.adj_power_pwm, self.pwm_work_ponoff_use)  
             
         
