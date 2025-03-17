@@ -566,9 +566,6 @@ class PrinterHoming:
         # Register g-code commands
         gcode = self.printer.lookup_object('gcode')
         gcode.register_command('G28', self.cmd_G28)
-        #gcode.register_command('M280', self.cmd_M280_JOG_STA)        
-        #gcode.register_command('M281', self.cmd_M281_JOG_END)
-        #gcode.register_command('M282', self.cmd_M282_JOG_CLS)   
         gcode.register_command('M284', self.cmd_M284_JOG_XYZ)  
         gcode.register_command('M285', self.cmd_M285_JOG_TRIGG)   
         self._recpoint = {}
@@ -733,3 +730,4 @@ class PrinterHoming:
 
 def load_config(config):
     return PrinterHoming(config)
+
