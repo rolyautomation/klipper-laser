@@ -988,7 +988,7 @@ class MCU:
             or self._is_timeout):
             return
         self._is_timeout = True
-        logging.info("Timeout with MCU '%s' (eventtime=%f)",
+        logging.info("TP Timeout with MCU '%s' (eventtime=%f)",
                      self._name, eventtime)
         self._printer.invoke_shutdown("Lost communication with MCU '%s'" % (
             self._name,))

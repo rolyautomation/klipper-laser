@@ -16,8 +16,96 @@ YAXIS_STR = "y_origin_position"
 UDEV_PATH  =  '/dev/serial/by-id/' 
 FIBER_STR = "mfiber"  
 offset_filelist = 2
-DEBUG_LOG = 0
+DEBUG_LOG = 1
 FUN_GPIO_EN = 0
+#CHK_DEV_FILE="/dev/ttyAMA0"
+CHK_DEV_FILE="/dev/serial/by-id/usb-mfiber_rp2040_E66368254F456427-if00"
+
+
+
+def verify_klipper_device(port='/dev/ttyAMA0', baudrate=250000, timeout=1):
+    """
+    Verify if Klipper device communication is normal
+    Parameters:
+    port:  Serial device path, default is'/dev/ttyAMA0 '
+    baudrate:  Baud rate, Klipper defaults to 250000
+    timeout:  Timeout (seconds)
+    returns:
+    (bool, str):  (Whether communication is normal, detailed information)
+    """
+    import serial
+    import time
+    import binascii
+
+    if not os.path.exists(port):
+        return False, f"devf:{port} is not exist"
+
+    if DEBUG_LOG > 0:
+        logging.info("verify_klipper_device:%s",port)
+
+    try:
+        # Open serial port
+        ser = serial.Serial(
+            port=port,
+            baudrate=baudrate,
+            timeout=timeout,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE
+        )
+        
+        if not ser.is_open:
+            return False, f"Unable to open device {port}"
+        
+        # Clear buffer
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
+        
+        # Send Klipper identify command
+        # This is the first command of Klipper communication, used to get device information
+        #identify_cmd = b"identify offset=0 count=40\n"
+        #identify_cmd = b"identify offset=0 count=10\n"
+        #identify_cmd = bytes([0x08, 0x00, 0x01, 0x00, 0x02, 0x03, 0xE7, 0x7E])        
+        #identify_cmd = bytes([0x08, 0x00, 0x01, 0x00, 0x28, 0x4F, 0x91, 0x7E])
+        #identify_cmd = bytes([0x08, 0x00, 0x01, 0x00, 0x00,0x28, 0x4F, 0x91, 0x7E])
+        #identify_cmd = bytes([0x08, 0x01, 0x01, 0x00, 0x28, 0xB5, 0x79, 0x7E])
+        identify_cmd = bytes([0x08, 0x10, 0x01, 0x00, 0x28, 0x3F, 0xE6, 0x7E])
+        ser.write(identify_cmd)
+
+
+        # Wait for response
+        time.sleep(0.1)
+        
+        # Read response
+        response = b""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if ser.in_waiting > 0:
+                response += ser.read(ser.in_waiting)
+                break
+                #if b"identify_response" in response:
+                #    break
+            time.sleep(0.1)
+        
+        # Close serial port
+        ser.close()
+        
+        # Analyze response
+        if b"identify_response" in response:
+            # Successfully received Klipper response
+            return True, f"Device communication normal, received Klipper response: {response[:100]}..."
+        else:
+            # Did not receive expected response
+            if response:
+                return False, f"Received unknown response: {binascii.hexlify(response[:100])}"
+            else:
+                return False, "No response received, device may not be running Klipper firmware or communication parameters are incorrect"
+    
+    except serial.SerialException as e:
+        return False, f"Serial port exception: {str(e)}"
+    except Exception as e:
+        return False, f"Error during verification: {str(e)}"
+
 
 
 def fiber_is_exist():  
@@ -114,7 +202,8 @@ class AutoSelectConfigFile:
         # Register commands
         gcode = config.get_printer().lookup_object('gcode')
         gcode.register_command("LOOK_AUTOSELECT_CONFIG", self.cmd_LOOK_AUTOSELECT_CONFIG)
-        gcode.register_command("SET_YAXIS_ORIGIN", self.cmd_SET_YAXIS_ORIGIN)         
+        gcode.register_command("SET_YAXIS_ORIGIN", self.cmd_SET_YAXIS_ORIGIN)  
+        gcode.register_command("CHK_ROTARY_EXIST", self.cmd_CHK_ROTARY_EXIST)                
         self.filename = ""
         self.uservariety_vars = None
         self.yaxis_origin_val = 0
@@ -131,6 +220,15 @@ class AutoSelectConfigFile:
         self.filename = filename
         gcmd.respond_info("AutoSelectConfigFile: %s" % (filename,))
 
+
+    def cmd_CHK_ROTARY_EXIST(self, gcmd):
+        success, message = verify_klipper_device(CHK_DEV_FILE)
+        msg = "no"
+        if success:
+            msg = "yes"    
+        msg = "%s:%s" % (msg, message)
+        gcmd.respond_info(msg)
+  
     def get_status(self, eventtime):
         return {
                 "filename": self.filename,
