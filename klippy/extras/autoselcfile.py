@@ -16,13 +16,14 @@ YAXIS_STR = "y_origin_position"
 UDEV_PATH  =  '/dev/serial/by-id/' 
 FIBER_STR = "mfiber"  
 offset_filelist = 2
-DEBUG_LOG = 1
+DEBUG_LOG = 0
 FUN_GPIO_EN = 0
 #CHK_DEV_FILE="/dev/ttyAMA0"
 CHK_DEV_FILE="/dev/serial/by-id/usb-mfiber_rp2040_E66368254F456427-if00"
 
 
 
+'''
 def verify_klipper_device(port='/dev/ttyAMA0', baudrate=250000, timeout=1):
     """
     Verify if Klipper device communication is normal
@@ -105,7 +106,7 @@ def verify_klipper_device(port='/dev/ttyAMA0', baudrate=250000, timeout=1):
         return False, f"Serial port exception: {str(e)}"
     except Exception as e:
         return False, f"Error during verification: {str(e)}"
-
+'''
 
 
 def fiber_is_exist():  
@@ -203,7 +204,7 @@ class AutoSelectConfigFile:
         gcode = config.get_printer().lookup_object('gcode')
         gcode.register_command("LOOK_AUTOSELECT_CONFIG", self.cmd_LOOK_AUTOSELECT_CONFIG)
         gcode.register_command("SET_YAXIS_ORIGIN", self.cmd_SET_YAXIS_ORIGIN)  
-        gcode.register_command("CHK_ROTARY_EXIST", self.cmd_CHK_ROTARY_EXIST)                
+        #gcode.register_command("CHK_ROTARY_EXIST", self.cmd_CHK_ROTARY_EXIST)                
         self.filename = ""
         self.uservariety_vars = None
         self.yaxis_origin_val = 0
@@ -221,6 +222,7 @@ class AutoSelectConfigFile:
         gcmd.respond_info("AutoSelectConfigFile: %s" % (filename,))
 
 
+    '''
     def cmd_CHK_ROTARY_EXIST(self, gcmd):
         success, message = verify_klipper_device(CHK_DEV_FILE)
         msg = "no"
@@ -228,7 +230,9 @@ class AutoSelectConfigFile:
             msg = "yes"    
         msg = "%s:%s" % (msg, message)
         gcmd.respond_info(msg)
+    '''
   
+
     def get_status(self, eventtime):
         return {
                 "filename": self.filename,
