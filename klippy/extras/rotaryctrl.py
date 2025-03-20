@@ -19,6 +19,7 @@ R3_DOACTION_YES = 6
 R3_DOACTION_NO =  7
 
 
+
 class RotaryCtrlInterface:
     def __init__(self, config):
         self.printer = config.get_printer()
@@ -38,6 +39,12 @@ class RotaryCtrlInterface:
         #if self.multimotor_existf :
         self.multimotor_axis_obj = None
         self.cur_selindex = -1
+        self.rotary_exist = 0
+
+        self.rmcu_name = config.get('rmcu_name', "rollerset")
+        self.reconnect_event_name = f"danger:non_critical_mcu_{self.rmcu_name}:reconnected"
+        self.disconnect_event_name = f"danger:non_critical_mcu_{self.rmcu_name}:disconnected"
+        
 
         #multimotor_axis_obj = self.printer.lookup_object('multimotor_axis')
         #    if multimotor_axis_obj is not None:
@@ -78,11 +85,38 @@ class RotaryCtrlInterface:
         self.rotray_pkeystate = [0, 0, 0, 0]
         self.doaction_ins = 0
 
+        self.printer.register_event_handler(
+             self.reconnect_event_name,
+             self.handle_reconnect
+         )
 
+        self.printer.register_event_handler(
+            self.disconnect_event_name,
+            self.handle_disconnect
+        )
 
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_rotaryctrl)     
 
+
+
+    def handle_reconnect(self):
+        self.rotary_exist = 1
+        self.last_rotarystate = [0, 0, 0, 0]
+        self.pre_rotarystate = [0, 0, 0, 0]   
+        self.rotray_pkeystate = [0, 0, 0, 0]   
+        logging.info("rotaryctrl:handle_reconnect")       
+        pass
+ 
+
+    def handle_disconnect(self):
+        self.rotary_exist = 0
+        self.last_rotarystate = [0, 0, 0, 0]
+        self.pre_rotarystate = [0, 0, 0, 0]   
+        self.rotray_pkeystate = [0, 0, 0, 0]    
+        logging.info("rotaryctrl:handle_disconnect") 
+        self.cmd_SET_MULTIMOTOR_AXIS(-1)            
+        pass
 
 
     def _handle_connect_rotaryctrl(self):
@@ -103,6 +137,7 @@ class RotaryCtrlInterface:
                 self.ardistllist.append(rotation_dist)
                 #self.arsprllist.append(steps_per_rotation)
         self.anum = len(self.ardistllist)
+        logging.info("%s:%s:%s", self.rmcu_name, self.reconnect_event_name, self.disconnect_event_name)
         #pass 
 
 
@@ -111,8 +146,12 @@ class RotaryCtrlInterface:
             self.cur_selindex = self.multimotor_axis_obj.get_curselindex()
         pass  
 
+
     cmd_SELECT_ROTARY_help = "select rotary controller by enable status"
     def cmd_SELECT_ROTARY(self, gcmd):
+        if self.rotary_exist == 0:
+            gcmd.respond_info("rotary not exist")
+            return
         index = gcmd.get_int('NUM', minval=-1, maxval=10)
         selectindex = 10
         if index >= 0 and index < 4:
@@ -132,11 +171,24 @@ class RotaryCtrlInterface:
                 "M118  SELECT_ROTARY %d SUCCESS \n" 
                 % (selectindex, selectindex)
                 )            
-        gcmd.respond_info(msgh)   
+        gcmd.respond_info(msgh)  
+
+
+    def cmd_SET_MULTIMOTOR_AXIS(self, selectindex=-1): 
+        self.gcode.run_script_from_command(
+            "SET_MULTIMOTOR_AXIS NUM=%d \n" 
+            "M118  SELECT_ROTARY %d SUCCESS \n" 
+            % (selectindex, selectindex)
+            )                
+        pass
+
 
 
     cmd_SET_ROTARY_ENABLE_help = "set rotary enable status"
     def cmd_SET_ROTARY_ENABLE(self, gcmd):
+        if self.rotary_exist == 0:
+            gcmd.respond_info("rotary not exist")
+            return
         msgh = "setrotary:"
         gval_string = gcmd.get('ARRAY',None)
         if gval_string == None:
@@ -157,6 +209,9 @@ class RotaryCtrlInterface:
 
 
     def cmd_TEST_ROTARY(self, gcmd):
+        if self.rotary_exist == 0:
+            gcmd.respond_info("rotary not exist")
+            return
         inputnum_val  =  gcmd.get_int('N', 0, minval=0, maxval=3)
         set_val  =  gcmd.get_int('V', 0, minval=0, maxval=1)   
         self.last_rotarystate[inputnum_val] = set_val   
@@ -165,6 +220,9 @@ class RotaryCtrlInterface:
 
     cmd_M520_ACIRCUM_help = "set rotary a axis circum"
     def cmd_M520_ACIRCUM(self, gcmd):
+        if self.rotary_exist == 0:
+            gcmd.respond_info("rotary not exist")
+            return        
         #if self.toolhead is None:
             #self.toolhead = self.printer.lookup_object('toolhead')
         #self.toolhead.flush_step_generation()
@@ -220,7 +278,8 @@ class RotaryCtrlInterface:
             else:
                 template = self.abnormal_template
             try:
-                self.gcode.run_script(template.render())
+                if self.rotary_exist > 0:
+                    self.gcode.run_script(template.render())
                 #self.gcode.run_script_from_command(template.render())
             except:
                 logging.exception("Script running error key event handle in rotary ctrl")
@@ -253,7 +312,8 @@ class RotaryCtrlInterface:
                 template = self.abnormal_template
             try:
                 #self.gcode.run_script(template.render())
-                self.gcode.run_script_from_command(template.render())
+                if self.rotary_exist > 0:
+                    self.gcode.run_script_from_command(template.render())
             except:
                 logging.exception("Script running error key event handle in rotary ctrl softsync")
             self.inside_handlegcode = False            
@@ -354,6 +414,7 @@ class RotaryCtrlInterface:
         self.update_rotary_selectindex()
         rotary_status['rotary_enabled'] = [ self.last_rotarystate[0], self.last_rotarystate[1], self.last_rotarystate[2], self.last_rotarystate[3] ]
         rotary_status['rotary_selected'] = self.cur_selindex
+        rotary_status['rotary_exist'] = self.rotary_exist
         return dict(rotary_status)
 
 
