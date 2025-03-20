@@ -237,37 +237,34 @@ class RotaryCtrlInterface:
             self.mcu_obj.set_used_flag(True)
         gcmd.respond_info(msgh)
     
-    
+
+    def set_rotation_distance(self, selindex, acircumval):
+        retacircumval =  0
+        if selindex >= 0 and selindex < self.anum:
+            s = self.asteplist[selindex]
+            rotation_dist, rd_notuse = s.get_rotation_distance()
+            if acircumval < self.epsilon:
+                acircumval = self.ardistllist[selindex]
+            if abs(acircumval-rotation_dist) > self.epsilon:
+                self.toolhead.flush_step_generation()
+                s.set_rotation_distance(acircumval)
+                retacircumval =  acircumval
+            else:
+                retacircumval =  acircumval  
+        return  retacircumval
+
+
     cmd_M520_ACIRCUM_help = "set rotary a axis circum"
     def cmd_M520_ACIRCUM(self, gcmd):
         if self.rotary_exist == 0:
             gcmd.respond_info("rotary not exist")
             return        
-        #if self.toolhead is None:
-            #self.toolhead = self.printer.lookup_object('toolhead')
-        #self.toolhead.flush_step_generation()
-        #logging.info("step_list" + str(self.astepdict))   
-        #logging.info("ardist_list" + str(self.ardistllist))  
-        #logging.info("anum:" + str(self.anum)) 
-        #logging.info("arspr_list" + str(self.arsprllist))   
-
         acircumval = gcmd.get_float('S', 0., minval=0.)
-        msgh = "M520 S" + str(acircumval) + " "
-        if self.cur_selindex >= 0 and self.cur_selindex < self.anum:
-            s = self.asteplist[self.cur_selindex]
-            rotation_dist, rd_notuse = s.get_rotation_distance()
-            if acircumval < self.epsilon:
-                acircumval = self.ardistllist[self.cur_selindex]
-            if abs(acircumval-rotation_dist) > self.epsilon:
-                self.toolhead.flush_step_generation()
-                s.set_rotation_distance(acircumval)
-                msgh = "M520 S" + str(acircumval) + " done" 
-            else:
-                msgh = "current value is equal to setting value[%s == %s]" % (acircumval, rotation_dist)          
-        elif self.cur_selindex < 0:
-            msgh = "please select rotary by SELECT_ROTARY first"
-        else:
-            msgh = "input index out of range[%d > %d]" % (self.cur_selindex, self.anum)
+        msgh = "M520 S" + str(acircumval) + ">"
+        for i in range(4):
+            retacircumval = self.set_rotation_distance(i, acircumval) 
+            msgh += str(i) + ":" + str(retacircumval) + ","   
+        msgh += "done"  
         gcmd.respond_info(msgh)  
 
 
