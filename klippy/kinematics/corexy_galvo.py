@@ -104,20 +104,24 @@ class CoreXYGalvoKinematics:
         config.get_printer().register_event_handler("stepper_enable:motor_off",
                                                     self._motor_off)
 
-        # Setup boundary checks
+        # Grab max velocity and accelerations
         max_velocity, max_accel = toolhead.get_max_velocity()
-        self.max_z_velocity = config.getfloat('max_z_velocity', max_velocity, above=0., maxval=max_velocity)
-        self.max_z_accel = config.getfloat('max_z_accel', max_accel, above=0., maxval=max_accel)
         self.mech_enable_alone = config.getfloat('mech_enable_alone', 0, above=0.)
         self.max_m_velocity = config.getfloat('max_m_velocity', max_velocity, above=0., maxval=max_velocity)
         self.max_m_accel = config.getfloat('max_m_accel', max_accel, above=0., maxval=max_accel)
+        self.max_z_velocity = config.getfloat('max_z_velocity', max_velocity, above=0., maxval=max_velocity)
+        self.max_z_accel = config.getfloat('max_z_accel', max_accel, above=0., maxval=max_accel)
         self.max_a_velocity = config.getfloat('max_a_velocity', max_velocity, above=0., maxval=max_velocity)
-        self.max_a_accel = config.getfloat('max_a_accel', max_accel, above=0., maxval=max_accel)   
-
+        self.max_a_accel = config.getfloat('max_a_accel', max_accel, above=0., maxval=max_accel)
         self.max_h_velocity = max_velocity
         self.max_h_accel = max_accel
+        # Set G0 speeds
+        self.g0_galvo_velocity = config.getfloat('g0_speed_galvo', max_velocity, minval=0.)
+        self.g0_m_velocity = config.getfloat('g0_speed_xy', 200, minval=0.)
+        self.g0_a_velocity = config.getfloat('g0_speed_a', 50, minval=0.)
+        self.g0_z_velocity = config.getfloat('g0_speed_z', 50, minval=0.)
+        # Set placeholder limits
         self.limits = [(1.0, -1.0)] * (3+3)
-
 
     def get_steppers(self):
         return [s for rail in self.rails for s in rail.get_steppers()]
@@ -271,12 +275,9 @@ class CoreXYGalvoKinematics:
                     raise move.move_error("Must home axis XYZ first")
                 raise move.move_error()
 
-
         for i in (3, 4, 5):
             if (i == 3) :
-                continue
-            #logging.info("check limits (%.3f %.3f %.2f)",
-                     #end_pos[i], self.limits[i][0], self.limits[i][1])                
+                continue             
             if (move.axes_d[i]
                 and (end_pos[i] < self.limits[i][0]
                      or end_pos[i] > self.limits[i][1])):
@@ -285,56 +286,62 @@ class CoreXYGalvoKinematics:
                 raise move.move_error()
 
     def check_move(self, move):      
+        # Check endstops as needed
         limits = self.limits
-        # Check X/Y endstops
         xpos, ypos = move.end_pos[:2]
-        if (xpos < limits[0][0] or xpos > limits[0][1]
-            or ypos < limits[1][0] or ypos > limits[1][1]):
-            self._check_endstops(move)
-        # Check B/C endstops
         bpos, cpos = move.end_pos[4:6]
-        if (bpos < limits[0+4][0] or bpos > limits[0+4][1]
-            or cpos < limits[1+4][0] or cpos > limits[1+4][1]):
+        if (xpos < limits[0][0] or xpos > limits[0][1] or ypos < limits[1][0] or ypos > limits[1][1]):
+            self._check_endstops(move)
+        elif (bpos < limits[4][0] or bpos > limits[4][1] or cpos < limits[5][0] or cpos > limits[5][1]):
+            self._check_endstops(move)
+        elif move.axes_d[2]:
             self._check_endstops(move)
 
         # For G0 moves, set the speed to preset g0 speed
-        if (not move.pwmsw):
-            move.set_speed_for_g0()
+        if not move.pwmsw:
+            move.set_speed_for_g0(self.g0_galvo_velocity)
 
         # Limit speed based on movement ratios between different axis
-        if move.axes_d[3]:
-            a_ratio = move.move_d / abs(move.axes_d[3])
-            s_a_v = self.max_a_velocity * a_ratio
-            s_a_a = self.max_a_accel * a_ratio
-            move.limit_speed(s_a_v, s_a_a)
-        elif move.axes_d[0] or move.axes_d[1]:
-            x_ratio = 0
-            y_ratio = 0
-            if move.axes_d[0]:
-                x_ratio = move.move_d / abs(move.axes_d[0])
-            if move.axes_d[1]:
-                y_ratio = move.move_d / abs(move.axes_d[1])
+        if (move.axes_d[0] or move.axes_d[1] or move.axes_d[2] or move.axes_d[3]):
+            m_capped_speed = z_capped_speed = a_capped_speed = self.max_h_velocity
+            m_capped_accel = z_capped_accel = a_capped_accel = self.max_h_accel
             
-            if move.axes_d[0] and move.axes_d[1]:
-                move.limit_speed(self.max_m_velocity, self.max_m_accel) 
-            elif x_ratio :
-                s_x_v = self.max_m_velocity * x_ratio
-                s_x_a = self.max_m_accel * x_ratio                                             
-                move.limit_speed(s_x_v, s_x_a)
-            elif y_ratio :
-                s_y_v = self.max_m_velocity * y_ratio
-                s_y_a = self.max_m_accel * y_ratio                                             
-                move.limit_speed(s_y_v, s_y_a)
-
-        if not move.axes_d[2]:
-            # Normal XY move - use defaults
-            return
-        # Move with Z - update velocity and accel for slower Z axis
-        self._check_endstops(move)
-        z_ratio = move.move_d / abs(move.axes_d[2])
-        move.limit_speed(
-            self.max_z_velocity * z_ratio, self.max_z_accel * z_ratio)
-
+            if move.axes_d[0] or move.axes_d[1]:
+                # Baseline: The overall acceleration of the move cannot exceed m-values if there are no galvo moves
+                m_ratio = 1.0
+                # If there are galvo moves as well, then there is potential to scale up
+                if move.axes_d[4] or move.axes_d[5]:
+                    if move.axes_d[0] and not move.axes_d[1]:
+                        m_ratio = move.move_d / abs(move.axes_d[0])
+                    elif move.axes_d[1] and not move.axes_d[0]:
+                        m_ratio = move.move_d / abs(move.axes_d[1])
+                    elif move.axes_d[0] and move.axes_d[1]:
+                        m_d = math.sqrt(sum([move.axes_d[0]**2, move.axes_d[1]**2]))
+                        m_ratio = move.move_d / m_d
+                if not move.pwmsw:
+                    m_capped_speed = self.g0_m_velocity * m_ratio
+                else:
+                    m_capped_speed = self.max_m_velocity * m_ratio
+                m_capped_accel = self.max_m_accel * m_ratio
+            if move.axes_d[2]:
+                z_ratio = move.move_d / abs(move.axes_d[2])
+                if not move.pwmsw:
+                    z_capped_speed = self.g0_z_velocity * z_ratio
+                else:
+                    z_capped_speed = self.max_z_velocity * z_ratio
+                z_capped_accel = self.max_z_accel * z_ratio
+            if move.axes_d[3]:
+                a_ratio = move.move_d / abs(move.axes_d[3])
+                if not move.pwmsw:
+                    a_capped_speed = self.g0_a_velocity * a_ratio
+                else:
+                    a_capped_speed = self.max_a_velocity * a_ratio
+                a_capped_accel = self.max_a_accel * a_ratio
+            
+            capped_speed = min(m_capped_speed, z_capped_speed, a_capped_speed)
+            capped_accel = min(m_capped_accel, z_capped_accel, a_capped_accel)
+            move.limit_speed(capped_speed, capped_accel)
+        
     def get_status(self, eventtime):
         axes = [a for a, (l, h) in zip("xyzabc", self.limits) if l <= h]
         return {

@@ -64,8 +64,7 @@ class Move:
         self.max_smoothed_v2 = 0.
         self.smooth_delta_v2 = 2.0 * move_d * toolhead.max_accel_to_decel
         
-    def set_speed_for_g0(self):
-        g0_speed = self.toolhead.g0_bc_velocity
+    def set_speed_for_g0(self, g0_speed):
         # This is to prevent editing homing speed (Move object created without G0/G1)
         if self.pwmmode is None or self.pwmvalue is None:
             return
@@ -81,25 +80,6 @@ class Move:
         self.accel = min(self.accel, accel)
         self.delta_v2 = 2.0 * self.move_d * self.accel
         self.smooth_delta_v2 = min(self.smooth_delta_v2, self.delta_v2)
-        
-        # Guard against changing homing speed (Move object created without G0/G1)
-        if self.pwmmode is None or self.pwmvalue is None:
-            return
-        
-        # Make sure speed is not higher than g0 speed
-        if not self.pwmsw:
-            if self.axes_d[0] or self.axes_d[1]:
-                g0_speed2 = self.toolhead.g0_xy_velocity**2
-                # Guard against g0_xy_velocity = 0 (missing in config file)
-                if g0_speed2 > 0 and g0_speed2 < self.max_cruise_v2:
-                    self.max_cruise_v2 = g0_speed2
-                    self.min_move_t = self.move_d / self.toolhead.g0_xy_velocity
-            if self.axes_d[3]:
-                g0_speed2 = self.toolhead.g0_a_velocity**2
-                if g0_speed2 > 0 and g0_speed2 < self.max_cruise_v2:
-                    self.max_cruise_v2 = g0_speed2
-                    self.min_move_t = self.move_d / self.toolhead.g0_a_velocity
-            # logging.info("Final G0 move speed^2 is:%s, and acceleration is :%s.\n", self.max_cruise_v2, self.accel)
     
     def move_error(self, msg="Move out of range"):
         ep = self.end_pos
@@ -286,13 +266,6 @@ class ToolHead:
                 min_cruise_ratio = 1. - min(1., (req_accel_to_decel / self.max_accel))
         self.min_cruise_ratio = config.getfloat('minimum_cruise_ratio',min_cruise_ratio, below=1., minval=0.)
         self.square_corner_velocity = config.getfloat('square_corner_velocity', 5., minval=0.)
-        
-        # G0 moves have set velocities. Grab them
-        self.g0_bc_velocity = config.getfloat('g0_speed_galvo', 0, minval=0.)
-        self.g0_xy_velocity = config.getfloat('g0_speed_xy', 0, minval=0.)
-        self.g0_a_velocity = config.getfloat('g0_speed_a', 0, minval=0.)
-        self.g0_z_velocity = config.getfloat('g0_speed_z', 0, minval=0.)
-        
         self.junction_deviation = self.max_accel_to_decel = 0.
         self._calc_junction_deviation()
         # Input stall detection
@@ -782,4 +755,4 @@ class ToolHead:
 def add_printer_objects(config):
     config.get_printer().add_object('toolhead', ToolHead(config))
     kinematics.extruder.add_printer_objects(config)
-   
+  
