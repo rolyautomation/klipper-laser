@@ -719,6 +719,8 @@ class MCU:
                 return 0.
             self.estimated_print_time = dummy_estimated_print_time
 
+    def set_used_flag(self, bvalue):
+        self.used_flag = bvalue
 
     def handle_non_critical_disconnect(self):
         self.non_critical_disconnected = True

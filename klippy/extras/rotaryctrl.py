@@ -76,7 +76,8 @@ class RotaryCtrlInterface:
         self.gcode.register_command("SET_ROTARY_ENABLE", self.cmd_SET_ROTARY_ENABLE, desc=self.cmd_SET_ROTARY_ENABLE_help) 
         self.gcode.register_command("M520", self.cmd_M520_ACIRCUM, desc=self.cmd_M520_ACIRCUM_help)
 
-
+        self.gcode.register_command("RESTART_LINK", self.cmd_RESTART_LINK, desc=self.cmd_RESTART_LINK_help)
+        self.mcu_obj = None
 
         self.register_switchbutton(config, 'R0_pin', self.R0_callback)
         self.register_switchbutton(config, 'R1_pin', self.R1_callback)
@@ -218,6 +219,25 @@ class RotaryCtrlInterface:
         gcmd.respond_info(self.name + ":[" + str(self.last_rotarystate[0]) + str(self.last_rotarystate[1]) + str(self.last_rotarystate[2]) + str(self.last_rotarystate[3]) + "]")  
 
 
+
+    cmd_RESTART_LINK_help = "restart rotary link"
+    def cmd_RESTART_LINK(self, gcmd):
+        if self.mcu_obj is None:
+            mcu_name = f"mcu {self.rmcu_name}"
+            self.mcu_obj = self.printer.lookup_object(mcu_name,None)  
+            if self.mcu_obj is None:
+                gcmd.respond_info(f"mcu {self.rmcu_name} is not exist")
+                return
+        index  =  gcmd.get_int('S', 1, minval=0, maxval=3)
+        if index > 0:
+            msgh = "rotary restart link"
+            self.mcu_obj.set_used_flag(False)
+        else:
+            msgh = "rotary close link"
+            self.mcu_obj.set_used_flag(True)
+        gcmd.respond_info(msgh)
+    
+    
     cmd_M520_ACIRCUM_help = "set rotary a axis circum"
     def cmd_M520_ACIRCUM(self, gcmd):
         if self.rotary_exist == 0:
