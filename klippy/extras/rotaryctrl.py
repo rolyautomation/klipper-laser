@@ -115,7 +115,7 @@ class RotaryCtrlInterface:
         self.pre_rotarystate = [0, 0, 0, 0]   
         self.rotray_pkeystate = [0, 0, 0, 0]    
         logging.info("rotaryctrl:handle_disconnect") 
-        self.cmd_SET_MULTIMOTOR_AXIS(-1)            
+        #self.cmd_SET_MULTIMOTOR_AXIS(-1)            
         pass
 
 

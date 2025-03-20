@@ -70,6 +70,8 @@ class CommandQueryWrapper:
         try:
             return xh.get_response(cmds, self._cmd_queue, minclock, reqclock)
         except serialhdl.error as e:
+            if self._serial.mcu.non_critical_disconnected:
+                return None
             raise self._error(str(e))
     def send(self, data=(), minclock=0, reqclock=0):
         return self._do_send([self._cmd.encode(data)], minclock, reqclock)
@@ -631,6 +633,7 @@ class MCU:
             config.getfloat("reconnect_interval", 2.0) + 0.12
         )  # add small change to not collide with other events
 
+        self.used_flag = False
         self.delay_confirmdev = True
         self.uart_link_mode = False
         if self._serialport.startswith("/dev/ttyAMA"):
@@ -719,6 +722,7 @@ class MCU:
 
     def handle_non_critical_disconnect(self):
         self.non_critical_disconnected = True
+        self.used_flag = True
         self._clocksync.disconnect()
         self._disconnect()
         self._reactor.update_timer(
@@ -905,6 +909,8 @@ class MCU:
             retb = True
         if retb and not self.delay_confirmdev:
             retb = False
+        if self.used_flag:
+            retb = False
         return retb
 
     def confirm_device_status(self, dlink_status=False):    
@@ -980,6 +986,7 @@ class MCU:
         self._get_status_info['mcu_constants'] = msgparser.get_constants()
         self.register_response(self._handle_shutdown, 'shutdown')
         self.register_response(self._handle_shutdown, 'is_shutdown')
+        #if not self.uart_link_mode:
         self.register_response(self._handle_mcu_stats, 'stats')
         return True
 

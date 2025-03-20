@@ -292,7 +292,7 @@ class SerialReader:
 
     def _check_noncritical_disconnected(self):
         if self.mcu is not None and self.mcu.non_critical_disconnected:
-            if not self.mcu.uart_link_mode:
+            if not self.mcu.uart_link_mode or self.mcu.used_flag:
                 self._error("non-critical MCU is disconnected")
 
     # Command sending

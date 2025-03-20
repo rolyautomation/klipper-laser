@@ -176,13 +176,16 @@ class TMCErrorCheck:
             return
     def _do_periodic_check(self, eventtime):
         try:
+            if self.mcu_tmc.mcu.non_critical_disconnected:
+                return eventtime + 1.
             self._query_register(self.drv_status_reg_info)
             if self.gstat_reg_info is not None:
                 self._query_register(self.gstat_reg_info)
             if self.adc_temp_reg is not None:
                 self._query_temperature()
         except self.printer.command_error as e:
-            self.printer.invoke_shutdown(str(e))
+            if not self.mcu_tmc.mcu.is_non_critical:
+                self.printer.invoke_shutdown(str(e))
             return self.printer.get_reactor().NEVER
         return eventtime + 1.
     def stop_checks(self):
