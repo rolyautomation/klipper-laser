@@ -91,8 +91,9 @@ class MCU_stepper:
         step_ctag_typef = 0
         set_pwm_sw_tag = 0
         set_pwm_modepower_tag = 0 
-        logging.info("mname=%s rbothedge=%s pulse=%s sbe=%s] \n", self._name,
-            self._req_step_both_edge, self._step_pulse_duration, self._step_both_edge)         
+
+        # logging.info("mname=%s rbothedge=%s pulse=%s sbe=%s] \n", self._name,
+        #     self._req_step_both_edge, self._step_pulse_duration, self._step_both_edge)         
 
         if (self._step_mvirtualmode > 0):
                 #eq 2, pwm
@@ -295,7 +296,8 @@ class MCU_stepper:
 
     def _query_mcu_position(self):
 
-        logging.info(f"name:{self._mcu._name} val: {self._mcu.non_critical_disconnected}")
+        if self._mcu.is_non_critical:
+            logging.info(f"name:{self._mcu._name} val: {self._mcu.non_critical_disconnected}")
         if self._mcu.is_fileoutput(): 
             return
         if self._mcu.non_critical_disconnected:
