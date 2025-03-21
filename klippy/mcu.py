@@ -636,7 +636,7 @@ class MCU:
         self.used_flag = False
         self.delay_confirmdev = True
         self.uart_link_mode = False
-        if self._serialport.startswith("/dev/ttyAMA"):
+        if self._serialport.startswith("/dev/ttyAMA") and self.is_non_critical:
             self.uart_link_mode = True
             self.delay_confirmdev = False
             self.non_critical_disconnected = True
@@ -848,7 +848,7 @@ class MCU:
         self._steppersync = None
 
     def _connect(self):
-        if self.non_critical_disconnected:
+        if self.is_non_critical and self.non_critical_disconnected:
             self._reactor.update_timer(
                 self.non_critical_recon_timer,
                 self._reactor.NOW + self.reconnect_interval,

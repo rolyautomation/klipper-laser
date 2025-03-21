@@ -39,7 +39,7 @@ class RotaryCtrlInterface:
         #if self.multimotor_existf :
         self.multimotor_axis_obj = None
         self.cur_selindex = -1
-        self.rotary_exist = 0
+        self.rotary_exist = 1
 
         self.rmcu_name = config.get('rmcu_name', "rollerset")
         self.reconnect_event_name = f"danger:non_critical_mcu_{self.rmcu_name}:reconnected"
