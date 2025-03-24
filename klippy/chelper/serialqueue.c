@@ -725,9 +725,20 @@ serialqueue_free(struct serialqueue *sq)
         message_queue_free(&cq->upcoming_queue);
     }
     pthread_mutex_unlock(&sq->lock);
+
+    if (sq->pipe_fds[0] >= 0) {
+        close(sq->pipe_fds[0]);
+        sq->pipe_fds[0] = -1;
+    }
+    if (sq->pipe_fds[1] >= 0) {
+        close(sq->pipe_fds[1]);
+        sq->pipe_fds[1] = -1;
+    }
+
     pollreactor_free(sq->pr);
     free(sq);
 }
+
 
 // Allocate a 'struct command_queue'
 struct command_queue * __visible
