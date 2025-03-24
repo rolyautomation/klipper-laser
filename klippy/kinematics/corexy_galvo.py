@@ -120,6 +120,16 @@ class CoreXYGalvoKinematics:
         self.g0_m_velocity = config.getfloat('g0_speed_xy', 200, minval=0.)
         self.g0_a_velocity = config.getfloat('g0_speed_a', 50, minval=0.)
         self.g0_z_velocity = config.getfloat('g0_speed_z', 50, minval=0.)
+
+        self.g0_m_ratio = config.getfloat('g0_ratio_xy', 0., minval=0.)
+        self.g0_a_ratio = config.getfloat('g0_ratio_a', 0., minval=0.)
+        self.g0_z_ratio = config.getfloat('g0_ratio_z', 0., minval=0.)
+
+        self.g1_m_ratio = config.getfloat('g1_ratio_xy', 0., minval=0.)
+        self.g1_a_ratio = config.getfloat('g1_ratio_a', 0., minval=0.)
+        self.g1_z_ratio = config.getfloat('g1_ratio_z', 0., minval=0.)
+
+        
         # Set placeholder limits
         self.limits = [(1.0, -1.0)] * (3+3)
 
@@ -319,28 +329,44 @@ class CoreXYGalvoKinematics:
                         m_d = math.sqrt(sum([move.axes_d[0]**2, move.axes_d[1]**2]))
                         m_ratio = move.move_d / m_d
                 if not move.pwmsw:
+                    if self.g0_m_ratio > 0:
+                        m_ratio = min(m_ratio, self.g0_m_ratio)
                     m_capped_speed = self.g0_m_velocity * m_ratio
                 else:
+                    if self.g1_m_ratio > 0:
+                        m_ratio = min(m_ratio, self.g1_m_ratio)
                     m_capped_speed = self.max_m_velocity * m_ratio
                 m_capped_accel = self.max_m_accel * m_ratio
             if move.axes_d[2]:
                 z_ratio = move.move_d / abs(move.axes_d[2])
                 if not move.pwmsw:
+                    if self.g0_z_ratio > 0:
+                        z_ratio = min(z_ratio, self.g0_z_ratio)
                     z_capped_speed = self.g0_z_velocity * z_ratio
                 else:
+                    if self.g1_z_ratio > 0:
+                        z_ratio = min(z_ratio, self.g1_z_ratio)
                     z_capped_speed = self.max_z_velocity * z_ratio
                 z_capped_accel = self.max_z_accel * z_ratio
             if move.axes_d[3]:
                 a_ratio = move.move_d / abs(move.axes_d[3])
                 if not move.pwmsw:
+                    if self.g0_a_ratio > 0:
+                        a_ratio = min(a_ratio, self.g0_a_ratio)
                     a_capped_speed = self.g0_a_velocity * a_ratio
                 else:
+                    if self.g1_a_ratio > 0:
+                        a_ratio = min(a_ratio, self.g1_a_ratio)
                     a_capped_speed = self.max_a_velocity * a_ratio
                 a_capped_accel = self.max_a_accel * a_ratio
             
             capped_speed = min(m_capped_speed, z_capped_speed, a_capped_speed)
             capped_accel = min(m_capped_accel, z_capped_accel, a_capped_accel)
             move.limit_speed(capped_speed, capped_accel)
+            # if not move.pwmsw:
+            #     logging.info("g0_v=%s g0_a=%s \n",capped_speed,capped_accel) 
+            #     logging.info("m_s_v=%s z_s_v=%s a_s_v=%s \n",m_capped_speed, z_capped_speed, a_capped_speed)  
+            #     logging.info("m_s_a=%s z_s_a=%s a_s_a=%s \n",m_capped_accel, z_capped_accel, a_capped_accel)   
         
     def get_status(self, eventtime):
         axes = [a for a, (l, h) in zip("xyzabc", self.limits) if l <= h]
