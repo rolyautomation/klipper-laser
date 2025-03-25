@@ -51,8 +51,7 @@ class Joggingrun:
 
         self.machinepos = None 
         gcode.register_command('M286', self.cmd_M286_JOG_XYZ)  
-
-        #gcode.register_command('M287', self.cmd_M287_JOG_TRIGG)  
+        gcode.register_command('LOOKMACHRANGE', self.cmd_LOOKMACHRANGE)  
         # Common probe implementation helpers
         #self.cmd_helper = probe.ProbeCommandHelper(
             #config, self, self.mcu_endstop.query_endstop)
@@ -60,29 +59,8 @@ class Joggingrun:
         self.printer.register_event_handler('klippy:mcu_identify',
                                             self._handle_mcu_identify)
 
-        #self.chktrigger_timer = self.reactor.register_timer(self.chktrigger_fun)                                              
-        #self.gpio_trigpin  = config.getint('trig_pin', 23, minval=0) 
-        #self.trig_sw  = config.getint('trig_sw', 1, minval=0) 
-        #self.last_outval   = 0                                             
-        #self.gpio_trigpin_init() 
-        #self.waitflagjog = 0
-        #self.chk_interval = 0.002
-        #self.sumtime = 0 
-        """
-        self.printer.register_event_handler("homing:homing_move_begin",
-                                            self.handle_homing_move_begin)
         self.printer.register_event_handler("homing:homing_move_end",
                                             self.handle_homing_move_end)
-        self.printer.register_event_handler("homing:homing_moving",
-                                            self.handle_homing_moving) 
-
-        self.printer.register_event_handler("jogging:trigger_to_stop",
-                                            self.handle_trigger_to_stop)  
-        """
-        self.printer.register_event_handler("homing:homing_move_end",
-                                            self.handle_homing_move_end)
-
-        #by user:self.printer.send_event("jogging:trigger_to_stop", 1)                                                                                                                                  
 
     def _handle_mcu_identify(self):
         kin = self.printer.lookup_object('toolhead').get_kinematics()
@@ -195,55 +173,7 @@ class Joggingrun:
     def handle_homing_move_end(self, hmove):
         self.jogworkmode = 0     
          
-    """
-    def handle_homing_move_begin(self, hmove):
-        self.waitflagjog = 0
-        self.sumtime = 0
-        if self.last_outval < 1:
-            self.gpio_trigpin_high_out()            
-
-    def handle_homing_move_end(self, hmove):
-        self.waitflagjog = 0        
-        if self.last_outval < 1:
-            self.gpio_trigpin_high_out()  
-
-    def handle_homing_moving(self, hmove):
-        self.waitflagjog = 1 
-
-    def chktrigger_fun(self, eventtime):
-        if self.waitflagjog == 0:
-            self.sumtime += self.chk_interval
-            if self.sumtime > 0.2:
-                return self.reactor.NEVER    
-            return eventtime + self.chk_interval
-        else:
-            self.waitflagjog = 0
-            if self.last_outval > 0:
-                self.gpio_trigpin_low_out() 
-            return self.reactor.NEVER  
-
-    def handle_trigger_to_stop(self, num):
-        logging.info("trigger_to_stop=%s\n",num) 
-        self.reactor.update_timer(self.chktrigger_timer, self.reactor.NOW)
-
-    def gpio_trigpin_init(self):
-        if self.trig_sw > 0:
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(self.gpio_trigpin, GPIO.OUT)  
-            GPIO.output(self.gpio_trigpin, GPIO.HIGH)
-            self.last_outval = 1                       
-
-    def gpio_trigpin_high_out(self):
-        if self.trig_sw > 0:        
-            GPIO.output(self.gpio_trigpin, GPIO.HIGH)
-            self.last_outval = 1  
-
-    def gpio_trigpin_low_out(self):  
-        if self.trig_sw > 0:              
-            GPIO.output(self.gpio_trigpin, GPIO.LOW)
-            self.last_outval = 0  
-    """
-
+   
     def get_position_endstop(self):
         return self.position_endstop
 
@@ -369,30 +299,15 @@ class Joggingrun:
         else:
             logging.info("current position is here,no need move\n")    
 
-        #recpointnull = {}
-        #jogrun_state = Homing(self.printer,recpointnull)
-        #jogrun_state.set_axes(axes)
-        #jogrun_state.set_dripparam(dripparam)
-        #kin = self.printer.lookup_object('toolhead').get_kinematics()
-        #logging.info("stop kin jogrun_drip=%s\n",axes) 
-        #kin.jogrun_drip(jogrun_state) 
-        #logging.info("kin jogrun_drip end\n")
-
-    """    
-    def cmd_M287_JOG_TRIGG(self, gcmd):
-        #pass  
-        outvalue = 0                  
-        if gcmd.get('H', None) is not None:
-            outvalue = 1
-        if gcmd.get('L', None) is not None:
-            outvalue = 2  
-        if  outvalue == 1:
-            self.gpio_trigpin_high_out()
-        elif  outvalue == 2:
-            self.gpio_trigpin_low_out()             
-        msg = "hgpio=%s,outval=%s" % (self.gpio_trigpin, self.last_outval) 
-        gcmd.respond_info(msg)
-    """
+    def cmd_LOOKMACHRANGE(self, gcmd): 
+        if self.machinepos is None:
+            kin = self.printer.lookup_object('toolhead').get_kinematics()
+            self.machinepos = kin.get_machine_pos()
+            msgstr = "machine range:" + str(self.machinepos)
+            gcmd.respond_info(msgstr)  
+        else:
+            msgstr = "machine range: [ None ]"
+            gcmd.respond_info(msgstr)  
 
 def load_config_prefix(config):
     return Joggingrun(config)  

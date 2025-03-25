@@ -7,58 +7,6 @@
 import logging
 
 
-'''
-class FastDigitalOut_v00:
-
-    def __init__(self, config):
-   
-        self.printer = printer = config.get_printer()
-        self.fastout_name = config.get_name().split()[-1]
-        ppins = printer.lookup_object('pins')
-        ctrl_pin_params = ppins.lookup_pin(config.get('ctrl_pin'))
-        self._mcu = ctrl_pin_params['chip']
-        self._ctrl_pin = ctrl_pin_params['pin']   
-        self._oid = self._mcu.create_oid()
-        self.cmd_queue = self._mcu.alloc_command_queue()
-        self._mcu.add_config_cmd("config_digital_out oid=%d pin=%s"
-                                " value=%d default_value=%d max_duration=%d" % (
-                                    self._oid, self._ctrl_pin, 1, 1, 0))   
-
-        self.update_pin_cmd = self._mcu.lookup_command(
-            "update_digital_out oid=%c value=%c", cq=self.cmd_queue)
-
-
-        gcode = self.printer.lookup_object("gcode")
-        """
-        gcode.register_mux_command("SET_POS_GALVO", "GALVO",
-                                   self.galvo_name,
-                                   self.cmd_SET_POS_GALVO,
-                                   desc=self.cmd_SET_POS_GALVO_help)          
-        """
-        gcode.register_command('TST_FASTDOUT',
-                                self.cmd_TST_FASTDOUT)
-
-    def get_mcu(self):
-        return self._mcu
-
-    def update_digital_out_noclock(self, value):
-        self.update_pin_cmd.send([self.oid, not not value])        
-
-    def cmd_TST_FASTDOUT(self, gcmd):
-        outvalue = 0                  
-        if gcmd.get('H', None) is not None:
-            outvalue = 1
-        if gcmd.get('L', None) is not None:
-            outvalue = 2  
-        if  outvalue == 1:
-            self.update_digital_out_noclock(1)
-        elif  outvalue == 2:
-            self.update_digital_out_noclock(0)             
-        msg = "hgpio=%s,outval=%s" % (self._ctrl_pin, self.last_outval) 
-        gcmd.respond_info(msg)
-'''
-
-
 class FastDigitalOut:
 
     def __init__(self, config):
@@ -165,17 +113,14 @@ class FastDigitalOut:
                                  minclock=minclock, reqclock=reqclock)
     '''
     def cmd_TST_FASTDOUT(self, gcmd):
-        outvalue = 0                  
-        if gcmd.get('H', None) is not None:
-            outvalue = 1
-        if gcmd.get('L', None) is not None:
-            outvalue = 2  
+        outvalue = gcmd.get_int('S',0, minval=0, maxval=2)                
         if  outvalue == 1:
             self.update_digital_out_noclock(1)
-        elif  outvalue == 2:
+        elif  outvalue == 0:
             self.update_digital_out_noclock(0)             
-        msg = "hgpio=%s,outval=%s" % (self._ctrl_pin, self.last_outval) 
+        msg = "hgpio=%s,outval=%s,curioval=%s" % (self._ctrl_pin, outvalue, self.last_outval) 
         gcmd.respond_info(msg)
+
 
 
 def load_config_prefix(config):

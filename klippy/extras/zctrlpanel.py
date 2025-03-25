@@ -11,7 +11,7 @@ UP_DIR_VAL  = 0
 DOWN_DIR_VAL  = 1
 #1mm
 GAP_NEED_VAL  = 1
-MAX_Z_SOFT_VAL = 100
+MAX_Z_SOFT_VAL = 60
 TM_INTER_VAL = 0.5
 
 M_QLEN_MIN = 3
@@ -50,8 +50,9 @@ class ZctrlPanel:
         #self.dcm_existf = config.has_section('angledcmove')
         self.limitswitch_existf = config.has_section('limitswitch_check lswcheck')
 
+        self.machinepos = None
         self.z_soft_high_val = config.getfloat(
-            'max_z_safe_d', MAX_Z_SOFT_VAL, above=40, maxval=120)
+            'max_z_safe_d', MAX_Z_SOFT_VAL, above=20, maxval=120)
         self.pshort_e_dist = config.getfloat(
             'short_d_unit', 1, above=0., maxval=10)
         self.plong_e_dist = config.getfloat(
@@ -98,6 +99,8 @@ class ZctrlPanel:
                                         self.cmd_QUERY_ZCTRL,
                                         desc=self.cmd_QUERY_ZCTRL_help)
 
+        self.gcode.register_command('LOOKZCTRLPARAM', self.cmd_LOOKZCTRLPARAM)                                          
+
 
         self.is_short_upclick = False
         self.is_long_upclick = False
@@ -114,7 +117,13 @@ class ZctrlPanel:
 
 
         self.gcode.register_command("SW_AS_KEYM", self.cmd_SW_AS_KEYM)  
-        self.gcode.register_command("LOOK_AS_KEYM", self.cmd_LOOK_AS_KEYM)                                                 
+        self.gcode.register_command("LOOK_AS_KEYM", self.cmd_LOOK_AS_KEYM)   
+
+
+    def cmd_LOOKZCTRLPARAM(self, gcmd):
+        msgstr = "max_z_d:%s sedist:%s " % (self.z_soft_high_val, self.pshort_e_dist)
+        msgstr += "ledist:%s sspeed:%s lspeed:%s" % (self.plong_e_dist, self.pshort_speed, self.plong_speed)        
+        gcmd.respond_info(msgstr)    
 
     def cmd_SW_AS_KEYM(self, gcmd):
         sw = gcmd.get_int('S',1, minval=0, maxval=2)
@@ -137,6 +146,13 @@ class ZctrlPanel:
 
 
     def _handle_connect_check(self):
+        z_max_val = self.z_soft_high_val
+        if self.machinepos is None:
+            kin = self.printer.lookup_object('toolhead').get_kinematics()
+            self.machinepos = kin.get_machine_pos()
+            z_max_val = self.machinepos[2][1]
+        self.z_soft_high_val = min(z_max_val, self.z_soft_high_val)
+        logging.info("zsoft_high_val=%s\n",self.z_soft_high_val)
         #if self.dcm_existf :
             #logging.info("\n angledcmove \n")
         #else:
@@ -296,13 +312,10 @@ class ZctrlPanel:
     def stop_now_run(self):
         flag = 0
         if self.startdirpflag:
-           #stopinstr_str= 'SET_PIN PIN=softtriggio VALUE=0\n'
-           #self.gcode.run_script_from_command(stopinstr_str)
-           #self.gpio_out_value(0)
-           logging.info("stop_now_run drip\n")
-           self.printer.send_event("jogging:trigger_to_stop", 1) 
-           logging.info("send drip\n")
-           #self.gcode.run_script(stopinstr_str)
+            logging.info("stop_now_run drip\n")
+            self.printer.send_event("jogging:trigger_to_stop", 1) 
+            logging.info("send drip\n")
+            #self.gcode.run_script(stopinstr_str)
         flag = self.checkdcm_stop_longpress()
         if flag :
             toolhead = self.printer.lookup_object('toolhead')
@@ -335,79 +348,6 @@ class ZctrlPanel:
             allow_continue = self.checkdcm_allow_run_longpress(CCW_DIR_VAL, self.dcm_long_stepf)                      
         self.key_event_handle('downlngp', eventtime)        
         return self.reactor.NEVER    
-
-
-    def stop_now_run_v00(self):
-        flag = 0
-        with self.mutex:
-            if self.upkey_longmode  > 0 :
-                self.reactor.update_timer(self.upclick_timer, self.reactor.NEVER) 
-                self.upkey_longmode = 0  
-                flag = 1    
-            if self.downkey_longmode  > 0 :
-                self.reactor.update_timer(self.downclick_timer, self.reactor.NEVER)
-                self.downkey_longmode = 0
-                falg = 1
-        if flag :
-            toolhead = self.printer.lookup_object('toolhead')
-            toolhead.dwell(0.001) 
-            #toolhead.flush_step_generation()
-
-
-    def long_upclick_event_v00(self, eventtime):
-        allow_continue = 0
-        with self.mutex:
-            if (self.upkey_longmode > 0):
-                self.upkey_longmode = 2 
-                self.check_isprinting(eventtime)
-                if self.isidle_mode:
-                    allow_continue = self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
-                else:
-                    allow_continue = self.checkdcm_allow_run(CW_DIR_VAL, self.dcm_long_stepf)                     
-                self.key_event_handle('uplngp', eventtime)
-            else:
-                self.upkey_longmode = 1        
-                self.is_short_upclick = False
-                self.is_long_upclick = True
-                self.check_isprinting(eventtime)
-                if self.isidle_mode:            
-                    allow_continue = self.checkz_allow_run(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
-                else:
-                    allow_continue = self.checkdcm_allow_run(CW_DIR_VAL, self.dcm_long_stepf)    
-                self.key_event_handle('uplngp', eventtime)
-        #return eventtime+TM_INTER_VAL  
-        if (allow_continue != 0):
-            return eventtime + self.ptime_interval
-        else:    
-            return self.reactor.NEVER
-
-    def long_downclick_event_v00(self, eventtime):
-        allow_continue = 0 
-        with self.mutex:               
-            if self.downkey_longmode  > 0 :
-                self.downkey_longmode = 2
-                self.check_isprinting(eventtime)
-                if self.isidle_mode:           
-                    allow_continue = self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
-                else:
-                    allow_continue = self.checkdcm_allow_run(CCW_DIR_VAL, self.dcm_long_stepf)                      
-                self.key_event_handle('downlngp', eventtime)
-            else:
-                self.downkey_longmode = 1                 
-                self.is_short_downclick = False
-                self.is_long_downclick = True
-                self.check_isprinting(eventtime)
-                if self.isidle_mode:             
-                    allow_continue = self.checkz_allow_run(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
-                else:
-                    allow_continue = self.checkdcm_allow_run(CCW_DIR_VAL, self.dcm_long_stepf)                     
-                self.key_event_handle('downlngp', eventtime)
-        #return eventtime+TM_INTER_VAL 
-        if (allow_continue != 0):
-            return eventtime + self.ptime_interval
-        else:    
-            return self.reactor.NEVER 
-        #return self.reactor.NEVER   
 
 
 

@@ -49,28 +49,21 @@ class LimitSwitchCheck:
 
     def cmd_OPEN_LSWCHECK(self, gcmd):
         en_flag  =  gcmd.get_int('E', 1, minval=0, maxval=10)
-        if (en_flag > 0):
-            if  (en_flag > 3):
-                self.switch_enalbe[X_MIN_IND] = 1
-                self.switch_enalbe[Y_MIN_IND] = 1
-                self.switch_enalbe[Z_MIN_IND] = 0 
-                self.switch_enalbe[X_MAX_IND] = 1
-                self.switch_enalbe[Y_MAX_IND] = 1
-                self.switch_enalbe[Z_MAX_IND] = 0                 
-            else:    
-                self.switch_enalbe[X_MIN_IND] = 1
-                self.switch_enalbe[Y_MIN_IND] = 1
-                self.switch_enalbe[Z_MIN_IND] = 1 
-                self.switch_enalbe[X_MAX_IND] = 1
-                self.switch_enalbe[Y_MAX_IND] = 1
-                self.switch_enalbe[Z_MAX_IND] = 1   
-        else:
-            self.switch_enalbe[X_MIN_IND] = 0
-            self.switch_enalbe[Y_MIN_IND] = 0
-            self.switch_enalbe[Z_MIN_IND] = 0 
-            self.switch_enalbe[X_MAX_IND] = 0
-            self.switch_enalbe[Y_MAX_IND] = 0
-            self.switch_enalbe[Z_MAX_IND] = 0
+        states = [0, 0, 0, 0, 0, 0]
+        if  en_flag > 3 :
+            states = [1, 1, 1, 1, 1, 0]
+        elif en_flag == 2:    
+            states = [1, 1, 0, 1, 1, 0]    
+        elif en_flag == 1:    
+            states = [1, 1, 1, 1, 1, 1]    
+
+        switches = [X_MIN_IND, Y_MIN_IND, Z_MIN_IND, 
+                   X_MAX_IND, Y_MAX_IND, Z_MAX_IND]
+        for switch, state in zip(switches, states):
+            self.switch_enalbe[switch] = state
+        msgstr = "sw_enalbe:" + str(self.switch_enalbe)
+        gcmd.respond_info(msgstr)
+
 
     def get_zlsw(self):
         return self.last_state[Z_MIN_IND], self.last_state[Z_MAX_IND]
