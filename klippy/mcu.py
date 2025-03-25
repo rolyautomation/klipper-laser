@@ -391,11 +391,17 @@ class MCU_digital_out:
         cmd_queue = self._mcu.alloc_command_queue()
         self._set_cmd = self._mcu.lookup_command(
             "queue_digital_out oid=%c clock=%u on_ticks=%u", cq=cmd_queue)
+        if self._mcu.is_non_critical:   
+            curtime = self._mcu.get_printer().get_reactor().monotonic()
+            printtime = self._mcu.estimated_print_time(curtime)
+            self._last_clock = self._mcu.print_time_to_clock(printtime + 0.100)
+
     def set_digital(self, print_time, value):
         clock = self._mcu.print_time_to_clock(print_time)
         self._set_cmd.send([self._oid, clock, (not not value) ^ self._invert],
                            minclock=self._last_clock, reqclock=clock)
         self._last_clock = clock
+
 
 class MCU_pwm:
     def __init__(self, mcu, pin_params):
