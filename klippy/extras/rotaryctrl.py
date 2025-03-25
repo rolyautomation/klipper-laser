@@ -44,7 +44,7 @@ class RotaryCtrlInterface:
         self.rmcu_name = config.get('rmcu_name', "rollerset")
         self.reconnect_event_name = f"danger:non_critical_mcu_{self.rmcu_name}:reconnected"
         self.disconnect_event_name = f"danger:non_critical_mcu_{self.rmcu_name}:disconnected"
-        
+        self.unlink_flag = 0
 
         #multimotor_axis_obj = self.printer.lookup_object('multimotor_axis')
         #    if multimotor_axis_obj is not None:
@@ -62,6 +62,7 @@ class RotaryCtrlInterface:
         self.r3_on_template = gcode_macro.load_template(config, 'r3_on_gcode', '')
         self.r3_off_template = gcode_macro.load_template(config,'r3_off_gcode', '')
         self.abnormal_gcode = gcode_macro.load_template(config,'abnormal_gcode', '')
+        self.reconnect_gcode = gcode_macro.load_template(config,'reconnect_gcode', '')
         
         self.gcode = self.printer.lookup_object('gcode')
 
@@ -106,11 +107,14 @@ class RotaryCtrlInterface:
         self.last_rotarystate = [0, 0, 0, 0]
         self.pre_rotarystate = [0, 0, 0, 0]   
         self.rotray_pkeystate = [0, 0, 0, 0]   
-        logging.info("rotaryctrl:handle_reconnect")       
+        logging.info("rotaryctrl:handle_reconnect")  
+        if self.unlink_flag > 0:
+            self.cmd_RECONNECT()
         pass
  
 
     def handle_disconnect(self):
+        self.unlink_flag = 1
         self.rotary_exist = 0
         self.last_rotarystate = [0, 0, 0, 0]
         self.pre_rotarystate = [0, 0, 0, 0]   
@@ -118,7 +122,7 @@ class RotaryCtrlInterface:
         logging.info("rotaryctrl:handle_disconnect") 
         self.cmd_SET_MULTIMOTOR_AXIS(-1)            
         pass
-
+        
 
     def _handle_connect_rotaryctrl(self):
         self.multimotor_axis_obj = self.printer.lookup_object('multimotor_axis',None)
@@ -337,6 +341,20 @@ class RotaryCtrlInterface:
         else:
             logging.exception("Script running repeat, check press speed softsync")
 
+
+    def cmd_RECONNECT(self):
+        if not self.inside_handlegcode :
+            self.inside_handlegcode = True        
+            template = self.reconnect_gcode
+            try:
+                #self.gcode.run_script(template.render())
+                if self.rotary_exist > 0:
+                    self.gcode.run_script_from_command(template.render())
+            except:
+                logging.exception("Script running error reconnect gcode")
+            self.inside_handlegcode = False            
+        else:
+            logging.exception("Script running repeat, reconnect gcode")        
 
 
     def update_action_by_status(self):
