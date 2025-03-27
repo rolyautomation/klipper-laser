@@ -238,9 +238,9 @@ class ZctrlPanel:
         allow_val = 0
         if not self.startdirpflag:
             self.startdirpflag = True
-            instrstr = "M400\n M286  Z   E1  F%s" % (rspeed,)
+            instrstr = "M400\n G4 P2 \n M286  Z E1  F%s\n M118 drip end" % (rspeed,)
             if rdir == DOWN_DIR_VAL:
-                instrstr = "M400\n M286  Z   E0  F%s" % (rspeed,)
+                instrstr = "M400\n G4 P2 \n M286 Z  E0  F%s\n M118 drip end" % (rspeed,)
             try:   
                 logging.info("start run drip=%s",instrstr)             
                 self.gcode.run_script(instrstr)
@@ -303,7 +303,11 @@ class ZctrlPanel:
 
         logging.info("check move=%s,%s,%s",allow_val,rzpos,rspeed)
         if  allow_val : 
-            toolhead.manual_move_zaxis(rzpos, rspeed)
+            try:
+                toolhead.manual_move_zaxis(rzpos, rspeed)
+            except Exception as e:
+                self.gcode.respond_info("manual_move_zaxis error: %s" % str(e))  
+                allow_val = 0
         return allow_val
 
 
@@ -331,7 +335,7 @@ class ZctrlPanel:
             allow_continue = self.checkz_allow_run_drip(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
         else:
             allow_continue = self.checkdcm_allow_run_longpress(CW_DIR_VAL, self.dcm_long_stepf)                     
-        self.key_event_handle('uplngp', eventtime)        
+            self.key_event_handle('uplngp', eventtime)        
         return self.reactor.NEVER
 
 
@@ -344,7 +348,7 @@ class ZctrlPanel:
             allow_continue = self.checkz_allow_run_drip(DOWN_DIR_VAL, self.plong_e_dist, self.plong_speed)
         else:
             allow_continue = self.checkdcm_allow_run_longpress(CCW_DIR_VAL, self.dcm_long_stepf)                      
-        self.key_event_handle('downlngp', eventtime)        
+            self.key_event_handle('downlngp', eventtime)        
         return self.reactor.NEVER    
 
 
