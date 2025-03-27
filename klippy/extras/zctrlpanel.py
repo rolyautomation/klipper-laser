@@ -63,8 +63,8 @@ class ZctrlPanel:
         self.plong_speed = config.getfloat(
              'plong_speed', 10, above=0., maxval=30)  
 
-        self.ptime_interval = config.getfloat(
-            'time_interval', 0.1, above=0., maxval=1)  
+        self.min_gap_d = config.getfloat(
+            'min_gap_d', GAP_NEED_VAL, minval=-2., maxval=5)  
 
         self.qminlen  = config.getint('qminlen', M_QLEN_MIN, minval=0)   
 
@@ -174,9 +174,8 @@ class ZctrlPanel:
             self.isidle_mode = False
 
     def key_event_handle(self, key, eventtime):
-
-        logging.info("not oper:key_event=%s,%s",key,eventtime)      
-        return
+        #logging.info("not oper:key_event=%s,%s",key,eventtime)      
+        #return
         if not self.inside_handlegcode :
             self.inside_handlegcode = True        
             template = self.abnormal_template
@@ -239,16 +238,15 @@ class ZctrlPanel:
         allow_val = 0
         if not self.startdirpflag:
             self.startdirpflag = True
-            #self.gpio_out_value(1)
-            instrstr = "M286  Z   E1  F%s" % (rspeed,)
-            #instrstr = 'M286  Z   E1  F100\n'
+            instrstr = "M400\n M286  Z   E1  F%s" % (rspeed,)
             if rdir == DOWN_DIR_VAL:
-                instrstr = "M286  Z   E0  F%s" % (rspeed,)
-                #instrstr = 'M286  Z   E0  F100\n'
-            try:                
+                instrstr = "M400\n M286  Z   E0  F%s" % (rspeed,)
+            try:   
+                logging.info("start run drip=%s",instrstr)             
                 self.gcode.run_script(instrstr)
+                logging.info("end run drip=%s",instrstr)   
             except Exception as e:
-                self.gcode.respond_info("info: %s" % str(e))              
+                self.gcode.respond_info("checkz drip info: %s" % str(e))              
             self.startdirpflag = False 
         return  allow_val            
 
@@ -276,7 +274,7 @@ class ZctrlPanel:
         zpos = pos[2]
         rzpos = pos[2]
         
-        if rdir == DOWN_DIR_VAL:
+        if rdir == UP_DIR_VAL:            
             allow_val = rdist
             exp_zpos = zpos + rdist
             rzpos = exp_zpos
@@ -291,14 +289,14 @@ class ZctrlPanel:
             allow_val = rdist
             exp_zpos = zpos + rdist
             rzpos = exp_zpos
-            #if zpos < GAP_NEED_VAL:
-            if zpos <= GAP_NEED_VAL: #important               
+            #if zpos <= GAP_NEED_VAL: #important    
+            if zpos <= self.min_gap_d:           
                 allow_val = 0  
                 rzpos = zpos
             else:                
-                if  exp_zpos < GAP_NEED_VAL:
-                    allow_val = GAP_NEED_VAL - exp_zpos
-                    rzpos = GAP_NEED_VAL  
+                if  exp_zpos < self.min_gap_d:
+                    allow_val = self.min_gap_d  - exp_zpos
+                    rzpos = self.min_gap_d   
 
             if  z_min_st:
                 allow_val = 0  
@@ -312,9 +310,9 @@ class ZctrlPanel:
     def stop_now_run(self):
         flag = 0
         if self.startdirpflag:
-            logging.info("stop_now_run drip\n")
+            logging.info("stop_now_run drip")
             self.printer.send_event("jogging:trigger_to_stop", 1) 
-            logging.info("send drip\n")
+            logging.info("end send drip")
             #self.gcode.run_script(stopinstr_str)
         flag = self.checkdcm_stop_longpress()
         if flag :

@@ -91,10 +91,24 @@ class WifiService:
         if ssid is None:
             gcmd.respond_info("SSID is required")
             return
-        self.forget_network(ssid)
+
+        networks = self.list_saved_networks()
+        network_found = False
+
+        for network in networks:
+            if network['ssid'] == ssid:
+                self.forget_network(network['id'])
+                network_found = True
+                break
+
+        if not network_found:
+            m = "Network not found,ssid:%s" % (ssid,)
+            gcmd.respond_info(m)
+            return
         msg = "forget wifi status:"
-        m = "%s%s" % (msg, self.get_current_connection())
+        m = "ssid:%s wifi status:%s" % (ssid, self.get_current_connection())
         gcmd.respond_info(m)  
+
 
     cmd_NET_LIST_help = "list wifi network"
     def cmd_NET_LIST(self, gcmd): 

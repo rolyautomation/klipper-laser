@@ -6,8 +6,8 @@
 import logging
 #from . import probe
 #import RPi.GPIO as GPIO
-SPEED_MIN_LIMIT = 20
-SPEED_MAX_LIMIT = 100
+SPEED_MIN_LIMIT = 5
+SPEED_MAX_LIMIT = 300
 
 # joggingrun  "endstop" wrapper
 class Joggingrun:
@@ -33,8 +33,8 @@ class Joggingrun:
 
         self.position_endstop = 0
          
-        self.min_speed  = config.getint('min_speed', SPEED_MIN_LIMIT, minval=2)  
-        self.max_speed  = config.getint('max_speed', SPEED_MAX_LIMIT, minval=20) 
+        self.min_speed  = config.getint('min_speed', SPEED_MIN_LIMIT, minval=1)  
+        self.max_speed  = config.getint('max_speed', SPEED_MAX_LIMIT, minval=5) 
         self.xmin_axes  = config.getint('xmin_axes', 0, minval=0)   
         self.ymin_axes  = config.getint('ymin_axes', 0, minval=0)   
         self.zmin_axes  = config.getint('zmin_axes', 0, minval=0)   
@@ -303,11 +303,8 @@ class Joggingrun:
         if self.machinepos is None:
             kin = self.printer.lookup_object('toolhead').get_kinematics()
             self.machinepos = kin.get_machine_pos()
-            msgstr = "machine range:" + str(self.machinepos)
-            gcmd.respond_info(msgstr)  
-        else:
-            msgstr = "machine range: [ None ]"
-            gcmd.respond_info(msgstr)  
+        msgstr = "machine range:" + str(self.machinepos)
+        gcmd.respond_info(msgstr)   
 
 def load_config_prefix(config):
     return Joggingrun(config)  
