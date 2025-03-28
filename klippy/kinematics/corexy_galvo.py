@@ -128,7 +128,7 @@ class CoreXYGalvoKinematics:
         self.g1_m_ratio = config.getfloat('g1_ratio_xy', 0., minval=0.)
         self.g1_a_ratio = config.getfloat('g1_ratio_a', 0., minval=0.)
         self.g1_z_ratio = config.getfloat('g1_ratio_z', 0., minval=0.)
-
+        self.printer = config.get_printer()
         
         # Set placeholder limits
         self.limits = [(1.0, -1.0)] * (3+3)
@@ -191,6 +191,13 @@ class CoreXYGalvoKinematics:
             # Perform homing
             homing_state.home_rails([rail], forcepos, homepos)
             #reason: A: soft reset zero 
+            self.send_axis_origin_msg(axis)
+
+
+    def send_axis_origin_msg(self, axis_num):
+        if axis_num == 2:
+            self.printer.send_event("zctrlpanel:zaxis_origin", axis_num)
+
 
     def jogrun_sta(self, axes_xyz):
         # Each axis is homed independently and in order

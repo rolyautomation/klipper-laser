@@ -44,6 +44,7 @@ class ZctrlPanel:
         self.dcm_keymode = False
         self.dcm_longpress = False
         self.startdirpflag = False
+        self.zaxis_origin = False
 
         self.dcm_existf = config.has_section('angledcmove as5600m')
         #fail value
@@ -119,6 +120,16 @@ class ZctrlPanel:
         self.gcode.register_command("SW_AS_KEYM", self.cmd_SW_AS_KEYM)  
         self.gcode.register_command("LOOK_AS_KEYM", self.cmd_LOOK_AS_KEYM)   
 
+        self.printer.register_event_handler("zctrlpanel:zaxis_origin",
+                                            self.handle_zaxis_origin)          
+
+
+
+    def handle_zaxis_origin(self, axis_num):
+        logging.info("handle_zaxis_origin=%d\n",axis_num) 
+        if axis_num == 2:
+            self.zaxis_origin = True
+            logging.info("zaxis_origin=%d\n",axis_num) 
 
     def cmd_LOOKZCTRLPARAM(self, gcmd):
         msgstr = "max_z_d:%s sedist:%s " % (self.z_soft_high_val, self.pshort_e_dist)
@@ -236,6 +247,14 @@ class ZctrlPanel:
 
     def checkz_allow_run_drip(self, rdir, rdist, rspeed):
         allow_val = 0
+        if not self.self.zaxis_origin and rdir == UP_DIR_VAL:
+           logging.info("please zaxis return origin first") 
+           instrstr = "M118  Start Z Axis return origin\n G32  Z\n  M118 End Z Axis"
+            try:   
+                self.gcode.run_script(instrstr)
+            except Exception as e:
+                self.gcode.respond_info("return origin info: %s" % str(e))            
+           return  allow_val   
         if not self.startdirpflag:
             self.startdirpflag = True
             instrstr = "M400\n G4 P2 \n M286  Z E1  F%s\n M118 drip maxend" % (rspeed,)
@@ -249,7 +268,6 @@ class ZctrlPanel:
                 self.gcode.respond_info("checkz drip info: %s" % str(e))              
             self.startdirpflag = False 
         return  allow_val            
-
 
 
     def checkz_allow_run(self, rdir, rdist, rspeed):
@@ -330,7 +348,6 @@ class ZctrlPanel:
         self.is_short_upclick = False
         self.is_long_upclick = True  
         self.check_isprinting(eventtime)      
-        self.check_isprinting(eventtime)
         if self.isidle_mode:
             allow_continue = self.checkz_allow_run_drip(UP_DIR_VAL, self.plong_e_dist, self.plong_speed)
         else:
