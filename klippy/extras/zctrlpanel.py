@@ -238,9 +238,9 @@ class ZctrlPanel:
         allow_val = 0
         if not self.startdirpflag:
             self.startdirpflag = True
-            instrstr = "M400\n G4 P2 \n M286  Z E1  F%s\n M118 drip end" % (rspeed,)
+            instrstr = "M400\n G4 P2 \n M286  Z E1  F%s\n M118 drip maxend" % (rspeed,)
             if rdir == DOWN_DIR_VAL:
-                instrstr = "M400\n G4 P2 \n M286 Z  E0  F%s\n M118 drip end" % (rspeed,)
+                instrstr = "M400\n G4 P2 \n M286 Z  E0  F%s\n M118 drip minend" % (rspeed,)
             try:   
                 logging.info("start run drip=%s",instrstr)             
                 self.gcode.run_script(instrstr)

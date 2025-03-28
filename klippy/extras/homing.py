@@ -166,6 +166,18 @@ class HomingMove:
         self.stepper_positions = [ StepperPosition(s, name)
                                    for es, name in self.endstops
                                    for s in es.get_steppers() ]
+
+        # logging.info("homing_move_probejog=%s ", str(self.stepper_positions))  
+        # stepper_info = []
+        # for sp in self.stepper_positions:
+        #     stepper_info.append({
+        #         'stepper_name': sp.stepper_name,
+        #         'endstop_name': sp.endstop_name,
+        #         'start_pos': sp.start_pos,
+        #         'trig_pos': sp.trig_pos,
+        #         'halt_pos': sp.halt_pos
+        #     })
+        # logging.info("homing_move_probejog stepper_positions: %s", stepper_info)
         # Start endstop checking
         print_time = self.toolhead.get_last_move_time()
         endstop_triggers = []
@@ -566,10 +578,8 @@ class PrinterHoming:
         # Register g-code commands
         gcode = self.printer.lookup_object('gcode')
         gcode.register_command('G28', self.cmd_G28)
-        gcode.register_command('M284', self.cmd_M284_JOG_XYZ)  
-        gcode.register_command('M285', self.cmd_M285_JOG_TRIGG)   
-        self._recpoint = {}
-        
+
+
     def manual_home(self, toolhead, endstops, pos, speed,
                     triggered, check_triggered):
         hmove = HomingMove(self.printer, endstops, toolhead)
@@ -606,9 +616,11 @@ class PrinterHoming:
                 raise self.printer.command_error(
                     "Probing failed due to printer shutdown")
             raise
-        if hmove.check_no_movement() is not None:
-            raise self.printer.command_error(
-                "Probe triggered prior to movement")
+        # logging.info("probing_move_jog:epos=%s ",epos)      
+        # if hmove.check_no_movement() is not None:
+        #     logging.info("probing_move_jog:check_no_movement=%s ",hmove.check_no_movement())
+        #     raise self.printer.command_error(
+        #         "Probe triggered prior to movement")
         return epos
 
     def cmd_G28(self, gcmd):
@@ -630,102 +642,6 @@ class PrinterHoming:
                     "Homing failed due to printer shutdown")
             self.printer.lookup_object('stepper_enable').motor_off()
             raise
-
-    def cmd_M282_JOG_CLS(self, gcmd):
-        self._recpoint = {} 
-
-    def cmd_M280_JOG_STA(self, gcmd):   
-        axes = []
-        for pos, axis in enumerate('XYZ'):
-            if gcmd.get(axis, None) is not None:
-                axes.append(pos)
-        if not axes:
-            axes = [2]
-            #axes = [0, 1, 2]
-
-        toolhead = self.printer.lookup_object('toolhead')
-        toolhead.flush_step_generation()
-        pt = toolhead.get_last_move_time()
-        kin = toolhead.get_kinematics()
-        raildata = kin.jogrun_sta(axes)
-        rails = raildata['rail']
-        minv  = raildata['min']
-        maxv  = raildata['max']        
-        endstops = [es for rail in rails for es in rail.get_endstops()]
-        kin_spos = {s.get_name(): s.get_commanded_position()
-                    for s in kin.get_steppers()}
-        stepper_positions = [ StepperPosition(s, name)
-                                   for es, name in endstops
-                                   for s in es.get_steppers() ]
-        recpoint = {
-                     JOGAXIS: axes,
-                     KIN_SPOS: kin_spos,
-                     STEPPERPOS: stepper_positions,
-                     PTIME     : pt
-                     }
-        self._recpoint = recpoint
-        logging.info("look recpoint= %s\n",self._recpoint)
-         
-
-    def cmd_M281_JOG_END(self, gcmd):
-        #pass
-        axes = []
-        for pos, axis in enumerate('XYZ'):
-            if gcmd.get(axis, None) is not None:
-                axes.append(pos)
-        if not axes:
-            axes = [2]            
-            #axes = [0, 1, 2]
-        if not self._recpoint:
-            logging.info("not record point=%s\n",axes) 
-            return
-        if  axes  !=  self._recpoint[JOGAXIS]:
-            logging.info("pls check status%s nq %s\n",axes,self._recpoint[JOGAXIS]) 
-            return  
-               
-        jogrun_state = Homing(self.printer,self._recpoint)
-        jogrun_state.set_axes(axes)
-        kin = self.printer.lookup_object('toolhead').get_kinematics()
-        #logging.info("\npwm Sp:%s V:%s E:%s A:%s\n", move.start_v, move.cruise_v, move.end_v, move.accel) 
-        logging.info("stop kin jogrun=%s\n",axes) 
-        kin.jogrun_end(jogrun_state) 
-        logging.info("kin jogrun end\n")
-        self._recpoint = {}  
-
-
-    def cmd_M284_JOG_XYZ(self, gcmd):
-        axes = []
-        for pos, axis in enumerate('XYZ'):
-            if gcmd.get(axis, None) is not None:
-                axes.append(pos)
-        if not axes:
-            axes = [2]  
-        dist = 0.0
-        endval = 0
-        drip_speed = 20.0
-        params = gcmd.get_command_parameters()
-        if 'E' in params:
-            endval = int(params['E'])
-        if 'D' in params:
-            dist = float(params['D']) 
-        if 'F' in params:
-            drip_speed = float(params['F'])
-            if drip_speed <= 0.: 
-                drip_speed = 20.0
-        dripparam = [dist,endval,drip_speed]
-        logging.info("iaxes=%s param=%s\n",axes,dripparam) 
-        recpointnull = {}
-        jogrun_state = Homing(self.printer,recpointnull)
-        jogrun_state.set_axes(axes)
-        jogrun_state.set_dripparam(dripparam)
-        kin = self.printer.lookup_object('toolhead').get_kinematics()
-        #logging.info("stop kin jogrun_drip=%s\n",axes) 
-        kin.jogrun_drip(jogrun_state) 
-        logging.info("kin jogrun_drip end\n")
-        
-    def cmd_M285_JOG_TRIGG(self, gcmd):
-        pass        
-
 
 
 def load_config(config):

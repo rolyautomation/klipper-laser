@@ -23,7 +23,8 @@ class Joggingrun:
         self.get_steppers = self.mcu_endstop.get_steppers
         self.home_start = self.mcu_endstop.home_start
         self.home_wait = self.mcu_endstop.home_wait
-        self.query_endstop = self.mcu_endstop.query_endstop   
+        self.query_endstop = self.mcu_endstop.query_endstop 
+        self.epsilon = 0.01  
 
         gcode = self.printer.lookup_object('gcode')
         # QUERY_JOGPIN command
@@ -183,6 +184,8 @@ class Joggingrun:
         if mdir == 0 and curpos <= gopos:
             ismove = False
         elif mdir == 1 and curpos >= gopos:
+            ismove = False
+        if abs(curpos - gopos) < self.epsilon:
             ismove = False
         return ismove
 
