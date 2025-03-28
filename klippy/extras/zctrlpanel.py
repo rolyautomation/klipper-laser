@@ -7,6 +7,7 @@ import logging
 
 LONG_PRESS_DURATION = 0.400
 #LONG_PRESS_DURATION = 1.800
+DCKEY_LONG_PRESS_DURATION = 1.5
 UP_DIR_VAL  = 0
 DOWN_DIR_VAL  = 1
 #1mm
@@ -22,6 +23,10 @@ CW_DIR_VAL   = 1
 
 DCM_CMD_START = 1
 DCM_CMD_STOP  = 2
+
+DCM_MIN_TM = 0.01
+DCM_MAX_TM = 0.2
+INC_VAL_TM = 0.01
 
 
 
@@ -45,6 +50,7 @@ class ZctrlPanel:
         self.dcm_longpress = False
         self.startdirpflag = False
         self.zaxis_origin = False
+        self.zorigin_running = False
 
         self.dcm_existf = config.has_section('angledcmove as5600m')
         #fail value
@@ -76,6 +82,11 @@ class ZctrlPanel:
         self.dcm_short_stepf = config.getfloat(
             'dcm_short_step', 0.05, above=0., maxval=1)          
 
+        self.dcm_run_mint = config.getfloat(
+            'dcm_min_step', DCM_MIN_TM, above=0., maxval=1) 
+        self.dcm_run_maxt = config.getfloat(
+            'dcm_max_step', DCM_MAX_TM, above=0., maxval=1) 
+     
 
         buttons = self.printer.load_object(config, "buttons")
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
@@ -215,6 +226,8 @@ class ZctrlPanel:
         else:
             logging.exception("Script running repeat, check zctrl")
 
+
+    """
     def checkdcm_allow_run_longpress(self, rdir, rdistf=0, rspeed=1):
         allow_run_next = 0
         if self.dcm_existf and self.dcm_keymode and not self.dcm_longpress:
@@ -233,6 +246,34 @@ class ZctrlPanel:
             self.dcm_longpress = False
             allow_run_next = 1
         return allow_run_next 
+    """
+
+    def checkdcm_allow_run_longpress(self, rdir, rdistf=0, rspeed=1):
+        allow_run_next = 0
+        if self.dcm_existf and self.dcm_keymode and not self.dcm_longpress:
+            if rdir == CW_DIR_VAL:
+                self.dcm_short_stepf = self.dcm_short_stepf + INC_VAL_TM
+            else: 
+                self.dcm_short_stepf = self.dcm_short_stepf - INC_VAL_TM
+            self.dcm_short_stepf = round(self.dcm_short_stepf, 2) 
+            self.dcm_short_stepf = max(self.dcm_run_mint,self.dcm_short_stepf)   
+            self.dcm_short_stepf = min(self.dcm_run_maxt,self.dcm_short_stepf)                              
+            instrstr = "M118 steptm=%s" % (self.dcm_short_stepf,)
+            try:   
+                self.gcode.run_script(instrstr)
+            except Exception as e:
+                self.gcode.respond_info("checkdcm longpress: %s" % str(e))                        
+            self.dcm_longpress =  True
+        else:
+            logging.info("not operation:checkdcm_allow_run_longpress\n")            
+        return allow_run_next   
+
+    def checkdcm_stop_longpress(self, rdir=0, rdistf=0, rspeed=1):
+        allow_run_next = 0
+        if self.dcm_longpress:
+            self.dcm_longpress = False
+            allow_run_next = 0
+        return allow_run_next 
 
 
     def checkdcm_allow_run(self, rdir, rdistf, rspeed=1):
@@ -247,14 +288,16 @@ class ZctrlPanel:
 
     def checkz_allow_run_drip(self, rdir, rdist, rspeed):
         allow_val = 0
-        if not self.self.zaxis_origin and rdir == UP_DIR_VAL:
-           logging.info("please zaxis return origin first") 
-           instrstr = "M118  Start Z Axis return origin\n G32  Z\n  M118 End Z Axis"
+        if not self.self.zaxis_origin and rdir == UP_DIR_VAL and not self.zorigin_running:
+            self.zorigin_running = True
+            logging.info("please zaxis return origin first") 
+            instrstr = "M118  Start Z Axis return origin\n G32  Z\n  M118 End Z Axis"
             try:   
                 self.gcode.run_script(instrstr)
             except Exception as e:
-                self.gcode.respond_info("return origin info: %s" % str(e))            
-           return  allow_val   
+                self.gcode.respond_info("return origin info: %s" % str(e))   
+            self.zorigin_running = False                          
+            return  allow_val   
         if not self.startdirpflag:
             self.startdirpflag = True
             instrstr = "M400\n G4 P2 \n M286  Z E1  F%s\n M118 drip maxend" % (rspeed,)
@@ -382,8 +425,13 @@ class ZctrlPanel:
                 self.is_short_upclick = True
                 self.is_long_upclick = False
                 self.upkey_longmode = 0 
-                self.reactor.update_timer(self.upclick_timer,
-                                        eventtime + LONG_PRESS_DURATION)
+                if self.dcm_keymode :
+                    self.reactor.update_timer(self.upclick_timer,
+                                            eventtime + DCKEY_LONG_PRESS_DURATION)                    
+                    
+                else:                 
+                    self.reactor.update_timer(self.upclick_timer,
+                                            eventtime + LONG_PRESS_DURATION)
         elif self.is_short_upclick:
             if self.upkey_usef:            
                 self.upkey_usef = False
@@ -415,8 +463,12 @@ class ZctrlPanel:
             if self.downkey_usef:
                 self.is_short_downclick = True
                 self.is_long_downclick = False
-                self.reactor.update_timer(self.downclick_timer,
-                                        eventtime + LONG_PRESS_DURATION)
+                if self.dcm_keymode :
+                    self.reactor.update_timer(self.downclick_timer,
+                                            eventtime + DCKEY_LONG_PRESS_DURATION)                    
+                else:                    
+                    self.reactor.update_timer(self.downclick_timer,
+                                            eventtime + LONG_PRESS_DURATION)
         elif self.is_short_downclick:
             if self.downkey_usef:
                 self.reactor.update_timer(self.downclick_timer, self.reactor.NEVER)
