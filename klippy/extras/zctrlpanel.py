@@ -18,8 +18,8 @@ TM_INTER_VAL = 0.5
 M_QLEN_MIN = 3
 
 
-CCW_DIR_VAL  = 0
-CW_DIR_VAL   = 1
+CCW_DIR_VAL  = 1
+CW_DIR_VAL   = 0
 
 DCM_CMD_START = 1
 DCM_CMD_STOP  = 2
@@ -137,10 +137,10 @@ class ZctrlPanel:
 
 
     def handle_zaxis_origin(self, axis_num):
-        logging.info("handle_zaxis_origin=%d\n",axis_num) 
+        logging.info("handle_zaxis_origin=%d",axis_num) 
         if axis_num == 2:
             self.zaxis_origin = True
-            logging.info("zaxis_origin=%d\n",axis_num) 
+            logging.info("zaxis_origin=%d",axis_num) 
 
     def cmd_LOOKZCTRLPARAM(self, gcmd):
         msgstr = "max_z_d:%s sedist:%s " % (self.z_soft_high_val, self.pshort_e_dist)
@@ -288,7 +288,7 @@ class ZctrlPanel:
 
     def checkz_allow_run_drip(self, rdir, rdist, rspeed):
         allow_val = 0
-        if not self.self.zaxis_origin and rdir == UP_DIR_VAL and not self.zorigin_running:
+        if not self.zaxis_origin and rdir == UP_DIR_VAL and not self.zorigin_running:
             self.zorigin_running = True
             logging.info("please zaxis return origin first") 
             instrstr = "M118  Start Z Axis return origin\n G32  Z\n  M118 End Z Axis"
