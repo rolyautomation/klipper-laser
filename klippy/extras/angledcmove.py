@@ -5,8 +5,8 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 from . import bus
-import time
-import threading
+#import time
+#import threading
 
 
 REPORT_TIME = .8
@@ -709,10 +709,15 @@ class Angledcmove:
         self.pwm_delay = config.getfloat('pwm_delay', 0.005)
         self.stop_delay = config.getfloat('stop_delay', 0.001) 
 
-        #self.min_pwm_plus = 0.10
-        #self.max_pwm_plus = 0.40  
-        self.min_pwm_plus = config.getfloat('min_pwm_val', 0.1)  
-        self.max_pwm_plus = config.getfloat('max_pwm_val', 0.4)       
+  
+        self.min_pwm_dnd = config.getfloat('min_pwm_val', 0.1)  
+        self.max_pwm_dnd = config.getfloat('max_pwm_val', 0.4)   
+        self.min_pwm_plus = self.min_pwm_dnd
+        self.max_pwm_plus = self.max_pwm_dnd         
+        self.min_pwm_upd = config.getfloat('min_pwm_upd', self.min_pwm_plus)  
+        self.max_pwm_upd = config.getfloat('max_pwm_upd', self.max_pwm_plus)  
+        self.rdirection_cval = 0
+
         self.findpid_work = 0 
         self.findpid_startworkf = 0
         self.find_pos_direction = 0
@@ -732,8 +737,8 @@ class Angledcmove:
         logging.info("kp=%s ki=%s kd=%s kpup=%s pidreptime=%s ", self.kp, self.ki, self.kd, self.kpup, self.pidreptime)  
         logging.info("toleranceval=%d swingarm_en=%d try_maxtimes=%d", self.toleranceval, self.swingarm_en, self.try_maxtimes) 
         if self.tstlog_en:
-            logging.info("minpwm=%s maxpwm=%s pwm_delay=%s stop_delay=%s \n", self.min_pwm_plus, self.max_pwm_plus, self.pwm_delay, self.stop_delay) 
-            logging.info("emptyqueuetimes=%s\n", self.idle_waittimes) 
+            logging.info("minpwm=%s maxpwm=%s pwm_delay=%s stop_delay=%s", self.min_pwm_plus, self.max_pwm_plus, self.pwm_delay, self.stop_delay) 
+            logging.info("emptyqueuetimes=%s", self.idle_waittimes) 
             
             
     # def cmd_SEL_ALG_FIND(self, gcmd):
@@ -869,6 +874,11 @@ class Angledcmove:
         gcmd.respond_info(msg) 
         pass
 
+    def check_position_value_right(self):
+        bcond = False
+        if self.poshead > self.posuse:
+            bcond = True
+        return bcond
 
     def cmd_SWINGARM_BYAS(self, gcmd): 
         self.gcmd =  gcmd
@@ -876,8 +886,12 @@ class Angledcmove:
             logging.info("SWINGARM_BYAS in testmode")  
             return
         if (self.poshead == self.posuse):
-            msg = "not do Position verification"
+            msg = "not do config poshead and posuse value"
         else:
+            if not self.check_position_value_right():
+                msg = "please check poshead and posuse"
+                gcmd.respond_info(msg)
+                return
             pos = gcmd.get_int('P',1, minval=0, maxval=2)
             destpos = self.poshead
             kp_sel = 1
@@ -891,6 +905,7 @@ class Angledcmove:
                 self.set_targer_angle(destpos)
                 self.pid_normal.restart_init()
                 self.pid_normal.set_kp_sel(kp_sel)
+                self.set_dc_force_rang(kp_sel)
                 self.reactor.update_timer(self.samptimer_fpos, self.reactor.NOW)
                 msghead = 'start find ' + "sel=%d " % (kp_sel, )
             else:
@@ -1105,6 +1120,20 @@ class Angledcmove:
             self.pwm_chg_status = 0
         self.findpid_startworkf = 0
         self.update_swingarm_curpos_file()
+
+    def set_dc_force_rang(self, rdir_val):
+        if self.rdirection_cval == rdir_val:
+            return
+        if  rdir_val > 0:
+            self.min_pwm_plus = self.min_pwm_upd
+            self.max_pwm_plus = self.max_pwm_upd
+        else:
+            self.min_pwm_plus = self.min_pwm_dnd
+            self.max_pwm_plus = self.max_pwm_dnd 
+        self.rdirection_cval = rdir_val  
+        if self.tstlog_en:
+            logging.info("pwmrange=[%s:%s]",self.min_pwm_plus, self.max_pwm_plus)             
+
 
     def set_targer_angle(self, targer_angle):
         self.targer_angle = targer_angle
