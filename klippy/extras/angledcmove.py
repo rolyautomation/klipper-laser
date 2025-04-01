@@ -118,7 +118,7 @@ AB_PIN_CHG  =  1
 #M_COTM_US =  1000
 M_COTM_US =  500000
 
-
+'''
 #4096
 class MFindPID:
     def __init__(self, Kp, Ki, Kd):
@@ -152,7 +152,7 @@ class MFindPID:
         self.err_last = 0.0
         self.err_next = 0.0 
         self.integral = 0.0 
-
+'''
 
 MAX_INTEGRAL = 100  
 MIN_INTEGRAL = -100 
@@ -308,7 +308,8 @@ class AngDCMotor:
         self.cw_last_value = 0
         self.ccw_last_value =  0
 
-        self.is_piom = config.getboolean('pio_mode', False)
+        #self.is_piom = config.getboolean('pio_mode', False)
+        self.is_piom = False
         ab_chg  = config.getint('ab_chg', 0, minval=0)
         self.pio_rmodeb = config.getint('prmode', 0, minval=0)
 
@@ -654,12 +655,12 @@ class Angledcmove:
         self.gcode.register_command("SAVE_POS_AS", self.cmd_SAVE_POS_AS) 
         self.gcode.register_command("UPDATE_POS_AS", self.cmd_UPDATE_POS_AS)           
         self.gcode.register_command("LOOK_POS_AS", self.cmd_LOOK_POS_AS) 
-        self.gcode.register_command("FIND_POS_BYAS", self.cmd_FIND_POS_BYAS)   
+        #self.gcode.register_command("FIND_POS_BYAS", self.cmd_FIND_POS_BYAS)   
         self.gcode.register_command("FIND_POS_BYAS_SA", self.cmd_FIND_POS_BYAS_SA) 
         self.gcode.register_command("FIND_POS_BYAS_EN", self.cmd_FIND_POS_BYAS_EN) 
         self.gcode.register_command("FIND_POS_BYAS_ST", self.cmd_FIND_POS_BYAS_ST)          
         self.gcode.register_command("SWINGARM_BYAS", self.cmd_SWINGARM_BYAS)  
-        self.gcode.register_command("SEL_ALG_FIND", self.cmd_SEL_ALG_FIND)
+        #self.gcode.register_command("SEL_ALG_FIND", self.cmd_SEL_ALG_FIND)
         self.gcode.register_command("SWINGARM_EN_SW", self.cmd_SWINGARM_EN_SW)   
         self.gcode.register_command("CLEAR_SWINGARMPOS", self.cmd_CLEAR_SWINGARMPOS)         
 
@@ -676,20 +677,21 @@ class Angledcmove:
         self.kd = config.getfloat('pid_kd', 0.01)
         self.kpup = config.getfloat('pid_kp_up', self.kp)      
         self.toleranceval = config.getint('tolerance', DIFF_VAL)
-        self.tstlog_en = config.getint('tstlog_en', 0)              
-        self.previous_error = 0
-        self.integral = 0
-        #self.last_time = time.time()
-        self.last_time = 0
+        self.tstlog_en = config.getint('tstlog_en', 0)  
 
-        self.sel_alg = 0
+        #self.previous_error = 0
+        #self.integral = 0
+        #self.last_time = time.time()
+        #self.last_time = 0
+
+        #self.sel_alg = 0
         #self.sel_alg = 1
-        self.previous_diff = 0
-        self.previous_rtm = 0
+        #self.previous_diff = 0
+        #self.previous_rtm = 0
         #self.normpid = MFindPID(0.31,0.07,0.3)
         #self.normpid = MFindPID(0.28,0.07,0.03)
-        self.normpid = MFindPID(0.25,0.07,0.03)
-        self.incpid = MFindPID(0.21,0.80,0.01)
+        #self.normpid = MFindPID(0.25,0.07,0.03)
+        #self.incpid = MFindPID(0.21,0.80,0.01)
         #self.pidreptime = config.getint('pidreptimef',0.02,minval=0.01)
         self.pidreptime = config.getfloat('pidreptimef', 0.02, above=0.01, maxval=2)
         self.samptimer_fpos = self.reactor.register_timer(self.samp_fpos_fun) 
@@ -734,14 +736,14 @@ class Angledcmove:
             logging.info("emptyqueuetimes=%s\n", self.idle_waittimes) 
             
             
-    def cmd_SEL_ALG_FIND(self, gcmd):
-        selalgv = gcmd.get_int('S',0, minval=0, maxval=10) 
-        if selalgv == 1:
-            self.sel_alg = 1
-        elif selalgv == 0:
-            self.sel_alg = 0 
-        msg = "sel alg=%s " % (self.sel_alg, )            
-        gcmd.respond_info(msg)  
+    # def cmd_SEL_ALG_FIND(self, gcmd):
+    #     selalgv = gcmd.get_int('S',0, minval=0, maxval=10) 
+    #     if selalgv == 1:
+    #         self.sel_alg = 1
+    #     elif selalgv == 0:
+    #         self.sel_alg = 0 
+    #     msg = "sel alg=%s " % (self.sel_alg, )            
+    #     gcmd.respond_info(msg)  
 
 
     def cmd_SWINGARM_EN_SW(self, gcmd):
@@ -776,11 +778,11 @@ class Angledcmove:
         #logging.info("no set pos offset=%s", self.posoffset)  
 
 
-    def cmd_FIND_POS_BYAS(self, gcmd):   
-        mpos = gcmd.get_int('M',1, minval=0, maxval=4095)  
-        retst = self.find_angle_pos(mpos) 
-        msg = "%s=%d" % ("result:",retst)
-        gcmd.respond_info(msg)  
+    # def cmd_FIND_POS_BYAS(self, gcmd):   
+    #     mpos = gcmd.get_int('M',1, minval=0, maxval=4095)  
+    #     retst = self.find_angle_pos(mpos) 
+    #     msg = "%s=%d" % ("result:",retst)
+    #     gcmd.respond_info(msg)  
 
     def cmd_FIND_POS_BYAS_SA(self, gcmd):  
         self.gcmd =  gcmd
@@ -1246,7 +1248,7 @@ class Angledcmove:
 
 
 
-        
+    '''
     def angel_transfrom_rtm(self, angle_value):   
         ret_sec = angle_value/ANGLE_MOD_VAL
         ret_sec = self.taturn_sec * ret_sec
@@ -1442,7 +1444,8 @@ class Angledcmove:
             self.wait_motionless(0.5)
             find_times = find_times + 1
         logging.info("findtimes=%d\n", find_times)                    
-        return successf            
+        return successf   
+    '''         
 
 
     def cmd_DCM_MOVE(self, gcmd):
