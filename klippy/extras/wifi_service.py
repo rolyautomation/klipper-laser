@@ -10,6 +10,7 @@ import re
 import os
 import time
 import logging
+import select
 #import json
 
 SIGNAL_STRENGTH_MIN = -100
@@ -20,6 +21,7 @@ SSID_MIN_LEN = 0
 class WifiService:
     def __init__(self, config):
         self.printer = config.get_printer()
+        self.reactor = self.printer.get_reactor()
 
         self.interface = "wlan0"
         self.wpa_supplicant_conf = "/etc/wpa_supplicant/wpa_supplicant.conf"
@@ -46,6 +48,49 @@ class WifiService:
         gcode.register_command('NET_FORGET', self.cmd_NET_FORGET,
                                desc=self.cmd_NET_FORGET_help)  
 
+        gcode.register_command('LIST_EVENT', self.cmd_LIST_EVENT,
+                               desc=self.cmd_LIST_EVENT_help) 
+
+        self.start_monitor = self.reactor.register_timer(self.timer_handle_fun) 
+        self.exit_flag = 0
+        self.monitor_proc = None
+        #self.reactor.update_timer(self.start_monitor, self.reactor.NOW)
+
+        gcode.register_command('TEVENT_START', self.cmd_TEVENT_START,
+                               desc=self.cmd_TEVENT_START_help) 
+
+        gcode.register_command('TEVENT_STOP', self.cmd_TEVENT_STOP,
+                               desc=self.cmd_TEVENT_STOP_help)                                
+
+
+    cmd_TEVENT_START_help = "start event monitor"
+    def cmd_TEVENT_START(self, gcmd): 
+        if self.monitor_proc is not None:
+            msg = "event monitor already started"  
+            gcmd.respond_info(msg)    
+            return
+        self.start_events()   
+        msg = "event monitor started"  
+        gcmd.respond_info(msg)    
+
+
+    cmd_TEVENT_STOP_help = "stop event monitor"
+    def cmd_TEVENT_STOP(self, gcmd): 
+        if self.monitor_proc is None:
+            msg = "event monitor not started"  
+            gcmd.respond_info(msg)    
+            return
+        self.stop_events()  
+        msg = "event monitor stopped"  
+        gcmd.respond_info(msg)           
+
+
+    cmd_LIST_EVENT_help = "list events"
+    def cmd_LIST_EVENT(self, gcmd): 
+        events = self.monitor_events()
+        msg = "list events:"
+        m = "%s%s" % (msg, str(events))
+        gcmd.respond_info(m)                                 
 
     cmd_NET_SCAN_help = "scan wifi network"
     def cmd_NET_SCAN(self, gcmd): 
@@ -333,7 +378,8 @@ class WifiService:
             self._run_command(["wpa_cli", "-i", self.interface, "set_network", network_id, "ssid", f'"{ssid}"'])
             self._run_command(["wpa_cli", "-i", self.interface, "set_network", network_id, "psk", f'"{password}"'])
             self._run_command(["wpa_cli", "-i", self.interface, "enable_network", network_id])
-            self._run_command(["wpa_cli", "-i", self.interface, "save_config"])
+            #self._run_command(["wpa_cli", "-i", self.interface, "save_config"])
+            # Don't save config yet, wait until connection is successful
         else:
             # Open network
             add_cmd = ["wpa_cli", "-i", self.interface, "add_network"]
@@ -343,11 +389,12 @@ class WifiService:
             self._run_command(["wpa_cli", "-i", self.interface, "set_network", network_id, "ssid", f'"{ssid}"'])
             self._run_command(["wpa_cli", "-i", self.interface, "set_network", network_id, "key_mgmt", "NONE"])
             self._run_command(["wpa_cli", "-i", self.interface, "enable_network", network_id])
-            self._run_command(["wpa_cli", "-i", self.interface, "save_config"])
+            #self._run_command(["wpa_cli", "-i", self.interface, "save_config"])
+            # Don't save config yet, wait until connection is successful
 
         # reconnect
         self._run_command(["wpa_cli", "-i", self.interface, "reconfigure"])
-        
+
         # Wait for connection
         for _ in range(30):  # Wait up to 30 seconds
             time.sleep(1)
@@ -355,8 +402,10 @@ class WifiService:
             if connection and connection['ssid'] == ssid:
                 return True
 
-        return False
+        return False        
+
     
+
 
     def list_saved_networks(self):
         # list saved networks
@@ -381,6 +430,171 @@ class WifiService:
         self._run_command(["wpa_cli", "-i", self.interface, "remove_network", str(network_id)])
         self._run_command(["wpa_cli", "-i", self.interface, "save_config"])
         return True
+
+
+
+    def monitor_events(self):
+        # Start monitoring events to detect authentication failures
+        monitor_proc = None
+        network_id = 123456
+        try:
+            # Start wpa_cli in monitor mode
+            # monitor_proc = subprocess.Popen(
+            #     ["wpa_cli", "-i", self.interface], 
+            #     stdin=subprocess.PIPE,
+            #     stdout=subprocess.PIPE,
+            #     stderr=subprocess.PIPE,
+            #     text=True
+            # )
+            monitor_proc = subprocess.Popen(
+                ["wpa_cli", "-i", self.interface], 
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )            
+            
+            logging.info(f"monitor_proc is starting")
+            # # Send attach command to start monitoring
+            # monitor_proc.stdin.write("attach\n")
+            # monitor_proc.stdin.flush()
+            
+            # Read initial output
+            # for _ in range(5):
+            #     line = monitor_proc.stdout.readline().strip()
+            #     if not line:
+            #         break
+            while True:
+                line = monitor_proc.stdout.readline().strip()
+                logging.info(f"monitor_proc header reading: {line}")
+                if not line or "Interactive mode" in line:
+                    break   
+
+            logging.info(f"monitor_proc is restarting")
+
+            # Send attach command to start monitoring
+            monitor_proc.stdin.write("attach\n")
+            monitor_proc.stdin.flush()                             
+
+            # Wait for connection while monitoring events
+            start_time = time.time()
+            #max_wait = 30  # Wait up to 30 seconds
+            max_wait = 2
+            
+            while time.time() - start_time < max_wait:
+                # Check if there's data to read from the monitor
+                if monitor_proc.stdout in select.select([monitor_proc.stdout], [], [], 0)[0]:
+                    line = monitor_proc.stdout.readline().strip()
+                    logging.info(f"monitor_proc is reading: {line}")
+                    
+                    # Check for authentication failures
+                    if "CTRL-EVENT-SSID-TEMP-DISABLED" in line and "auth_failures" in line:
+                        # Remove the failed network
+                        #self._run_command(["wpa_cli", "-i", self.interface, "remove_network", network_id])
+                        return {"success": False, "error": "Authentication failure", "details": "Incorrect password"}
+                    
+                    if "4-Way Handshake failed" in line:
+                        # Remove the failed network
+                        #self._run_command(["wpa_cli", "-i", self.interface, "remove_network", network_id])
+                        return {"success": False, "error": "Authentication failure", "details": "4-Way Handshake failed, likely incorrect password"}
+                    
+                    if "CTRL-EVENT-ASSOC-REJECT" in line:
+                        # Remove the failed network
+                        #self._run_command(["wpa_cli", "-i", self.interface, "remove_network", network_id])
+                        return {"success": False, "error": "Association rejected", "details": "The access point rejected the connection attempt"}
+                    
+                    if "CTRL-EVENT-NETWORK-NOT-FOUND" in line:
+                        # Remove the failed network
+                        #self._run_command(["wpa_cli", "-i", self.interface, "remove_network", network_id])
+                        return {"success": False, "error": "Network not found", "details": "The network disappeared during connection attempt"}
+                    
+                    if "CTRL-EVENT-CONNECTED" in line:
+                        # Connection successful, now save the configuration
+                        #self._run_command(["wpa_cli", "-i", self.interface, "save_config"])
+                        return {"success": True, "network_id": network_id}
+                
+                # # Also check connection status the traditional way
+                # connection = self.get_current_connection()
+                # if connection and connection['ssid'] == ssid:
+                #     # Connection successful, now save the configuration
+                #     self._run_command(["wpa_cli", "-i", self.interface, "save_config"])
+                #     return {"success": True, "network_id": network_id}
+                
+                time.sleep(0.1)
+            
+            # # Connection timed out, remove the network
+            # self._run_command(["wpa_cli", "-i", self.interface, "remove_network", network_id])
+            # return {"success": False, "error": "Connection timeout", "details": "Failed to connect within 30 seconds"}
+            return {"success": False, "error": "Connection timeout", "details": "Failed to connect within 30 seconds"}
+        
+        finally:
+            # Clean up the monitor process
+            if monitor_proc:
+                try:
+                    logging.info(f"monitor_proc is ending")
+                    monitor_proc.stdin.write("detach\n")
+                    monitor_proc.stdin.flush()
+                    monitor_proc.stdin.write("quit\n")
+                    monitor_proc.stdin.flush()
+                    monitor_proc.terminate()
+                except:
+                    pass
+
+    def start_events(self):
+        if self.monitor_proc is not None:
+            return
+        self.exit_flag = 0
+        self.monitor_proc = subprocess.Popen(
+            ["wpa_cli", "-i", self.interface], 
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1
+        )            
+        
+        logging.info(f"monitor_proc is starting on test")
+        while True:
+            line = self.monitor_proc.stdout.readline().strip()
+            logging.info(f"monitor_proc header reading: {line} on test")
+            if not line or "Interactive mode" in line:
+                break   
+        logging.info(f"monitor_proc is restarting on test")
+        # Send attach command to start monitoring
+        #self.monitor_proc.stdin.write("attach\n")
+        #self.monitor_proc.stdin.flush()  
+        self.reactor.update_timer(self.start_monitor, self.reactor.NOW)
+
+
+    def stop_events(self):
+        if self.monitor_proc is None:
+            return
+        self.exit_flag = 1
+
+
+    def timer_handle_fun(self, eventtime):    
+        pass
+        if self.monitor_proc.stdout in select.select([self.monitor_proc.stdout], [], [], 0.1)[0]:
+            line = self.monitor_proc.stdout.readline().strip()
+            if line:
+                logging.info(f"Event received: {line}")
+
+        if self.exit_flag > 0:
+            if self.monitor_proc:
+                try:
+                    logging.info(f"monitor_proc is ending on test")
+                    #self.monitor_proc.stdin.write("detach\n")
+                    #self.monitor_proc.stdin.flush()
+                    self.monitor_proc.stdin.write("quit\n")
+                    self.monitor_proc.stdin.flush()
+                    self.monitor_proc.terminate()
+                    self.monitor_proc = None
+                    self.exit_flag = 0
+                except:
+                    pass
+                return self.reactor.NEVER
+        else:
+            return  eventtime+0.2            
 
 
 def load_config(config):
