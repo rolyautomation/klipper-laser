@@ -57,6 +57,24 @@ class MCU_stepper:
         self._trapq = ffi_main.NULL
         self._mcu.get_printer().register_event_handler('klippy:connect',
                                                        self._query_mcu_position)
+
+        self.ismove_flag = 0                                                
+        if self._mcu.is_non_critical:
+            self._mcu.get_printer().register_event_handler(self._mcu.get_non_critical_reconnect_event_name(),
+                                                                    self._handle_reconnect)
+
+    def _handle_reconnect(self):
+        if self.ismove_flag > 0:
+            logging.info("stepper %s mcu: %s in _handle_reconnect",
+                        self._name,
+                        self._mcu.get_name())
+            ffi_main, ffi_lib = chelper.get_ffi()
+            ret = ffi_lib.stepcompress_reset(self._stepqueue, 0)
+            if ret:
+                raise error("non-critical mcu reconnect:Internal error in stepcompress")
+            self.ismove_flag = 0
+        #self._query_mcu_position()
+
     def get_mcu(self):
         return self._mcu
     def get_name(self, short=False):
@@ -341,6 +359,7 @@ class MCU_stepper:
                 for cb in cbs:
                     cb(ret)
         # Generate steps
+        self.ismove_flag = 1
         sk = self._stepper_kinematics
         ret = self._itersolve_generate_steps(sk, flush_time)
         if ret:

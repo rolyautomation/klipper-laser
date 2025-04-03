@@ -574,10 +574,15 @@ class WifiService:
 
     def timer_handle_fun(self, eventtime):    
         pass
-        if self.monitor_proc.stdout in select.select([self.monitor_proc.stdout], [], [], 0.1)[0]:
-            line = self.monitor_proc.stdout.readline().strip()
-            if line:
-                logging.info(f"Event received: {line}")
+        #if self.monitor_proc.stdout in select.select([self.monitor_proc.stdout], [], [], 0.1)[0]:
+        if self.monitor_proc.stdout in select.select([self.monitor_proc.stdout], [], [], 0)[0]:
+                line = self.monitor_proc.stdout.readline().strip()
+                if line:
+                    logging.info(f"{eventtime} Event received: {line}")
+                    if "CTRL-EVENT-SCAN-STARTED" in line:
+                        logging.info(f"find CTRL-EVENT-SCAN-STARTED")
+                    if "CTRL-EVENT-SCAN-RESULTS" in line:  
+                        logging.info(f"find CTRL-EVENT-SCAN-RESULTS")                      
 
         if self.exit_flag > 0:
             if self.monitor_proc:
