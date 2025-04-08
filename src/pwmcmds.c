@@ -14,6 +14,7 @@
 struct pwm_out_s {
     struct timer timer;
     struct gpio_pwm pin;
+    uint32_t pin_gnum;
     uint32_t max_duration;
     uint16_t default_value;
     struct move_queue_head mq;
@@ -69,6 +70,7 @@ command_config_pwm_out(uint32_t *args)
     struct gpio_pwm pin = gpio_pwm_setup(args[1], args[2], args[3]);
     struct pwm_out_s *p = oid_alloc(args[0], command_config_pwm_out
                                     , sizeof(*p));
+    p->pin_gnum = args[1];
     p->pin = pin;
     p->default_value = args[4];
     p->max_duration = args[5];
@@ -78,6 +80,19 @@ command_config_pwm_out(uint32_t *args)
 DECL_COMMAND(command_config_pwm_out,
              "config_pwm_out oid=%c pin=%u cycle_ticks=%u value=%hu"
              " default_value=%hu max_duration=%u");
+
+
+
+void
+command_set_pwm_out_cycle(uint32_t *args)
+{
+    struct pwm_out_s *p = oid_lookup(args[0], command_config_pwm_out);
+    gpio_pwm_update_cycle(p->pin_gnum, args[1], args[2]);
+
+}
+DECL_COMMAND(command_set_pwm_out_cycle,
+             "set_pwm_out_cycle oid=%c cycle_ticks=%u value=%hu");
+
 
 void
 command_queue_pwm_out(uint32_t *args)
