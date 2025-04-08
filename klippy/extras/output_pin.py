@@ -19,6 +19,7 @@ class PrinterOutputPin:
             self.mcu_pin = ppins.setup_pin('pwm', config.get('pin'))
             cycle_time = config.getfloat('cycle_time', 0.100, above=0.,
                                          maxval=MAX_SCHEDULE_TIME)
+            self.default_cycle_time = cycle_time
             hardware_pwm = config.getboolean('hardware_pwm', False)
             self.mcu_pin.setup_cycle_time(cycle_time, hardware_pwm)
             self.scale = config.getfloat('scale', 1., above=0.)
@@ -68,6 +69,9 @@ class PrinterOutputPin:
         gcode.register_mux_command("SET_PIN", "PIN", pin_name,
                                    self.cmd_SET_PIN,
                                    desc=self.cmd_SET_PIN_help)
+        gcode.register_mux_command("SET_PIN_CYCLE", "PIN", pin_name,
+                                   self.cmd_SET_PIN_CYCLE,
+                                   desc=self.cmd_SET_PIN_CYCLE_help)                                   
 
     def _handle_connect_bind(self):
         if self._epwm_name == 'extrdpwm':
@@ -78,6 +82,26 @@ class PrinterOutputPin:
             laser_type = 0
             extruderpwm.set_extrdpwm_oid(pwm_oid,mcu_pwm,laser_type)
             #logging.info("bind pwm: %s %s %i", mcu_pwm, self._epwm_name, pwm_oid)   
+
+
+    def _set_pin_cycle(self, print_time, value, cycle_time, update_flag):
+        pass
+
+    cmd_SET_PIN_CYCLE_help = "Set the value and cycle time of an output pin"
+    def cmd_SET_PIN_CYCLE(self, gcmd):
+        # Read requested value
+        if self._epwm_name == 'extrdpwm':
+            update_flag  =  gcmd.get_int('FLAG', 0, minval=0, maxval=10)
+            value = gcmd.get_float('VALUE', minval=0., maxval=self.scale)
+            value /= self.scale
+            cycle_time = gcmd.get_float('CYCLE_TIME', self.default_cycle_time,
+                                        above=0., maxval=MAX_SCHEDULE_TIME)
+            # Obtain print_time and apply requested settings
+            toolhead = self.printer.lookup_object('toolhead')
+            toolhead.register_lookahead_callback(
+                lambda print_time: self._set_pin_cycle(print_time, value, cycle_time, update_flag)) 
+        else:
+            gcmd.respond_info( "only extrdpwm supportSET_PIN_CYCLE") 
 
 
     def get_status(self, eventtime):
