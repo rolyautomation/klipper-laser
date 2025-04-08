@@ -98,7 +98,7 @@ gpio_pwm_setup(uint8_t pin, uint32_t cycle_time, uint8_t val) {
 
 
 void
-gpio_pwm_update_cycle(uint8_t pin, uint32_t new_cycle_time, uint8_t val)
+gpio_pwm_update_cycle(uint8_t pin, uint32_t new_cycle_time)
 {
     if(pin >= 30)
         shutdown("invalid gpio pin");
@@ -106,7 +106,7 @@ gpio_pwm_update_cycle(uint8_t pin, uint32_t new_cycle_time, uint8_t val)
     // All pins on the rp2040 can be used for PWM, there are 8 PWM
     // slices and each has two channels.
     pwm_slice_hw_t * slice = &pwm_hw->slice[(pin >> 1) & 0x7];
-    uint8_t channel = pin & 1;
+    //uint8_t channel = pin & 1;
     // Map cycle_time to clock divider
     // The rp2040 has an 8.4 fractional divider, so we'll map the requested
     // cycle time into that. The cycle_time we receive from Klippy is in
@@ -145,20 +145,15 @@ gpio_pwm_update_cycle(uint8_t pin, uint32_t new_cycle_time, uint8_t val)
     // the cycle time requested now matches the cycle time already
     // set on the slice. This allows both channels to be utilized,
     // as long as their cycle times are the same.
-    
-    struct gpio_pwm out;
-    out.reg = (void*)&slice->cc;
-    out.shift = channel ? PWM_CH0_CC_B_LSB : PWM_CH0_CC_A_LSB;
-    out.mask = channel ? PWM_CH0_CC_B_BITS : PWM_CH0_CC_A_BITS;
 
     if (slice->csr & PWM_CH0_CSR_EN_BITS) {
         slice->csr = PWM_CH0_CSR_EN_RESET;
         slice->div = pwm_div;
         slice->top = MAX_PWM - 1;
-        slice->ctr = e;
+        slice->ctr = PWM_CH0_CTR_RESET;
         //slice->cc = PWM_CH0_CC_RESET;
-        gpio_pwm_write(out, val)
         slice->csr = PWM_CH0_CSR_EN_BITS;
+
     } 
 
     /*

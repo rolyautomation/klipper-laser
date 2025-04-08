@@ -87,11 +87,14 @@ void
 command_set_pwm_out_cycle(uint32_t *args)
 {
     struct pwm_out_s *p = oid_lookup(args[0], command_config_pwm_out);
-    gpio_pwm_update_cycle(p->pin_gnum, args[1], args[2]);
+    uint8_t flag = args[3];
+    gpio_pwm_update_cycle(p->pin_gnum, args[1]);
+    if (flag > 0)
+        gpio_pwm_write(p->pin, args[2]);
 
 }
 DECL_COMMAND(command_set_pwm_out_cycle,
-             "set_pwm_out_cycle oid=%c cycle_ticks=%u value=%hu");
+             "set_pwm_out_cycle oid=%c cycle_ticks=%u value=%hu flag=%hu");
 
 
 void
@@ -160,5 +163,20 @@ direct_set_pwm_pulse_width(uint8_t pwd_oid, uint32_t val)
     
 
 }
+
+
+void 
+direct_set_pwm_pulse_cycle(uint8_t pwd_oid, uint32_t cycle_time)
+{
+    
+    struct pwm_out_s *p = oid_lookup(pwd_oid, command_config_pwm_out);
+    if (p != NULL)
+    {
+        gpio_pwm_update_cycle(p->pin_gnum, cycle_time);
+    }
+    
+
+}
+
 
 #endif
