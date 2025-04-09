@@ -140,7 +140,7 @@ class PrinterOutputPin:
             return        
         if self._epwm_name == 'extrdpwm':
             v = int(max(0., min(1., self.last_value)) * self._pwm_max + 0.5)
-            logging.info("extrdpwm set:%s %s %s %s %s", self.last_cycle_time, self.last_value, self.last_update_flag, v, self._cycle_ticks) 
+            #logging.info("extrdpwm set:%s %s %s %s %s", self.last_cycle_time, self.last_value, self.last_update_flag, v, self._cycle_ticks) 
             update_flag  =  gcmd.get_int('FLAG', 0, minval=0, maxval=10)
             value = gcmd.get_float('VALUE', 0., minval=0., maxval=self.scale)
             value /= self.scale
@@ -150,7 +150,7 @@ class PrinterOutputPin:
             toolhead = self.printer.lookup_object('toolhead')
             toolhead.register_lookahead_callback(
                 lambda print_time: self._set_pin_cycle(print_time, value, cycle_time, update_flag)) 
-            gcmd.respond_info( "SET_PIN_CYCLE pin=extrdpwm value=%s cycle_time=%s flag=%s" % (value, cycle_time, update_flag))
+            #gcmd.respond_info( "SET_PIN_CYCLE pin=extrdpwm value=%s cycle_time=%s flag=%s" % (value, cycle_time, update_flag))
         else:
             gcmd.respond_info( "only support pin=extrdpwm on SET_PIN_CYCLE") 
 
