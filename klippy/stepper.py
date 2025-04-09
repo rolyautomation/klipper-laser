@@ -179,7 +179,10 @@ class MCU_stepper:
                     "reset_step_clock_vir oid=%c clock=%u").get_command_tag()
                 self._get_position_cmd = self._mcu.lookup_query_command(
                     "stepper_get_position_vir oid=%c",
-                    "stepper_position_vir oid=%c pos=%i", oid=self._oid)                
+                    "stepper_position_vir oid=%c pos=%i", oid=self._oid)    
+
+                step_cmd_tag = self.convert_tag_to_signed(step_cmd_tag)
+                dir_cmd_tag = self.convert_tag_to_signed(dir_cmd_tag)                                
 
         else:     
             self._mcu.add_config_cmd(
