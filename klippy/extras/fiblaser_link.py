@@ -135,7 +135,8 @@ class FiberLaserLink:
         psyncdutyf = gcmd.get_float('LF', 0.5, minval=0.1, maxval=0.9) 
 
         msgh = "PRR:"
-        if psyncp < self.M_PRR_MINHZ and psyncp > self.M_PRR_MAXHZ:
+        #if psyncp < self.M_PRR_MINHZ and psyncp > self.M_PRR_MAXHZ:
+        if psyncp > 0:
            psyncduty = int(round(psyncp*psyncdutyf+0.5))
            toolhead = self.printer.lookup_object('toolhead')
            toolhead.register_lookahead_callback(
