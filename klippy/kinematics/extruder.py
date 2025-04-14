@@ -536,6 +536,9 @@ class PrinterExtruderPWM:
         else:
             self.lasermin_power = int(laser_minpower + 0.5)  
 
+        self.diff_pwmval = config.getfloat(
+            'diff_pwmval', 0., minval=0., maxval=255.)   
+
         logging.info("EP:%s =%.6f,%d",self.name, self.max_e_velocity, self.lasermin_power) 
         # Setup extruder trapq (trapezoidal motion queue)
         ffi_main, ffi_lib = chelper.get_ffi()
@@ -585,6 +588,7 @@ class PrinterExtruderPWM:
         self._laser_type = 0
         self._pwm_prf = 0
         self.last_min_power = 0 
+        self.pre_pwmval = 0
         #RSYNCPOWER_M
         gcode.register_mux_command("RSYNCPOWER", "LASER",
                                    self.name, self.cmd_RSYNCPOWER,
@@ -740,7 +744,15 @@ class PrinterExtruderPWM:
         pwmsw = 1.0*(move.pwmsw or 0)
 
         speed_pulse_ticks = self.cacl_step_dist_tick(max_cruise_v)
-                        
+
+        if self.diff_pwmval > 0:
+            if abs(pwmvalue - self.pre_pwmval) > self.diff_pwmval:
+                self.pre_pwmval = pwmvalue
+            else:
+                if pwmvalue == 0:
+                    self.pre_pwmval = 0                    
+                pwmvalue = self.pre_pwmval
+         
         if (speed_pulse_ticks is None):
             speed_pulse_ticks = 1500 
         restartcmd_flag  = not self._restartcmd_flag
