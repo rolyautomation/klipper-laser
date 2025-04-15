@@ -746,11 +746,11 @@ class PrinterExtruderPWM:
         speed_pulse_ticks = self.cacl_step_dist_tick(max_cruise_v)
 
         if self.diff_pwmval > 0:
-            if abs(pwmvalue - self.pre_pwmval) > self.diff_pwmval:
+            if pwmvalue == 0:
+                self.pre_pwmval = 0
+            elif abs(pwmvalue - self.pre_pwmval) > self.diff_pwmval:
                 self.pre_pwmval = pwmvalue
             else:
-                if pwmvalue == 0:
-                    self.pre_pwmval = 0                    
                 pwmvalue = self.pre_pwmval
          
         if (speed_pulse_ticks is None):
