@@ -58,7 +58,10 @@ struct stepper_move_pwm {
     uint8_t  pwm_on_off;    
     uint8_t  mode;
     uint16_t pwmval;
-    uint32_t speed_pulse_ticks;    
+    uint32_t speed_pulse_ticks;  
+    uint32_t composite_dcount;  
+    uint16_t composite_count_offset;    
+    uint8_t  composite_mode;
     #endif       
     uint8_t flags;
 };
@@ -80,6 +83,9 @@ struct stepper_pwm {
     uint8_t  mode;
     uint16_t pwmval;
     uint32_t speed_pulse_ticks;
+    uint32_t composite_dcount;  
+    uint32_t composite_count_offset;    
+    uint8_t  composite_mode;
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
     uint8_t  oid_pwm_flag;
     uint8_t  laser_type; 
@@ -155,6 +161,56 @@ typedef struct pwm_ctrl_s_t pwm_ctrl_s_t;
 
 
 pwm_ctrl_s_t  g_pwm_ctrl_data;
+
+#define  M_FIFO_DATA_LEN  (64)
+#define  M_FIFO_NUM_MAX   (3)
+struct fifo_buff_s_t {
+    uint8_t  buff[M_FIFO_NUM_MAX][M_FIFO_DATA_LEN]; 
+    uint8_t  head;
+    uint8_t  tail;
+};
+typedef struct fifo_buff_s_t fifo_buff_s_t;
+fifo_buff_s_t  g_fifo_buff_data;
+
+void init_fifo_buff_data(void)
+{
+    g_fifo_buff_data.head = 0;
+    g_fifo_buff_data.tail = 0;
+}
+
+int push_fifo_buff_data(uint8_t *data, uint8_t len)
+{
+
+    if(len == 0 || len > M_FIFO_DATA_LEN)
+        return -1;    
+    if((g_fifo_buff_data.head + 1) % M_FIFO_NUM_MAX == g_fifo_buff_data.tail)
+        return -2;
+    memcpy(g_fifo_buff_data.buff[g_fifo_buff_data.head], data, len);
+    g_fifo_buff_data.head = (g_fifo_buff_data.head + 1) % M_FIFO_NUM_MAX;
+    return 0;
+
+}
+
+int  pop_fifo_buff_data(uint8_t curindex)
+{
+    if(g_fifo_buff_data.head == g_fifo_buff_data.tail)
+        return -2;
+    if(curindex != g_fifo_buff_data.tail)
+        return -1;
+    g_fifo_buff_data.tail = (g_fifo_buff_data.tail + 1) % M_FIFO_NUM_MAX;
+    return 0;
+}
+
+uint8_t *  get_fifo_buff_pdata(uint8_t curindex)
+{
+    if(g_fifo_buff_data.head == g_fifo_buff_data.tail)
+        return NULL;
+    if(curindex != g_fifo_buff_data.tail)
+        return NULL;
+    return g_fifo_buff_data.buff[g_fifo_buff_data.tail];
+
+}
+
 
 void  set_pwm_ctrl_data(uint8_t oid_pwm_flag, uint8_t  oid_pwm, uint8_t  laser_type)
 {
@@ -237,85 +293,6 @@ uint32_t cacl_power_var_value(uint32_t inter_pulse_ticks)
             
 }
 
-#if  0
-uint32_t cacl_power_var_value_float(uint32_t inter_pulse_ticks)
-{
-    uint32_t result_value = 0;
-    float  fa = 0;
-    float  fb = 0;  
-    float  fc = 0;       
-    
-    if (inter_pulse_ticks == 0)
-    {
-        return(result_value);
-    } 
-    #if 0   
-    if (inter_pulse_ticks < M_MIN_PULSE_TICKS)
-    {
-        ;//return(result_value);
-    }
-    //sts
-    if (sts_speed_pulse_ticks > 0)
-    {
-        if(sts_speed_pulse_ticks > inter_pulse_ticks)
-        {
-            sts_speed_pulse_ticks = inter_pulse_ticks;
-        }
-    }
-    else
-    {
-        sts_speed_pulse_ticks = inter_pulse_ticks;
-
-    }
-
-    if (sts_speed_pulse_ticks_max > 0)
-    {
-        if(sts_speed_pulse_ticks_max < inter_pulse_ticks)
-        {
-            sts_speed_pulse_ticks_max = inter_pulse_ticks;
-        }
-    }
-    else
-    {
-        sts_speed_pulse_ticks_max = inter_pulse_ticks;
-
-    }
-    /*
-    if (inter_pulse_ticks < M_MIN_PULSE_TICKS)
-    {
-        inter_pulse_ticks = M_MIN_PULSE_TICKS;   
-    }  
-    */  
-    #endif    
-    fa =  inter_pulse_ticks;
-    //add new value
-    //fa =  fa/2;
-    fb =  g_pwm_ctrl_data.speed_pulse_ticks;
-    fb =  fb/fa;
-    //new add
-    if (fb > 1.0 )
-    {
-        fb = 1.0;
-    }
-    #if 0
-    if (fb < M_MIN_POWER_VALUE_PER)
-    {
-        fb = M_MIN_POWER_VALUE_PER;
-    }
-    #endif
-    fc =  g_pwm_ctrl_data.pwmval;
-    fc = fb*fc;
-    result_value = fc;
-    result_value =  result_value & 0xFF;
-    //min power 255*0.1=25.5
-    if((result_value < M_POWER_VAL_LOWERLIMIT) && (g_pwm_ctrl_data.pwmval > 0))
-    {
-        result_value = M_POWER_VAL_LOWERLIMIT;     
-    }
-    return(result_value);
-
-}
-#endif
 
 //sts
 void report_speed_stauts_ontest(void)
@@ -709,6 +686,16 @@ command_queue_step_pwm(uint32_t *args)
      m->mode = s->mode;
      m->pwmval = s->pwmval;
      m->speed_pulse_ticks = s->speed_pulse_ticks;
+     m->composite_mode = s->composite_mode;
+     if (s->composite_mode > 0) {
+         m->composite_dcount = s->composite_dcount;
+         m->composite_count_offset = s->composite_count_offset;
+         s->composite_count_offset = s->composite_count_offset + m->count;
+         if (s->composite_count_offset >= s->composite_dcount)
+         {
+            s->composite_mode = 0;
+         }
+     }
     //m->mode = args[4];
     //m->p_v1 = args[5];
     //m->p_v2 = args[6];   
@@ -761,7 +748,6 @@ command_set_next_step_dir_pwm(uint32_t *args)
 DECL_COMMAND(command_set_next_step_dir_pwm, "set_next_step_dir_pwm oid=%c dir=%c");
 
 
-
 #ifdef M_PWM_OUT_EN
 
 void
@@ -802,8 +788,6 @@ command_pauseresume_oid_stepper_pwm(uint32_t *args)
 DECL_COMMAND(command_pauseresume_oid_stepper_pwm, "pauseresume_pwm oid=%c sw=%c");
 
 
-
-
 void
 command_setminpower_oid_stepper_pwm(uint32_t *args)
 {
@@ -824,8 +808,6 @@ command_setminpower_oid_stepper_pwm(uint32_t *args)
 DECL_COMMAND(command_setminpower_oid_stepper_pwm, "setminpower oid=%c pv=%c");
 
 
-
-
 void
 command_set_pwm_sw_stepper_pwm(uint32_t *args)
 {
@@ -838,12 +820,12 @@ command_set_pwm_sw_stepper_pwm(uint32_t *args)
 DECL_COMMAND(command_set_pwm_sw_stepper_pwm, "set_pwm_onf oid=%c onf=%c");
 
 
-
 void
 command_set_pwm_modepower_stepper_pwm(uint32_t *args)
 {
     struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
     irq_disable();
+    s->composite_mode = 0;      
     s->mode = args[1];
     s->pwmval = args[2];
     s->speed_pulse_ticks = args[3];        
@@ -853,6 +835,52 @@ command_set_pwm_modepower_stepper_pwm(uint32_t *args)
 DECL_COMMAND(command_set_pwm_modepower_stepper_pwm, "set_pwm_power oid=%c mod=%c pwmv=%hu pticks=%u");
 
 
+
+void
+command_set_pwmpower_lbandwidth_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->composite_mode = 0;  
+    s->pwmval = args[1];
+    irq_enable();
+
+}
+DECL_COMMAND(command_set_pwmpower_lbandwidth_stepper_pwm, "set_pwmpower_lbandwidth oid=%c pwmval=%c");
+
+
+void
+command_powerfunc_table_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->composite_mode = 1;    
+    s->composite_dcount = args[1];
+    s->composite_count_offset = 0;
+    uint8_t data_len = args[3];
+    uint8_t *data = command_decode_ptr(args[4]);     
+    irq_enable();
+
+}
+DECL_COMMAND(command_powerfunc_table_stepper_pwm, "set_powerfunc_table oid=%c tdc=%u data=%*s");
+
+
+void
+command_powerfunc_speed_table_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->composite_mode = 1;
+    s->speed_pulse_ticks = args[1];
+    s->composite_dcount = args[2];
+    s->composite_count_offset = 0;
+    uint8_t data_len = args[3];
+    uint8_t *data = command_decode_ptr(args[4]); 
+
+    irq_enable();
+
+}
+DECL_COMMAND(command_powerfunc_speed_table_stepper_pwm, "set_powerfunc_speed_table oid=%c pticks=%u tdc=%u data=%*s");
 
 
 void 
@@ -880,7 +908,6 @@ set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val, uint8
 
 
 #endif
-
 
 
 
