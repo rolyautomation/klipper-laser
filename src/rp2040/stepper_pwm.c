@@ -1059,7 +1059,16 @@ command_powerfunc_table_stepper_pwm(uint32_t *args)
     irq_enable();
     int8_t iret = push_fifo_buff_compmode(data, data_len);
     if(iret < 0)
-        shutdown("FIFO buffer overflow or invalid length");
+    {
+        if (iret == FIFO_ERR_FULL)
+        {
+            shutdown("FIFO buffer overflow");
+        }
+        else
+        {
+            shutdown("FIFO buffer invalid length");
+        }
+    }
     else
     {
         if (data_len & 0x01)
@@ -1087,7 +1096,16 @@ command_powerfunc_speed_table_stepper_pwm(uint32_t *args)
     irq_enable();
     int8_t iret = push_fifo_buff_compmode(data, data_len);
     if(iret < 0)
-        shutdown("FIFO buffer overflow or invalid length");
+    {
+        if (iret == FIFO_ERR_FULL)
+        {
+            shutdown("FIFO buffer overflow");
+        }
+        else
+        {
+            shutdown("FIFO buffer invalid length");
+        }
+    }
     else
     {
         if (data_len & 0x01)
