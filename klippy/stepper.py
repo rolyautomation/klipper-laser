@@ -110,6 +110,11 @@ class MCU_stepper:
         set_pwm_sw_tag = 0
         set_pwm_modepower_tag = 0 
 
+        set_pwmpower_msgtag = 0
+        set_plusticks_msgtag = 0
+        set_powerftable_msgtag = 0
+        set_powerftable_sp_msgtag = 0
+
         # logging.info("mname=%s rbothedge=%s pulse=%s sbe=%s] \n", self._name,
         #     self._req_step_both_edge, self._step_pulse_duration, self._step_both_edge)         
 
@@ -155,12 +160,27 @@ class MCU_stepper:
                     "pauseresume_pwm oid=%c sw=%c")  
 
                 self._setminpower_cmd =  self._mcu.lookup_command(
-                    "setminpower oid=%c pv=%c")                                                        
+                    "setminpower oid=%c pv=%c")    
+
+                set_pwmpower_msgtag = self._mcu.lookup_command(
+                    "set_pwmpower_lbandwidth oid=%c pwmval=%c").get_command_tag()   
+                set_plusticks_msgtag = self._mcu.lookup_command(
+                    "set_pticks_lbandwidth oid=%c pticks=%u").get_command_tag()  
+
+                set_powerftable_msgtag = self._mcu.lookup_command(
+                    "set_powerfunc_table oid=%c tdc=%u data=%*s").get_command_tag()   
+                set_powerftable_sp_msgtag = self._mcu.lookup_command(
+                    "set_powerfunc_speed_table oid=%c pticks=%u tdc=%u data=%*s").get_command_tag()                                                                                                                  
 
                 step_cmd_tag = self.convert_tag_to_signed(step_cmd_tag)
                 dir_cmd_tag = self.convert_tag_to_signed(dir_cmd_tag)
                 set_pwm_sw_tag = self.convert_tag_to_signed(set_pwm_sw_tag)
                 set_pwm_modepower_tag = self.convert_tag_to_signed(set_pwm_modepower_tag)
+
+                set_pwmpower_msgtag = self.convert_tag_to_signed(set_pwmpower_msgtag)
+                set_plusticks_msgtag = self.convert_tag_to_signed(set_plusticks_msgtag)
+                set_powerftable_msgtag = self.convert_tag_to_signed(set_powerftable_msgtag)
+                set_powerftable_sp_msgtag = self.convert_tag_to_signed(set_powerftable_sp_msgtag)
                 step_ctag_typef = 1
 
             else:
@@ -210,6 +230,11 @@ class MCU_stepper:
         ffi_lib.stepcompress_fill(self._stepqueue, max_error_ticks,
                                   step_cmd_tag, dir_cmd_tag, step_ctag_typef,
                                   set_pwm_sw_tag,set_pwm_modepower_tag)
+
+        ffi_lib.stepcompress_fill_ext(self._stepqueue, set_pwmpower_msgtag,
+                                  set_plusticks_msgtag, set_powerftable_msgtag,
+                                  set_powerftable_sp_msgtag)  
+
 
 
     def convert_tag_to_signed(self,unsigned_tag):

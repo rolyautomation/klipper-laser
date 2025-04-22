@@ -60,8 +60,10 @@ struct stepcompress {
     uint32_t pre_speed_pulse_ticks;    
     uint32_t pre_pwmval;  
     int32_t set_pwm_sw_msgtag, set_pwm_modepower_msgtag;
-
-
+    int32_t set_pwmpower_msgtag;
+    int32_t set_plusticks_msgtag;
+    int32_t set_powerftable_msgtag;
+    int32_t set_powerftable_sp_msgtag;
 
 };
 
@@ -284,6 +286,16 @@ stepcompress_fill(struct stepcompress *sc, uint32_t max_error
     sc->set_pwm_modepower_msgtag = set_pwm_modepower_msgtag;
 }
 
+void __visible
+stepcompress_fill_ext(struct stepcompress *sc, int32_t set_pwmpower_msgtag, int32_t set_plusticks_msgtag, int32_t set_powerftable_msgtag, int32_t set_powerftable_sp_msgtag)
+{
+    sc->set_pwmpower_msgtag = set_pwmpower_msgtag;
+    sc->set_plusticks_msgtag = set_plusticks_msgtag;
+    sc->set_powerftable_msgtag = set_powerftable_msgtag;
+    sc->set_powerftable_sp_msgtag = set_powerftable_sp_msgtag;
+}
+
+
 // Set the inverted stepper direction flag
 void __visible
 stepcompress_set_invert_sdir(struct stepcompress *sc, uint32_t invert_sdir)
@@ -393,30 +405,12 @@ add_move(struct stepcompress *sc, uint64_t first_clock, struct step_move *move)
     uint32_t ticks = move->add*addfactor + move->interval*(move->count-1);
     uint64_t last_clock = first_clock + ticks;
 
-    #if 1
-
-    uint32_t msg[5+3] = {
-        sc->queue_step_msgtag, sc->oid, move->interval, move->count, move->add, 0, 0, 0
-    };
-    int len = 5;
-    if ( sc->step_ctag_typef > 0 )
-    {
-        //msg[5] = sc->pwm_mode;  
-        //msg[6] = sc->pwm_pv1;  
-        //msg[7] = sc->pwm_pv2;
-        //len = 5+3;
-    }
-    struct queue_message *qm = message_alloc_and_encode(msg, len);
-
-
-    #else
+ 
     // Create and queue a queue_step command old
     uint32_t msg[5] = {
         sc->queue_step_msgtag, sc->oid, move->interval, move->count, move->add
     };
     struct queue_message *qm = message_alloc_and_encode(msg, 5);
-    #endif
-
 
     qm->min_clock = qm->req_clock = sc->last_step_clock;
     if (move->count == 1 && first_clock >= sc->last_step_clock + CLOCK_DIFF_MAX)
@@ -524,23 +518,56 @@ set_pwm_mode_power_send(struct stepcompress *sc)
 {
     int runflag = 0;
 
-    if (( sc->pre_pwm_mode != sc->pwm_mode ) || (sc->pre_pwmval != sc->pwmval) || (sc->pre_speed_pulse_ticks != sc->speed_pulse_ticks))
+    if ( (sc->pre_pwmval != sc->pwmval) )
+    {
+        sc->pre_pwmval = sc->pwmval;
+        runflag = runflag | 0x01;
+    }
+
+    if (sc->pre_speed_pulse_ticks != sc->speed_pulse_ticks)
+    {
+        sc->pre_speed_pulse_ticks = sc->speed_pulse_ticks;
+        runflag = runflag | 0x02;
+    }
+
+    if (sc->pre_pwm_mode != sc->pwm_mode)
     {
         sc->pre_pwm_mode = sc->pwm_mode;
-        sc->pre_pwmval = sc->pwmval;
-        sc->pre_speed_pulse_ticks = sc->speed_pulse_ticks;   
-        runflag = 1;
+        runflag = runflag | 0x04;
     }
-    if (runflag)
-    {
 
-        uint32_t msg[5] = {
-            sc->set_pwm_modepower_msgtag, sc->oid, sc->pwm_mode, sc->pwmval, sc->speed_pulse_ticks
-        };
-        struct queue_message *qm = message_alloc_and_encode(msg, 5);
-        qm->req_clock = sc->last_step_clock;
-        list_add_tail(&qm->node, &sc->msg_queue);
-        return 0;
+    if (runflag > 0)
+    {
+        if (runflag  == 1)
+        {
+            uint32_t msg[3] = {
+                sc->set_pwmpower_msgtag, sc->oid, sc->pwmval
+            };
+            struct queue_message *qm = message_alloc_and_encode(msg, 3);
+            qm->req_clock = sc->last_step_clock;
+            list_add_tail(&qm->node, &sc->msg_queue);
+            return 0;
+        } else if (runflag  == 2)
+        {
+            uint32_t msg[3] = {
+                sc->set_plusticks_msgtag, sc->oid, sc->speed_pulse_ticks
+            };
+            struct queue_message *qm = message_alloc_and_encode(msg, 3);
+            qm->req_clock = sc->last_step_clock;
+            list_add_tail(&qm->node, &sc->msg_queue);
+            return 0;
+        }
+        else 
+        {
+            uint32_t msg[5] = {
+                sc->set_pwm_modepower_msgtag, sc->oid, sc->pwm_mode, sc->pwmval, sc->speed_pulse_ticks
+            };
+            struct queue_message *qm = message_alloc_and_encode(msg, 5);
+            qm->req_clock = sc->last_step_clock;
+            list_add_tail(&qm->node, &sc->msg_queue);
+            return 0;
+
+        }
         
     }
     return 0;
