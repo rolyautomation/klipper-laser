@@ -182,6 +182,7 @@ pwm_ctrl_s_t  g_pwm_ctrl_data;
 #define  M_BASE_RATIO     (128)
 #define  M_BASE_BIT       (7)
 
+
 struct fifo_buff_s_t {
     uint8_t  buff[M_FIFO_NUM_MAX][M_FIFO_DATA_LEN]; 
     uint8_t  head;
@@ -247,7 +248,7 @@ int  pop_fifo_buff_compmode(uint8_t curindex)
 
 }
 
-uint8_t *  get_fifo_buff_compmode(uint8_t curindex)
+uint8_t * get_fifo_buff_compmode(uint8_t curindex)
 {
     if(g_fifo_buff_data.head == g_fifo_buff_data.tail)
         return NULL;
@@ -357,7 +358,12 @@ void  load_next_pwm_ctrl_data_composite(uint8_t composite_mode, uint8_t composit
             }
 
 
-        } 
+        }
+        else
+        {
+            update_power_pwm_value(g_pwm_ctrl_data.composite_cpower_run);
+        }
+ 
 
     } 
  
@@ -391,7 +397,7 @@ void  update_composite_cindex_dcount(void)
             }
             else
             {
-                 g_pwm_ctrl_data.composite_mode = 0
+                g_pwm_ctrl_data.composite_mode = 0;
 
 
             }
@@ -403,7 +409,6 @@ void  update_composite_cindex_dcount(void)
 
 
 }
-
 
 
 //#define M_MIN_PULSE_TICKS   (10)
@@ -463,26 +468,25 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count, uint32_t inter_p
     uint32_t cur_pwm_val=0;
     uint8_t  flag = 0;
     uint8_t  pwm_on_off_transfer = 0; 
-    //int  a = 0;
-    //float  fa = 0;
 
-    //pause_resume 
-    pwm_on_off_transfer = g_pwm_ctrl_data.pwm_on_off;
-    if (g_pwm_ctrl_data.pauseresume_sw > 0 )
-    {
-        cur_pwm_val = 0;
-        flag = 1;
-        pwm_on_off_transfer = 0;
-        goto  runpwmout;
 
-    }
+    // //pause_resume 
+    // pwm_on_off_transfer = g_pwm_ctrl_data.pwm_on_off;
+    // if (g_pwm_ctrl_data.pauseresume_sw > 0 )
+    // {
+    //     cur_pwm_val = 0;
+    //     flag = 1;
+    //     pwm_on_off_transfer = 0;
+    //     goto  runpwmout;
 
-    if (g_pwm_ctrl_data.pwm_on_off == 0)
-    {
-        cur_pwm_val = 0;
-        flag = 1;
-        goto  runpwmout;
-    }
+    // }
+
+    // if (g_pwm_ctrl_data.pwm_on_off == 0)
+    // {
+    //     cur_pwm_val = 0;
+    //     flag = 1;
+    //     goto  runpwmout;
+    // }
     //turn on
     if (g_pwm_ctrl_data.count <= 1)
     {
@@ -575,6 +579,24 @@ void update_next_pwm_ctrl_data(uint8_t runstep, uint16_t count, uint32_t inter_p
         default :
             flag = 0;
 
+    }
+
+    //pause_resume 
+    pwm_on_off_transfer = g_pwm_ctrl_data.pwm_on_off;
+    if (g_pwm_ctrl_data.pauseresume_sw > 0 )
+    {
+        cur_pwm_val = 0;
+        flag = 1;
+        pwm_on_off_transfer = 0;
+        goto  runpwmout;
+
+    }
+
+    if (g_pwm_ctrl_data.pwm_on_off == 0)
+    {
+        cur_pwm_val = 0;
+        flag = 1;
+        //goto  runpwmout;
     }
 
 runpwmout:    
@@ -857,6 +879,7 @@ command_queue_step_pwm(uint32_t *args)
          if (s->composite_count_offset >= s->composite_dcount)
          {
             s->composite_mode = 0;
+
          }
      }
     //m->mode = args[4];
@@ -998,7 +1021,6 @@ command_set_pwm_modepower_stepper_pwm(uint32_t *args)
 DECL_COMMAND(command_set_pwm_modepower_stepper_pwm, "set_pwm_power oid=%c mod=%c pwmv=%hu pticks=%u");
 
 
-
 void
 command_set_pwmpower_lbandwidth_stepper_pwm(uint32_t *args)
 {
@@ -1010,6 +1032,18 @@ command_set_pwmpower_lbandwidth_stepper_pwm(uint32_t *args)
 
 }
 DECL_COMMAND(command_set_pwmpower_lbandwidth_stepper_pwm, "set_pwmpower_lbandwidth oid=%c pwmval=%c");
+
+
+void
+command_set_pticks_lbandwidth_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->speed_pulse_ticks = args[1];        
+    irq_enable();
+
+}
+DECL_COMMAND(command_set_pticks_lbandwidth_stepper_pwm, "set_pticks_lbandwidth oid=%c pticks=%u");
 
 
 void
