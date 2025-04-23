@@ -308,7 +308,16 @@ class GCodeMove:
             if toolhead is None:
                 raise gcmd.error("Printer not ready in cmd G1")
             kin = toolhead.get_kinematics()
-            self.galvo_coord_confactor = kin.get_galvo_coord_confactor()            
+            self.galvo_coord_confactor = kin.get_galvo_coord_confactor()   
+
+        power_table_data = None
+        powerp_str = gcmd.get('P', '')
+        if powerp_str:
+            power_table_values = [int(float(x.strip())) for x in powerp_str.split(',')]
+            if len(power_table_values) % 2 != 0:
+                raise gcmd.error("Invalid power table format")
+            power_table_data = power_table_values
+            logging.info("Power table: %s", power_table_data)
 
         params = gcmd.get_command_parameters()
         try:
@@ -385,7 +394,7 @@ class GCodeMove:
         # pwm_work_mode_use: 0, 1, 2 --> M5, M3, M4
         # adj_power_pwm: S value from G-code file
         # pwm_work_ponoff_use: 0, 1 --> effectively distinguishes between G0 and G1        
-        self.move_with_transform(self.last_position, self.adj_speed_mmsec, self.pwm_work_mode_use, self.adj_power_pwm, self.pwm_work_ponoff_use)  
+        self.move_with_transform(self.last_position, self.adj_speed_mmsec, self.pwm_work_mode_use, self.adj_power_pwm, self.pwm_work_ponoff_use, power_table_data)  
             
         
     # G-Code coordinate manipulation
