@@ -543,7 +543,8 @@ class PrinterExtruderPWM:
         # Setup extruder trapq (trapezoidal motion queue)
         ffi_main, ffi_lib = chelper.get_ffi()
         self.trapq = ffi_main.gc(ffi_lib.trapq_alloc(), ffi_lib.trapq_free)
-        self.trapq_append = ffi_lib.trapq_append
+        #self.trapq_append = ffi_lib.trapq_append
+        self.trapq_append_extend = ffi_lib.trapq_append_extend
         self.trapq_finalize_moves = ffi_lib.trapq_finalize_moves
         # Setup extruder stepper
         self.extruder_stepper = None
@@ -762,7 +763,7 @@ class PrinterExtruderPWM:
         else :
             self._restartcmd_flag = restartcmd_flag                    
 
-        self.trapq_append(self.trapq, print_time,
+        self.trapq_append_extend(self.trapq, print_time,
                           move.accel_t, move.cruise_t, move.decel_t,
                           move.start_pos[3+3], 0., 0.,
                           0., 0., pwmsw,

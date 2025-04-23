@@ -13,11 +13,19 @@ struct coord {
 };
 
 
+#define MAX_PTABLE_LEN  (64)
+//M_FIFO_DATA_LEN
+
+struct power_table_s {
+    unsigned char ddata[MAX_PTABLE_LEN];
+    unsigned int  dist_count;
+};
 
 struct pwm_synci {
     unsigned char enf;
     unsigned char acd_val;
     unsigned char on_off;
+    unsigned char pdlen;
     double pwmmode, pwmval;
     double speed_pulse_ticks;
     double restartcmd_flag;
@@ -28,6 +36,7 @@ struct move {
     double start_v, half_accel;
     struct coord start_pos, axes_r;
     struct pwm_synci pwm_syncd; 
+    struct power_table_s power_tabled;
 
     struct list_node node;
 };
@@ -61,6 +70,13 @@ void trapq_append(struct trapq *tq, double print_time
                   , double axes_r_x, double axes_r_y, double axes_r_z
                   , double axes_r_a, double axes_r_b, double axes_r_c
                   , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en);
+void trapq_append_extend(struct trapq *tq, double print_time
+             , double accel_t, double cruise_t, double decel_t
+             , double start_pos_x, double start_pos_y, double start_pos_z
+             , double start_pos_a, double start_pos_b, double start_pos_c
+             , double axes_r_x, double axes_r_y, double axes_r_z
+             , double axes_r_a, double axes_r_b, double axes_r_c             
+             , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en);
 void trapq_finalize_moves(struct trapq *tq, double print_time
                           , double clear_history_time);
 void trapq_set_position(struct trapq *tq, double print_time

@@ -130,6 +130,7 @@ trapq_append(struct trapq *tq, double print_time
 {
 
     unsigned char on_off = 0;
+    unsigned char pdlen = 0;
     if (pwm_sync_en > 0)
     {
         on_off = start_pos_c;
@@ -140,11 +141,9 @@ trapq_append(struct trapq *tq, double print_time
     struct coord axes_r = { .x=axes_r_x, .y=axes_r_y, .z=axes_r_z 
                            ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
 
-    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pwmmode=axes_r_a, .pwmval=axes_r_b 
+    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pdlen=pdlen, .pwmmode=axes_r_a, .pwmval=axes_r_b 
                             ,.speed_pulse_ticks=axes_r_c, .restartcmd_flag = axes_r_z};   
 
-    //pwm_syncd.on_off =  (axes_r_b > 0) ? 1: 0; 
-    //pwm_syncd.on_off =  on_off;
                                               
     if (accel_t) {
         struct move *m = move_alloc();
@@ -154,7 +153,6 @@ trapq_append(struct trapq *tq, double print_time
         m->half_accel = .5 * accel;
         m->start_pos = start_pos;
         m->axes_r = axes_r;
-        pwm_syncd.acd_val = 1; 
         m->pwm_syncd = pwm_syncd;
         trapq_add_move(tq, m);
 
@@ -169,7 +167,6 @@ trapq_append(struct trapq *tq, double print_time
         m->half_accel = 0.;
         m->start_pos = start_pos;
         m->axes_r = axes_r;
-        pwm_syncd.acd_val = 2; 
         m->pwm_syncd = pwm_syncd;
         trapq_add_move(tq, m);
 
@@ -184,11 +181,97 @@ trapq_append(struct trapq *tq, double print_time
         m->half_accel = -.5 * accel;
         m->start_pos = start_pos;
         m->axes_r = axes_r;
-        pwm_syncd.acd_val = 3; 
         m->pwm_syncd = pwm_syncd;
         trapq_add_move(tq, m);
+
     }
 }
+
+
+
+
+void __visible
+trapq_append_extend(struct trapq *tq, double print_time
+             , double accel_t, double cruise_t, double decel_t
+             , double start_pos_x, double start_pos_y, double start_pos_z
+             , double start_pos_a, double start_pos_b, double start_pos_c
+             , double axes_r_x, double axes_r_y, double axes_r_z
+             , double axes_r_a, double axes_r_b, double axes_r_c             
+             , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en)
+{
+
+    unsigned char on_off = 0;
+    unsigned char pdlen = 0;
+    struct power_table_s power_tabled = {0};    
+    if (pwm_sync_en > 0)
+    {
+        on_off = start_pos_c;
+        start_pos_c = 0;
+
+    }
+    struct coord start_pos = { .x=start_pos_x, .y=start_pos_y, .z=start_pos_z 
+                              ,.a=start_pos_a, .b=start_pos_b, .c=start_pos_c  };
+    struct coord axes_r = { .x=axes_r_x, .y=axes_r_y, .z=axes_r_z 
+                           ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
+
+    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pdlen=pdlen, .pwmmode=axes_r_a, .pwmval=axes_r_b 
+                            ,.speed_pulse_ticks=axes_r_c, .restartcmd_flag = axes_r_z};   
+
+                                              
+    if (accel_t) {
+        struct move *m = move_alloc();
+        m->print_time = print_time;
+        m->move_t = accel_t;
+        m->start_v = start_v;
+        m->half_accel = .5 * accel;
+        m->start_pos = start_pos;
+        m->axes_r = axes_r;
+        m->pwm_syncd = pwm_syncd;
+        if (pwm_syncd.pdlen > 0)
+        {
+            m->power_tabled = power_tabled;
+        }
+        trapq_add_move(tq, m);
+
+        print_time += accel_t;
+        start_pos = move_get_coord(m, accel_t);
+    }
+    if (cruise_t) {
+        struct move *m = move_alloc();
+        m->print_time = print_time;
+        m->move_t = cruise_t;
+        m->start_v = cruise_v;
+        m->half_accel = 0.;
+        m->start_pos = start_pos;
+        m->axes_r = axes_r;
+        m->pwm_syncd = pwm_syncd;
+        if (pwm_syncd.pdlen > 0)
+        {
+            m->power_tabled = power_tabled;
+        }        
+        trapq_add_move(tq, m);
+
+        print_time += cruise_t;
+        start_pos = move_get_coord(m, cruise_t);
+    }
+    if (decel_t) {
+        struct move *m = move_alloc();
+        m->print_time = print_time;
+        m->move_t = decel_t;
+        m->start_v = cruise_v;
+        m->half_accel = -.5 * accel;
+        m->start_pos = start_pos;
+        m->axes_r = axes_r;
+        m->pwm_syncd = pwm_syncd;
+        if (pwm_syncd.pdlen > 0)
+        {
+            m->power_tabled = power_tabled;
+        }        
+        trapq_add_move(tq, m);
+    }
+    
+}
+
 
 // Expire any moves older than `print_time` from the trapezoid velocity queue
 void __visible
