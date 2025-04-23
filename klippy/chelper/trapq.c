@@ -197,7 +197,8 @@ trapq_append_extend(struct trapq *tq, double print_time
              , double start_pos_a, double start_pos_b, double start_pos_c
              , double axes_r_x, double axes_r_y, double axes_r_z
              , double axes_r_a, double axes_r_b, double axes_r_c             
-             , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en)
+             , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en
+             , unsigned char * power_table, unsigned char len_power_table, unsigned int dist_count)
 {
 
     unsigned char on_off = 0;
@@ -207,7 +208,15 @@ trapq_append_extend(struct trapq *tq, double print_time
     {
         on_off = start_pos_c;
         start_pos_c = 0;
-
+        pdlen = len_power_table;
+        power_tabled.dist_count = dist_count;
+        if (len_power_table > MAX_PTABLE_LEN) {
+            len_power_table = MAX_PTABLE_LEN;
+        }
+        if (len_power_table > 0) {
+            memcpy(power_tabled.ddata, power_table, len_power_table);
+        }
+        
     }
     struct coord start_pos = { .x=start_pos_x, .y=start_pos_y, .z=start_pos_z 
                               ,.a=start_pos_a, .b=start_pos_b, .c=start_pos_c  };

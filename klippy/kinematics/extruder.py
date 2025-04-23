@@ -5,6 +5,8 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import math, logging
 import stepper, chelper
+import array
+
 
 class ExtruderStepper:
     def __init__(self, config):
@@ -537,7 +539,10 @@ class PrinterExtruderPWM:
             self.lasermin_power = int(laser_minpower + 0.5)  
 
         self.diff_pwmval = config.getfloat(
-            'diff_pwmval', 0., minval=0., maxval=255.)   
+            'diff_pwmval', 0., minval=0., maxval=255.) 
+
+        self.c_array = array.array('B', [0] * 96)  
+        self.c_array_NULL = array.array('B', [0] * 2)            
 
         logging.info("EP:%s =%.6f,%d",self.name, self.max_e_velocity, self.lasermin_power) 
         # Setup extruder trapq (trapezoidal motion queue)
@@ -545,6 +550,7 @@ class PrinterExtruderPWM:
         self.trapq = ffi_main.gc(ffi_lib.trapq_alloc(), ffi_lib.trapq_free)
         #self.trapq_append = ffi_lib.trapq_append
         self.trapq_append_extend = ffi_lib.trapq_append_extend
+        self.power_table_ptr = ffi_main.from_buffer(self.c_array)
         self.trapq_finalize_moves = ffi_lib.trapq_finalize_moves
         # Setup extruder stepper
         self.extruder_stepper = None
@@ -746,6 +752,13 @@ class PrinterExtruderPWM:
 
         speed_pulse_ticks = self.cacl_step_dist_tick(max_cruise_v)
 
+
+        distance_count = 0
+        len_powertable = 0
+        #self.c_array
+        #power_table_carray = self.c_array_NULL
+        #power_table_ptr = ffi_main.from_buffer(power_table_carray)
+       
         if self.diff_pwmval > 0:
             if pwmvalue == 0:
                 self.pre_pwmval = 0
@@ -769,7 +782,8 @@ class PrinterExtruderPWM:
                           0., 0., pwmsw,
                           1., can_pressure_advance, restartcmd_flag,
                           pwmmode, pwmvalue, speed_pulse_ticks,
-                          start_v, cruise_v, accel, 1)
+                          start_v, cruise_v, accel, 1, 
+                          self.power_table_ptr, len_powertable, distance_count)
         
         self.last_position = move.end_pos[3+3]
         
