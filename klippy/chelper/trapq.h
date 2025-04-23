@@ -2,6 +2,8 @@
 #define TRAPQ_H
 
 #include "list.h" // list_node
+#include "common_ptd.h"
+
 
 struct coord {
     union {
@@ -13,13 +15,7 @@ struct coord {
 };
 
 
-#define MAX_PTABLE_LEN  (64)
-//M_FIFO_DATA_LEN
 
-struct power_table_s {
-    unsigned char ddata[MAX_PTABLE_LEN];
-    unsigned int  dist_count;
-};
 
 struct pwm_synci {
     unsigned char enf;

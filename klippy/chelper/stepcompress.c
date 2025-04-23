@@ -24,9 +24,11 @@
 #include "pyhelper.h" // errorf
 #include "serialqueue.h" // struct queue_message
 #include "stepcompress.h" // stepcompress_alloc
+#include "common_ptd.h"
 
 #define CHECK_LINES 1
 #define QUEUE_START_SIZE 1024
+
 
 struct stepcompress {
     // Buffer management
@@ -53,7 +55,11 @@ struct stepcompress {
     uint16_t pwm_mode;  
     uint16_t on_off;    
     uint32_t speed_pulse_ticks;    
-    uint32_t pwmval;  
+    uint32_t pwmval;
+
+    uint8_t  pdlen; 
+    uint8_t  ddata[MAX_PTABLE_LEN];
+    uint32_t dist_count;     
 
     uint16_t pre_pwm_mode;  
     uint16_t pre_on_off;    
@@ -353,16 +359,7 @@ stepcompress_get_step_dir(struct stepcompress *sc)
     return sc->next_step_dir;
 }
 
-/*
-void
-stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, 
-    uint32_t pwm_pv1, uint32_t pwm_pv2)
-{
-    p_sc_insk->pwm_mode = pwm_mode;
-    p_sc_insk->pwm_pv1 = pwm_pv1;
-    p_sc_insk->pwm_pv2 = pwm_pv2;
-}
-*/
+
 void
 stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uint16_t on_off,
     uint32_t pwmval, uint32_t speed_pulse_ticks, uint16_t restartcmd_flag)
@@ -374,6 +371,26 @@ stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uin
     p_sc_insk->restartcmd_flag = restartcmd_flag;
 
 }
+
+
+
+void
+stepcompress_set_power_table(struct stepcompress *p_sc_insk, uint8_t  pdlen,
+    uint32_t dist_count, uint8_t *  pddata, uint8_t ddata_len)
+{
+    p_sc_insk->pdlen = pdlen;
+    if (p_sc_insk->pdlen > 0)
+    {
+        p_sc_insk->dist_count = dist_count;
+        if (ddata_len > MAX_PTABLE_LEN)
+            ddata_len = MAX_PTABLE_LEN;
+        memcpy(p_sc_insk->ddata, pddata, ddata_len);
+
+    }
+
+
+}
+
 
 
 // Determine the "print time" of the last_step_clock
@@ -571,7 +588,38 @@ set_pwm_mode_power_send(struct stepcompress *sc)
     }
     return 0;
 
+
 }
+
+
+static int 
+set_power_table_data_send(struct stepcompress *sc)
+{
+
+    int power_table_len = sc->pdlen;
+    if ( power_table_len > 0 )
+    {
+        sc->pdlen = 0;
+        uint32_t msg[5+MAX_PTABLE_LEN] = {0}; 
+        int msg_len = 0;
+        msg[0] = sc->set_powerftable_msgtag;
+        msg[1] = sc->oid;
+        msg[2] = sc->dist_count;
+        for(int i = 0; i < power_table_len; i++)
+        {
+            msg[3+i] = sc->ddata[i];
+        }
+        msg_len = 3+power_table_len;
+        struct queue_message *qm = message_alloc_and_encode(msg, msg_len);
+        qm->req_clock = sc->last_step_clock;
+        list_add_tail(&qm->node, &sc->msg_queue);
+        return 0;
+        
+    }
+    return 0;
+
+}
+
 
 static int 
 check_syncdata_send(struct stepcompress *sc)
@@ -580,6 +628,10 @@ check_syncdata_send(struct stepcompress *sc)
     if (( sc->pre_pwm_mode != sc->pwm_mode ) || (sc->pre_pwmval != sc->pwmval) || (sc->pre_speed_pulse_ticks != sc->speed_pulse_ticks) || ( sc->pre_on_off != sc->on_off ))
     {
        runflag = 1;
+    }
+    if (sc->pdlen > 0)
+    {
+        runflag = 1;
     }
     return(runflag);
 
@@ -617,6 +669,7 @@ int send_pwm_sync_data(struct stepcompress *sc)
 
         set_pwm_mode_power_send(sc);
         set_pwm_on_off_send(sc);
+        set_power_table_data_send(sc);
     }
     return 0;
 
