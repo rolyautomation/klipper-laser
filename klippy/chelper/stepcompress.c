@@ -538,36 +538,35 @@ set_pwm_mode_power_send(struct stepcompress *sc)
 
     if (runflag > 0)
     {
+        uint32_t msg[5] = {0}; 
+        int msg_len = 0;
+
         if (runflag  == 1)
         {
-            uint32_t msg[3] = {
-                sc->set_pwmpower_msgtag, sc->oid, sc->pwmval
-            };
-            struct queue_message *qm = message_alloc_and_encode(msg, 3);
-            qm->req_clock = sc->last_step_clock;
-            list_add_tail(&qm->node, &sc->msg_queue);
-            return 0;
+            msg[0] = sc->set_pwmpower_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->pwmval;
+            msg_len = 3;
         } else if (runflag  == 2)
         {
-            uint32_t msg[3] = {
-                sc->set_plusticks_msgtag, sc->oid, sc->speed_pulse_ticks
-            };
-            struct queue_message *qm = message_alloc_and_encode(msg, 3);
-            qm->req_clock = sc->last_step_clock;
-            list_add_tail(&qm->node, &sc->msg_queue);
-            return 0;
+            msg[0] = sc->set_plusticks_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->speed_pulse_ticks;
+            msg_len = 3;
         }
-        else 
+        else
         {
-            uint32_t msg[5] = {
-                sc->set_pwm_modepower_msgtag, sc->oid, sc->pwm_mode, sc->pwmval, sc->speed_pulse_ticks
-            };
-            struct queue_message *qm = message_alloc_and_encode(msg, 5);
-            qm->req_clock = sc->last_step_clock;
-            list_add_tail(&qm->node, &sc->msg_queue);
-            return 0;
-
+            msg[0] = sc->set_pwm_modepower_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->pwm_mode;
+            msg[3] = sc->pwmval;
+            msg[4] = sc->speed_pulse_ticks;
+            msg_len = 5;
         }
+        struct queue_message *qm = message_alloc_and_encode(msg, msg_len);
+        qm->req_clock = sc->last_step_clock;
+        list_add_tail(&qm->node, &sc->msg_queue);
+        return 0;
         
     }
     return 0;
