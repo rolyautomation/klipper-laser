@@ -416,10 +416,13 @@ class ExtruderStepperPWM:
     #    self.mcu_clock_freq_value = extstepper_mcu.get_constant_float('CLOCK_FREQ')
 
     def get_step_dist_val(self):
-        self._step_dist_tick  =  self.stepper.get_step_dist()
+        if self._step_dist_tick is None:
+            self._step_dist_tick  =  self.stepper.get_step_dist()
+        return self._step_dist_tick
 
     def cacl_step_dist_tick(self,curspeed=1):
-        self._step_dist_tick = self.stepper.get_step_dist()
+        if self._step_dist_tick is None:
+            self._step_dist_tick = self.stepper.get_step_dist()
         _step_dist_time = self._step_dist_tick/curspeed
         extstepper_mcu = self.stepper.get_mcu()
         _mcu_tick_clock = extstepper_mcu.seconds_to_clock(1.0)
@@ -541,8 +544,11 @@ class PrinterExtruderPWM:
         self.diff_pwmval = config.getfloat(
             'diff_pwmval', 0., minval=0., maxval=255.) 
 
-        self.c_array = array.array('B', [0] * 96)  
-        self.c_array_NULL = array.array('B', [0] * 2)            
+
+        self.ep_step_dist_tick = None
+        self.powertable_max = 64
+        self.c_array = array.array('B', [0] * self.powertable_max)  
+        #self.c_array_NULL = array.array('B', [0] * 2)            
 
         logging.info("EP:%s =%.6f,%d",self.name, self.max_e_velocity, self.lasermin_power) 
         # Setup extruder trapq (trapezoidal motion queue)
@@ -680,6 +686,12 @@ class PrinterExtruderPWM:
         plus_inter_tick = self.extruder_stepper.cacl_step_dist_tick(curspeed)
         return(plus_inter_tick)
 
+    def cacl_distance_count(self, distmm):
+        if self.ep_step_dist_tick is None:
+            self.ep_step_dist_tick = self.extruder_stepper.get_step_dist_val()
+        dist_count = int(distmm/self.ep_step_dist_tick)
+        return(dist_count)        
+
     def set_restart_pwmdcmd(self, val=False):   
         self._restartcmd_flag = val
 
@@ -752,13 +764,22 @@ class PrinterExtruderPWM:
 
         speed_pulse_ticks = self.cacl_step_dist_tick(max_cruise_v)
 
-
         distance_count = 0
-        len_powertable = 0
+        len_powertable = len(move.power_table or [])
+        if len_powertable > 0:
+            if len_powertable % 2 != 0:
+                len_powertable = 0
+            elif len_powertable <= self.powertable_max:
+                self.c_array[:len_powertable] = move.power_table[:len_powertable]
+                distmm = abs(move.axes_d[3+3])
+                distance_count = self.cacl_distance_count(distmm)
+            else:
+                len_powertable = 0
+
         #self.c_array
         #power_table_carray = self.c_array_NULL
         #power_table_ptr = ffi_main.from_buffer(power_table_carray)
-       
+
         if self.diff_pwmval > 0:
             if pwmvalue == 0:
                 self.pre_pwmval = 0
