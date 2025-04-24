@@ -32,7 +32,7 @@ stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uin
 
 void
 stepcompress_set_power_table(struct stepcompress *p_sc_insk, uint8_t  pdlen,
-    uint32_t dist_count, uint8_t *  pddata, uint8_t ddata_len);      
+    uint32_t dist_count, uint8_t *  pddata, uint8_t ddata_len, uint8_t ptagcode);      
 
 int send_pwm_sync_data(struct stepcompress *sc);    
                             

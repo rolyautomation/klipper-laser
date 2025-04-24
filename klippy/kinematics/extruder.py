@@ -544,7 +544,8 @@ class PrinterExtruderPWM:
         self.diff_pwmval = config.getfloat(
             'diff_pwmval', 0., minval=0., maxval=255.) 
 
-
+        
+        self.ptagcode = 0
         self.ep_step_dist_tick = None
         self.powertable_max = 64
         self.c_array = array.array('B', [0] * self.powertable_max)  
@@ -763,7 +764,8 @@ class PrinterExtruderPWM:
         pwmsw = 1.0*(move.pwmsw or 0)
 
         speed_pulse_ticks = self.cacl_step_dist_tick(max_cruise_v)
-
+        
+        
         distance_count = 0
         len_powertable = len(move.power_table or [])
         if len_powertable > 0:
@@ -776,10 +778,13 @@ class PrinterExtruderPWM:
                 distmm = abs(move.axes_d[3+3])
                 distance_count = self.cacl_distance_count(distmm)
                 logging.info("distance_count=%s, distance=%s, len_powertable=%s", distance_count, distmm, len_powertable)
+                self.ptagcode +=1
+                self.ptagcode = self.ptagcode % 128
                 #logging.info("power_table_array=%s", self.c_array)
                 #len_powertable = 0
             else:
                 len_powertable = 0
+        current_ptagcode = self.ptagcode        
 
         #self.c_array
         #power_table_carray = self.c_array_NULL
@@ -809,7 +814,7 @@ class PrinterExtruderPWM:
                           1., can_pressure_advance, restartcmd_flag,
                           pwmmode, pwmvalue, speed_pulse_ticks,
                           start_v, cruise_v, accel, 1, 
-                          self.power_table_ptr, len_powertable, distance_count)
+                          self.power_table_ptr, len_powertable, distance_count, current_ptagcode)
         
         self.last_position = move.end_pos[3+3]
         

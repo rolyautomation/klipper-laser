@@ -58,6 +58,8 @@ struct stepcompress {
     uint32_t speed_pulse_ticks;    
     uint32_t pwmval;
 
+    uint8_t  ptagcode;
+    uint8_t  pre_ptagcode;
     uint8_t  pdlen; 
     uint8_t  ddata[MAX_PTABLE_LEN];
     uint32_t dist_count;     
@@ -377,8 +379,9 @@ stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uin
 
 void
 stepcompress_set_power_table(struct stepcompress *p_sc_insk, uint8_t  pdlen,
-    uint32_t dist_count, uint8_t *  pddata, uint8_t ddata_len)
+    uint32_t dist_count, uint8_t *  pddata, uint8_t ddata_len, uint8_t ptagcode)
 {
+    p_sc_insk->ptagcode = ptagcode;
     p_sc_insk->pdlen = pdlen;
     if (p_sc_insk->pdlen > 0)
     {
@@ -608,15 +611,28 @@ void log_to_file(const char *fmt, ...) {
 static int 
 set_power_table_data_send(struct stepcompress *sc)
 {
-
+    int runflag = 0;
     int power_table_len = sc->pdlen;
+    log_to_file("bDEBUG: pre_tagcode=%d, tagcode=%d \n", 
+            sc->pre_ptagcode, sc->ptagcode);      
+    if (sc->pre_ptagcode != sc->ptagcode)
+    {
+        runflag = 1;
+        sc->pre_ptagcode = sc->ptagcode;
+    }
+
     log_to_file("DEBUG: power_table[0]=%d, len_power_table=%d, dist_count=%d\n", 
             sc->ddata[0], power_table_len, sc->dist_count);
     log_to_file("DEBUG: power_table[1]=%d, power_table[2]=%d, power_table[3]=%d\n", 
-            sc->ddata[1], sc->ddata[2], sc->ddata[3]);   
+            sc->ddata[1], sc->ddata[2], sc->ddata[3]); 
+    log_to_file("DEBUG: pre_tagcode=%d, tagcode=%d \n", 
+            sc->pre_ptagcode, sc->ptagcode);                 
 
-    if ( power_table_len > 0 )
+    if (( power_table_len > 0 ) && (runflag))
     {
+
+    log_to_file("DEBUG: power_table_len=%d, runflag=%d \n", 
+            power_table_len, runflag);          
         sc->pdlen = 0;
         uint32_t msg[5+MAX_PTABLE_LEN] = {0}; 
         int msg_len = 0;
@@ -648,9 +664,13 @@ check_syncdata_send(struct stepcompress *sc)
     {
        runflag = 1;
     }
-    if (sc->pdlen > 0)
+    if ((sc->pre_ptagcode != sc->ptagcode) && (sc->pdlen > 0))
     {
         runflag = 1;
+    }
+    else if (sc->pdlen > 0)
+    {
+        sc->pdlen = 0;
     }
     return(runflag);
 
@@ -667,6 +687,7 @@ reset_initdata_send(struct stepcompress *sc)
         sc->pre_pwmval = 500;
         sc->pre_speed_pulse_ticks = 0;
         sc->pre_on_off = 100;
+        //sc->pre_ptagcode = 0;
     }
     return 0;
 

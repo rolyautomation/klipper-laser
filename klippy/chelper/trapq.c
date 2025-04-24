@@ -141,7 +141,7 @@ trapq_append(struct trapq *tq, double print_time
     struct coord axes_r = { .x=axes_r_x, .y=axes_r_y, .z=axes_r_z 
                            ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
 
-    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pdlen=pdlen, .pwmmode=axes_r_a, .pwmval=axes_r_b 
+    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pdlen=pdlen, .ptagcode=0, .pwmmode=axes_r_a, .pwmval=axes_r_b 
                             ,.speed_pulse_ticks=axes_r_c, .restartcmd_flag = axes_r_z};   
 
                                               
@@ -198,7 +198,7 @@ trapq_append_extend(struct trapq *tq, double print_time
              , double axes_r_x, double axes_r_y, double axes_r_z
              , double axes_r_a, double axes_r_b, double axes_r_c             
              , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en
-             , unsigned char * power_table, unsigned char len_power_table, unsigned int dist_count)
+             , unsigned char * power_table, unsigned char len_power_table, unsigned int dist_count, unsigned char ptagcode)
 {
 
     unsigned char on_off = 0;
@@ -223,7 +223,7 @@ trapq_append_extend(struct trapq *tq, double print_time
     struct coord axes_r = { .x=axes_r_x, .y=axes_r_y, .z=axes_r_z 
                            ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
 
-    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pdlen=pdlen, .pwmmode=axes_r_a, .pwmval=axes_r_b 
+    struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pdlen=pdlen, .ptagcode=ptagcode, .pwmmode=axes_r_a, .pwmval=axes_r_b 
                             ,.speed_pulse_ticks=axes_r_c, .restartcmd_flag = axes_r_z};   
 
                                               

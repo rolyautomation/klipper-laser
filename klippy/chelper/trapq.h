@@ -22,6 +22,7 @@ struct pwm_synci {
     unsigned char acd_val;
     unsigned char on_off;
     unsigned char pdlen;
+    unsigned char ptagcode;
     double pwmmode, pwmval;
     double speed_pulse_ticks;
     double restartcmd_flag;
@@ -73,7 +74,7 @@ void trapq_append_extend(struct trapq *tq, double print_time
              , double axes_r_x, double axes_r_y, double axes_r_z
              , double axes_r_a, double axes_r_b, double axes_r_c             
              , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en
-             , unsigned char * power_table, unsigned char len_power_table, unsigned int dist_count);
+             , unsigned char * power_table, unsigned char len_power_table, unsigned int dist_count, unsigned char ptagcode);
 void trapq_finalize_moves(struct trapq *tq, double print_time
                           , double clear_history_time);
 void trapq_set_position(struct trapq *tq, double print_time
