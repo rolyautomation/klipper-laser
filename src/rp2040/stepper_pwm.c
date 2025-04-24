@@ -882,11 +882,9 @@ command_queue_step_pwm(uint32_t *args)
 
          }
      }
-    //m->mode = args[4];
-    //m->p_v1 = args[5];
-    //m->p_v2 = args[6];   
     #if M_OUTINFO_EN
     output("val:[%c,%u,%hu,%hi,:%c,%c,%u,%u]",args[0],args[1],args[2],args[3],m->pwm_on_off,m->mode,m->pwmval,m->speed_pulse_ticks); 
+    output("coff:[%c,%c,%c,%u,%u]",s->composite_mode,s->composite_fifo_index,s->composite_itemlen,s->composite_dcount,s->composite_count_offset); 
     #endif
 #endif
     irq_disable();
@@ -1054,8 +1052,12 @@ command_powerfunc_table_stepper_pwm(uint32_t *args)
     s->composite_mode = 1;    
     s->composite_dcount = args[1];
     s->composite_count_offset = 0;
-    uint8_t data_len = args[3];
-    uint8_t *data = command_decode_ptr(args[4]);     
+    uint8_t data_len = args[2];
+    uint8_t *data = command_decode_ptr(args[3]); 
+    #if M_OUTINFO_EN
+    output("powerf:[%c,%u,%c]",args[0],args[1],args[2]); 
+    output("powerval:[%c,%c]",data[0],data[data_len-1]); 
+    #endif    
     irq_enable();
     int8_t iret = push_fifo_buff_compmode(data, data_len);
     if(iret < 0)
