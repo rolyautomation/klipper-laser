@@ -302,6 +302,7 @@ void  update_composite_chgb_dcount(void)
 
     if (g_pwm_ctrl_data.composite_cindex_run+1 < g_pwm_ctrl_data.composite_itemlen)
     {
+
         //g_pwm_ctrl_data.composite_chgb_dcount_run = (uint32_t)(((uint64_t)g_pwm_ctrl_data.composite_sum_run * g_pwm_ctrl_data.composite_dcount) / M_BASE_RATIO);
         g_pwm_ctrl_data.composite_chgb_dcount_run = (uint32_t)(((uint64_t)g_pwm_ctrl_data.composite_sum_run * g_pwm_ctrl_data.composite_dcount) >> M_BASE_BIT);
     }
@@ -309,7 +310,10 @@ void  update_composite_chgb_dcount(void)
     {
         g_pwm_ctrl_data.composite_chgb_dcount_run = g_pwm_ctrl_data.composite_dcount;
         //last item
-        pop_fifo_buff_compmode(g_pwm_ctrl_data.composite_fifo_index);        
+        pop_fifo_buff_compmode(g_pwm_ctrl_data.composite_fifo_index); 
+        #if M_OUTINFO_EN
+        output("popfifo:[%c]",g_pwm_ctrl_data.composite_fifo_index); 
+        #endif        
 
     }
 
@@ -361,7 +365,12 @@ void  load_next_pwm_ctrl_data_composite(uint8_t composite_mode, uint8_t composit
         }
         else
         {
+            #if M_OUTINFO_EN
+            output("correction:[%u,%u]",g_pwm_ctrl_data.composite_count_offset,g_pwm_ctrl_data.composite_cindex_dcount_run); 
+            #endif             
+            g_pwm_ctrl_data.composite_cindex_dcount_run = g_pwm_ctrl_data.composite_count_offset;
             update_power_pwm_value(g_pwm_ctrl_data.composite_cpower_run);
+
         }
  
 
@@ -376,7 +385,7 @@ void  update_composite_cindex_dcount(void)
     if (g_pwm_ctrl_data.composite_mode > 0)
     {
         g_pwm_ctrl_data.composite_cindex_dcount_run++;
-        if (g_pwm_ctrl_data.composite_cindex_dcount_run  >=  g_pwm_ctrl_data.composite_chgb_dcount_run)
+        if (g_pwm_ctrl_data.composite_cindex_dcount_run  >  g_pwm_ctrl_data.composite_chgb_dcount_run)
         {
             g_pwm_ctrl_data.composite_cindex_run++;
             if (g_pwm_ctrl_data.composite_cindex_run < g_pwm_ctrl_data.composite_itemlen)
@@ -387,6 +396,10 @@ void  update_composite_cindex_dcount(void)
                 g_pwm_ctrl_data.composite_cpower_run = g_pwm_ctrl_data.p_power_table[index + 1];
                 update_composite_chgb_dcount();
                 update_power_pwm_value(g_pwm_ctrl_data.composite_cpower_run);
+                #if M_OUTINFO_EN
+                output("next item:[%c]",g_pwm_ctrl_data.composite_cindex_run); 
+                output("value:[%u:%u,%c]",g_pwm_ctrl_data.composite_cindex_dcount_run,g_pwm_ctrl_data.composite_chgb_dcount_run,g_pwm_ctrl_data.composite_cpower_run);                 
+                #endif                  
                 // if (g_pwm_ctrl_data.composite_cindex_run+1 >= g_pwm_ctrl_data.composite_itemlen)
                 // {   
                 //     //last item
@@ -398,6 +411,9 @@ void  update_composite_cindex_dcount(void)
             else
             {
                 g_pwm_ctrl_data.composite_mode = 0;
+                #if M_OUTINFO_EN
+                output("end composite mode"); 
+                #endif              
 
 
             }
@@ -1009,7 +1025,7 @@ command_set_pwm_modepower_stepper_pwm(uint32_t *args)
 {
     struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
     irq_disable();
-    s->composite_mode = 0;      
+    //s->composite_mode = 0;      
     s->mode = args[1];
     s->pwmval = args[2];
     s->speed_pulse_ticks = args[3];        
@@ -1024,7 +1040,7 @@ command_set_pwmpower_lbandwidth_stepper_pwm(uint32_t *args)
 {
     struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
     irq_disable();
-    s->composite_mode = 0;  
+    //s->composite_mode = 0;  
     s->pwmval = args[1];
     irq_enable();
 
