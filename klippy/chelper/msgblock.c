@@ -163,6 +163,32 @@ fail:
     return qm;
 }
 
+struct queue_message *
+message_alloc_and_encode_psbuffer(uint32_t *data, int len, uint8_t *psbuff, uint8_t buff_len)
+{
+    struct queue_message *qm = message_alloc();
+    int i;
+    uint8_t *p = qm->msg;
+    for (i=0; i<len; i++) {
+        p = encode_int(p, data[i]);
+        if (p > &qm->msg[MESSAGE_PAYLOAD_MAX])
+            goto fail;
+    }
+    int fmsglen = p - qm->msg + 1;
+    if (fmsglen + buff_len > MESSAGE_PAYLOAD_MAX)
+        goto fail;
+    *p++ = buff_len;
+    memcpy(p, psbuff, buff_len);
+    p += buff_len;
+    qm->len = p - qm->msg;
+    return qm;
+
+fail:
+    errorf("Encode error psbuffer");
+    qm->len = 0;
+    return qm;
+}
+
 // Free the storage from a previous message_alloc() call
 void
 message_free(struct queue_message *qm)

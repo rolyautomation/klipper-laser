@@ -630,24 +630,15 @@ set_power_table_data_send(struct stepcompress *sc)
 
     if (( power_table_len > 0 ) && (runflag))
     {
-
-    // log_to_file("DEBUG: power_table_len=%d, runflag=%d \n", 
-    //         power_table_len, runflag);          
         sc->pdlen = 0;
-        uint32_t msg[5+MAX_PTABLE_LEN] = {0}; 
-        int msg_len = 0;
-        msg[0] = sc->set_powerftable_msgtag;
-        msg[1] = sc->oid;
-        msg[2] = sc->dist_count;
-        msg[3] = power_table_len;
-        for(int i = 0; i < power_table_len; i++)
-        {
-            msg[4+i] = sc->ddata[i];
-        }
-        msg_len = 4+power_table_len;
-        struct queue_message *qm = message_alloc_and_encode(msg, msg_len);
+        uint32_t msg[3] = {
+            sc->set_powerftable_msgtag, sc->oid, sc->dist_count
+        };
+        struct queue_message *qm = message_alloc_and_encode_psbuffer(msg, 3, sc->ddata, power_table_len);
         qm->req_clock = sc->last_step_clock;
         list_add_tail(&qm->node, &sc->msg_queue);
+        log_to_file("DEBUG: qmlen=%d, power_table_len=%d \n", 
+            qm->len, power_table_len);  
         return 0;
         
     }

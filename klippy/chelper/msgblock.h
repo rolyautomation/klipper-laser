@@ -45,6 +45,7 @@ int msgblock_decode(uint32_t *data, int data_len, uint8_t *msg, int msg_len);
 struct queue_message *message_alloc(void);
 struct queue_message *message_fill(uint8_t *data, int len);
 struct queue_message *message_alloc_and_encode(uint32_t *data, int len);
+struct queue_message *message_alloc_and_encode_psbuffer(uint32_t *data, int len, uint8_t *psbuff, uint8_t buff_len);
 void message_free(struct queue_message *qm);
 void message_queue_free(struct list_head *root);
 uint64_t clock_from_clock32(struct clock_estimate *ce, uint32_t clock32);
