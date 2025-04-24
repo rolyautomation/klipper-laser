@@ -311,16 +311,18 @@ class GCodeMove:
             self.galvo_coord_confactor = kin.get_galvo_coord_confactor()   
 
         power_table_data = None
-        powerp_str = gcmd.get('P', '')
-        if powerp_str:
-            power_table_values = [int(float(x.strip())) for x in powerp_str.split(',')]
-            if len(power_table_values) % 2 != 0:
-                raise gcmd.error("Invalid power table format")
-            power_table_data = power_table_values
-            logging.info("Power table: %s", power_table_data)
-
         params = gcmd.get_command_parameters()
+        #logging.info("Params: %s", params)
         try:
+            if 'P' in params:
+                powerp_str = params['P']
+                if powerp_str:
+                    power_table_values = [int(float(x.strip())) for x in powerp_str.split(',')]
+                    if len(power_table_values) % 2 != 0:
+                        raise gcmd.error("Invalid power table format length")
+                    power_table_data = power_table_values
+                    logging.info("Power table: %s", power_table_data)
+
             for pos, axis in enumerate('XYZ'):
                 if axis in params:
                     v = float(params[axis])
