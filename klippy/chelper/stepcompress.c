@@ -623,11 +623,12 @@ set_power_table_data_send(struct stepcompress *sc)
         msg[0] = sc->set_powerftable_msgtag;
         msg[1] = sc->oid;
         msg[2] = sc->dist_count;
+        msg[3] = power_table_len;
         for(int i = 0; i < power_table_len; i++)
         {
-            msg[3+i] = sc->ddata[i];
+            msg[4+i] = sc->ddata[i];
         }
-        msg_len = 3+power_table_len;
+        msg_len = 4+power_table_len;
         struct queue_message *qm = message_alloc_and_encode(msg, msg_len);
         qm->req_clock = sc->last_step_clock;
         list_add_tail(&qm->node, &sc->msg_queue);
