@@ -25,6 +25,7 @@
 #include "serialqueue.h" // struct queue_message
 #include "stepcompress.h" // stepcompress_alloc
 #include "common_ptd.h"
+#include <stdarg.h>
 
 #define CHECK_LINES 1
 #define QUEUE_START_SIZE 1024
@@ -591,12 +592,29 @@ set_pwm_mode_power_send(struct stepcompress *sc)
 
 }
 
+void log_to_file(const char *fmt, ...) {
+    FILE *fp = fopen("/tmp/klippy_test.log", "a");
+    if (fp) {
+        va_list args;
+        va_start(args, fmt);
+        vfprintf(fp, fmt, args);
+        va_end(args);
+        fclose(fp);
+    }
+}
+
+
 
 static int 
 set_power_table_data_send(struct stepcompress *sc)
 {
 
     int power_table_len = sc->pdlen;
+    log_to_file("DEBUG: power_table[0]=%d, len_power_table=%d, dist_count=%d\n", 
+            sc->ddata[0], power_table_len, sc->dist_count);
+    log_to_file("DEBUG: power_table[1]=%d, power_table[2]=%d, power_table[3]=%d\n", 
+            sc->ddata[1], sc->ddata[2], sc->ddata[3]);   
+
     if ( power_table_len > 0 )
     {
         sc->pdlen = 0;
