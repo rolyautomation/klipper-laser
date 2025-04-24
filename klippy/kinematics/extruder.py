@@ -770,9 +770,14 @@ class PrinterExtruderPWM:
             if len_powertable % 2 != 0:
                 len_powertable = 0
             elif len_powertable <= self.powertable_max:
-                self.c_array[:len_powertable] = move.power_table[:len_powertable]
+                for i in range(len_powertable):
+                    self.c_array[i] = move.power_table[i]
+                #self.c_array[:len_powertable] = move.power_table[:len_powertable]
                 distmm = abs(move.axes_d[3+3])
                 distance_count = self.cacl_distance_count(distmm)
+                logging.info("distance_count=%s, distance=%s, len_powertable=%s", distance_count, distmm, len_powertable)
+                #logging.info("power_table_array=%s", self.c_array)
+                #len_powertable = 0
             else:
                 len_powertable = 0
 
