@@ -613,8 +613,8 @@ set_power_table_data_send(struct stepcompress *sc)
 {
     int runflag = 0;
     int power_table_len = sc->pdlen;
-    log_to_file("bDEBUG: pre_tagcode=%d, tagcode=%d \n", 
-            sc->pre_ptagcode, sc->ptagcode);      
+    // log_to_file("bDEBUG: pre_tagcode=%d, tagcode=%d \n", 
+    //         sc->pre_ptagcode, sc->ptagcode);      
     if (sc->pre_ptagcode != sc->ptagcode)
     {
         runflag = 1;
@@ -625,14 +625,14 @@ set_power_table_data_send(struct stepcompress *sc)
             sc->ddata[0], power_table_len, sc->dist_count);
     log_to_file("DEBUG: power_table[1]=%d, power_table[2]=%d, power_table[3]=%d\n", 
             sc->ddata[1], sc->ddata[2], sc->ddata[3]); 
-    log_to_file("DEBUG: pre_tagcode=%d, tagcode=%d \n", 
-            sc->pre_ptagcode, sc->ptagcode);                 
+    // log_to_file("DEBUG: pre_tagcode=%d, tagcode=%d \n", 
+    //         sc->pre_ptagcode, sc->ptagcode);                 
 
     if (( power_table_len > 0 ) && (runflag))
     {
 
-    log_to_file("DEBUG: power_table_len=%d, runflag=%d \n", 
-            power_table_len, runflag);          
+    // log_to_file("DEBUG: power_table_len=%d, runflag=%d \n", 
+    //         power_table_len, runflag);          
         sc->pdlen = 0;
         uint32_t msg[5+MAX_PTABLE_LEN] = {0}; 
         int msg_len = 0;
