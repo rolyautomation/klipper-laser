@@ -944,37 +944,34 @@ command_queue_step_pwm(uint32_t *args)
         shutdown("Invalid count parameter");
     m->add = args[3];
     m->flags = 0;
+    irq_disable();
 #ifdef M_PWM_OUT_EN 
-     m->pwm_on_off = s->pwm_on_off;
-     m->mode = s->mode;
-     m->pwmval = s->pwmval;
-     m->speed_pulse_ticks = s->speed_pulse_ticks;
-     m->composite_mode = s->composite_mode;
-     if (s->composite_mode > 0) {
-         m->composite_itemlen = s->composite_itemlen;
-         m->composite_dcount = s->composite_dcount;
-         m->composite_count_offset = s->composite_count_offset;
-         m->composite_fifo_index = s->composite_fifo_index;
-         #if POWER_TABLE_SEL_COMPMODE  == DVAR_TYPE
-         if (m->composite_count_offset == 0)
-         {
+    m->pwm_on_off = s->pwm_on_off;
+    m->mode = s->mode;
+    m->pwmval = s->pwmval;
+    m->speed_pulse_ticks = s->speed_pulse_ticks;
+    m->composite_mode = s->composite_mode;
+    if (s->composite_mode > 0) {
+        m->composite_itemlen = s->composite_itemlen;
+        m->composite_dcount = s->composite_dcount;
+        m->composite_count_offset = s->composite_count_offset;
+        m->composite_fifo_index = s->composite_fifo_index;
+        #if POWER_TABLE_SEL_COMPMODE  == DVAR_TYPE
+        if (m->composite_count_offset == 0)
+        {
             m->power_idcode = s->power_idcode;
             memcpy(m->powertable, s->powertable, m->composite_itemlen*2);
-         }
-         #endif
-         s->composite_count_offset = s->composite_count_offset + m->count;
-         if (s->composite_count_offset >= s->composite_dcount)
-         {
-            s->composite_mode = 0;
+        }
+        #endif
+        s->composite_count_offset = s->composite_count_offset + m->count;
+        if (s->composite_count_offset >= s->composite_dcount)
+        {
+        s->composite_mode = 0;
 
-         }
-     }
-    #if M_OUTINFO_EN
-    output("val:[%c,%u,%hu,%hi,:%c,%c,%u,%u]",args[0],args[1],args[2],args[3],m->pwm_on_off,m->mode,m->pwmval,m->speed_pulse_ticks); 
-    output("coff:[%c,%c,%c,%u,%u]",m->composite_mode,s->composite_fifo_index,s->composite_itemlen,s->composite_dcount,s->composite_count_offset); 
-    #endif
+        }
+    }
 #endif
-    irq_disable();
+    //irq_disable();
     uint8_t flags = s->flags;
     if (!!(flags & SF_LAST_DIR) != !!(flags & SF_NEXT_DIR)) {
         flags ^= SF_LAST_DIR;
@@ -992,6 +989,11 @@ command_queue_step_pwm(uint32_t *args)
         sched_add_timer(&s->time);
     }
     irq_enable();
+    #if M_OUTINFO_EN
+    output("val:[%c,%u,%hu,%hi,:%c,%c,%u,%u]",args[0],args[1],args[2],args[3],m->pwm_on_off,m->mode,m->pwmval,m->speed_pulse_ticks); 
+    output("coff:[%c,%c,%c,%u,%u]",m->composite_mode,s->composite_fifo_index,s->composite_itemlen,s->composite_dcount,s->composite_count_offset); 
+    #endif
+
 }
 
 
@@ -1141,11 +1143,7 @@ command_powerfunc_table_stepper_pwm(uint32_t *args)
     s->composite_count_offset = 0;
     uint8_t data_len = args[2];
     uint8_t *data = command_decode_ptr(args[3]); 
-    #if M_OUTINFO_EN
-    output("powerf:[%c,%u,%c]",args[0],args[1],args[2]); 
-    output("powerval:[%c,%c]",data[0],data[data_len-1]); 
-    #endif    
-    irq_enable();
+    //irq_enable();
     #if POWER_TABLE_SEL_COMPMODE  == FIFO_TYPE
     int8_t iret = push_fifo_buff_compmode(data, data_len);
     if(iret < 0)
@@ -1174,7 +1172,12 @@ command_powerfunc_table_stepper_pwm(uint32_t *args)
         shutdown("Invalid length, must be less than maxlen");
     memcpy(s->powertable, data, data_len);
     s->composite_itemlen = data_len >> 1 ; //data_len/2
-    #endif    
+    #endif 
+    irq_enable();
+    #if M_OUTINFO_EN
+    output("powerf:[%c,%u,%c]",args[0],args[1],args[2]); 
+    output("powerval:[%c,%c]",data[0],data[data_len-1]); 
+    #endif     
 
 }
 DECL_COMMAND(command_powerfunc_table_stepper_pwm, "set_powerfunc_table oid=%c tdc=%u data=%*s");
