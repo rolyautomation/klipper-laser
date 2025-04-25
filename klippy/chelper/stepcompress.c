@@ -27,6 +27,10 @@
 #include "common_ptd.h"
 #include <stdarg.h>
 
+
+#define DEBUG_LOGFILE_EN   (1)
+
+
 #define CHECK_LINES 1
 #define QUEUE_START_SIZE 1024
 
@@ -52,7 +56,9 @@ struct stepcompress {
     struct list_head history_list;
 
     // pwm mode
-    uint16_t restartcmd_flag;
+    //uint16_t restartcmd_flag;
+    uint8_t  restartcmd_sn;
+    uint8_t  pre_restartcmd_sn;    
     uint16_t pwm_mode;  
     uint16_t on_off;    
     uint32_t speed_pulse_ticks;    
@@ -365,13 +371,13 @@ stepcompress_get_step_dir(struct stepcompress *sc)
 
 void
 stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uint16_t on_off,
-    uint32_t pwmval, uint32_t speed_pulse_ticks, uint16_t restartcmd_flag)
+    uint32_t pwmval, uint32_t speed_pulse_ticks, double frestartcmd_sn)
 {
     p_sc_insk->pwm_mode = pwm_mode;
     p_sc_insk->on_off = on_off;    
     p_sc_insk->pwmval = pwmval;
     p_sc_insk->speed_pulse_ticks = speed_pulse_ticks;
-    p_sc_insk->restartcmd_flag = restartcmd_flag;
+    p_sc_insk->restartcmd_sn = (uint8_t)frestartcmd_sn;
 
 }
 
@@ -595,6 +601,9 @@ set_pwm_mode_power_send(struct stepcompress *sc)
 
 }
 
+
+
+#if  DEBUG_LOGFILE_EN
 void log_to_file(const char *fmt, ...) {
     FILE *fp = fopen("/tmp/klippy_test.log", "a");
     if (fp) {
@@ -605,7 +614,7 @@ void log_to_file(const char *fmt, ...) {
         fclose(fp);
     }
 }
-
+#endif  // DEBUG_LOGFILE_EN
 
 
 static int 
@@ -620,13 +629,14 @@ set_power_table_data_send(struct stepcompress *sc)
         runflag = 1;
         sc->pre_ptagcode = sc->ptagcode;
     }
-
+    #if  DEBUG_LOGFILE_EN
     log_to_file("DEBUG: power_table[0]=%d, len_power_table=%d, dist_count=%d\n", 
             sc->ddata[0], power_table_len, sc->dist_count);
     log_to_file("DEBUG: power_table[1]=%d, power_table[2]=%d, power_table[3]=%d\n", 
             sc->ddata[1], sc->ddata[2], sc->ddata[3]); 
     // log_to_file("DEBUG: pre_tagcode=%d, tagcode=%d \n", 
-    //         sc->pre_ptagcode, sc->ptagcode);                 
+    //         sc->pre_ptagcode, sc->ptagcode); 
+    #endif  // DEBUG_LOGFILE_EN                   
 
     if (( power_table_len > 0 ) && (runflag))
     {
@@ -637,8 +647,10 @@ set_power_table_data_send(struct stepcompress *sc)
         struct queue_message *qm = message_alloc_and_encode_psbuffer(msg, 3, sc->ddata, power_table_len);
         qm->req_clock = sc->last_step_clock;
         list_add_tail(&qm->node, &sc->msg_queue);
+        #if  DEBUG_LOGFILE_EN
         log_to_file("DEBUG: qmlen=%d, power_table_len=%d \n", 
             qm->len, power_table_len);  
+        #endif  // DEBUG_LOGFILE_EN                    
         return 0;
         
     }
@@ -670,9 +682,14 @@ check_syncdata_send(struct stepcompress *sc)
 static int 
 reset_initdata_send(struct stepcompress *sc)
 {
-    if ( sc->restartcmd_flag > 0 )
+    //if ( sc->restartcmd_sn > 0 )
+    if ( sc->pre_restartcmd_sn != sc->restartcmd_sn )
     {
-        sc->restartcmd_flag = 0;
+        #if  DEBUG_LOGFILE_EN   
+        log_to_file("DEBUG: resend restartcmd_sn=%d, pre_restartcmd_sn=%d \n", sc->restartcmd_sn, sc->pre_restartcmd_sn);
+        #endif  // DEBUG_LOGFILE_EN                    
+        sc->pre_restartcmd_sn = sc->restartcmd_sn;
+        //sc->restartcmd_sn = 0;
         // no use value
         sc->pre_pwm_mode = 100;
         sc->pre_pwmval = 500;

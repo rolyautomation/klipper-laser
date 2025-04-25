@@ -28,7 +28,7 @@ int stepcompress_append(struct stepcompress *sc, int sdir
 
 void
 stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uint16_t on_off,
-    uint32_t pwmval, uint32_t speed_pulse_ticks, uint16_t restartcmd_flag);  
+    uint32_t pwmval, uint32_t speed_pulse_ticks, double frestartcmd_sn);  
 
 void
 stepcompress_set_power_table(struct stepcompress *p_sc_insk, uint8_t  pdlen,

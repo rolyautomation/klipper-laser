@@ -142,7 +142,7 @@ trapq_append(struct trapq *tq, double print_time
                            ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
 
     struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pdlen=pdlen, .ptagcode=0, .pwmmode=axes_r_a, .pwmval=axes_r_b 
-                            ,.speed_pulse_ticks=axes_r_c, .restartcmd_flag = axes_r_z};   
+                            ,.speed_pulse_ticks=axes_r_c, .frestartcmd_sn = axes_r_z};   
 
                                               
     if (accel_t) {
@@ -224,7 +224,7 @@ trapq_append_extend(struct trapq *tq, double print_time
                            ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
 
     struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pdlen=pdlen, .ptagcode=ptagcode, .pwmmode=axes_r_a, .pwmval=axes_r_b 
-                            ,.speed_pulse_ticks=axes_r_c, .restartcmd_flag = axes_r_z};   
+                            ,.speed_pulse_ticks=axes_r_c, .frestartcmd_sn = axes_r_z};   
 
                                               
     if (accel_t) {

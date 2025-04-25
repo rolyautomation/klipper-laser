@@ -598,7 +598,7 @@ class PrinterExtruderPWM:
         self._extrdpwm_oid = None
         logging.info("PrinterExtruderPWM end") 
         self.optmode = 1
-        self._restartcmd_flag = False
+        self._restartcmd_sn = 1
         self._laser_type = 0
         self._pwm_prf = 0
         self.last_min_power = 0 
@@ -626,12 +626,13 @@ class PrinterExtruderPWM:
 
     def cmd_RSYNCPOWER(self, gcmd):
         syncpmode = gcmd.get_int('M',0, minval=0, maxval=10) 
-        if syncpmode == 1:
+        if syncpmode == 0:
             self.optmode = 0
-        elif syncpmode == 0:
+            self._restartcmd_sn = 0
+        elif syncpmode == 1:
             self.optmode = 1 
-            self._restartcmd_flag = False
-        msg = "resp name=%s optmode=%s rflag=%s " % (self.name, self.optmode, self._restartcmd_flag)            
+            self._restartcmd_sn = (self._restartcmd_sn % 120) + 1
+        msg = "resp name=%s optmode=%s restartcmd_sn=%s " % (self.name, self.optmode, self._restartcmd_sn)            
         gcmd.respond_info(msg)  
         
 
@@ -693,8 +694,8 @@ class PrinterExtruderPWM:
         dist_count = int(distmm/self.ep_step_dist_tick)
         return(dist_count)        
 
-    def set_restart_pwmdcmd(self, val=False):   
-        self._restartcmd_flag = val
+    def set_restart_pwmdcmd(self, val=0):   
+        self._restartcmd_sn = val
 
     def get_name(self):
         return self.name
@@ -798,18 +799,12 @@ class PrinterExtruderPWM:
          
         if (speed_pulse_ticks is None):
             speed_pulse_ticks = 1500 
-        restartcmd_flag  = not self._restartcmd_flag
-        if self.optmode > 0 :
-            if restartcmd_flag:
-                self._restartcmd_flag = restartcmd_flag
-        else :
-            self._restartcmd_flag = restartcmd_flag                    
 
         self.trapq_append_extend(self.trapq, print_time,
                           move.accel_t, move.cruise_t, move.decel_t,
                           move.start_pos[3+3], 0., 0.,
                           0., 0., pwmsw,
-                          1., can_pressure_advance, restartcmd_flag,
+                          1., can_pressure_advance, self._restartcmd_sn,
                           pwmmode, pwmvalue, speed_pulse_ticks,
                           start_v, cruise_v, accel, 1, 
                           self.power_table_ptr, len_powertable, distance_count, current_ptagcode)

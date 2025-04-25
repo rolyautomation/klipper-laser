@@ -25,7 +25,7 @@ struct pwm_synci {
     unsigned char ptagcode;
     double pwmmode, pwmval;
     double speed_pulse_ticks;
-    double restartcmd_flag;
+    double frestartcmd_sn;
 };
 
 struct move {
