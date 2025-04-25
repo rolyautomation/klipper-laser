@@ -106,12 +106,14 @@ struct stepper_pwm {
     uint8_t  pwm_on_off;
     uint8_t  mode;
     uint16_t pwmval;
+    uint16_t pre_pwmval;
     uint32_t speed_pulse_ticks;
     uint8_t  composite_itemlen;
     uint8_t  composite_fifo_index;
     uint32_t composite_dcount;  
     uint32_t composite_count_offset;    
     uint8_t  composite_mode;
+    uint8_t  req_composite_mode;
     uint8_t  oid_pwm;    //must pwm stepper on same mcu 
     uint8_t  oid_pwm_flag;
     uint8_t  laser_type; 
@@ -950,6 +952,29 @@ command_queue_step_pwm(uint32_t *args)
     m->mode = s->mode;
     m->pwmval = s->pwmval;
     m->speed_pulse_ticks = s->speed_pulse_ticks;
+    if (s->req_composite_mode > 0)
+    {
+        s->composite_mode =  s->req_composite_mode;
+        s->req_composite_mode = 0;
+        s->pre_pwmval = s->pwmval;
+    }
+    else
+    {   
+        if (s->composite_mode > 0)
+        {
+            if(s->pwm_on_off == 0)
+            {
+                s->composite_mode = 0;
+                                
+            }
+            if (s->pre_pwmval != s->pwmval)
+            {
+                s->composite_mode = 0;
+                s->pre_pwmval = s->pwmval;
+            }
+        }
+
+    }
     m->composite_mode = s->composite_mode;
     if (s->composite_mode > 0) {
         m->composite_itemlen = s->composite_itemlen;
@@ -966,8 +991,7 @@ command_queue_step_pwm(uint32_t *args)
         s->composite_count_offset = s->composite_count_offset + m->count;
         if (s->composite_count_offset >= s->composite_dcount)
         {
-        s->composite_mode = 0;
-
+            s->composite_mode = 0;
         }
     }
 #endif
@@ -1138,7 +1162,7 @@ command_powerfunc_table_stepper_pwm(uint32_t *args)
 {
     struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
     irq_disable();
-    s->composite_mode = 1;    
+    s->req_composite_mode = 1;    
     s->composite_dcount = args[1];
     s->composite_count_offset = 0;
     uint8_t data_len = args[2];
@@ -1188,7 +1212,7 @@ command_powerfunc_speed_table_stepper_pwm(uint32_t *args)
 {
     struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
     irq_disable();
-    s->composite_mode = 1;
+    s->req_composite_mode = 1;
     s->speed_pulse_ticks = args[1];
     s->composite_dcount = args[2];
     s->composite_count_offset = 0;
@@ -1311,6 +1335,7 @@ stepper_stop_pwm(struct trsync_signal *tss, uint8_t reason)
     s->next_step_time = s->time.waketime = 0;
     s->position = -stepper_get_position_pwm(s);
     s->composite_mode = 0;
+    s->req_composite_mode = 0;
     s->count = 0;
     s->flags = (s->flags & (SF_INVERT_STEP|SF_SINGLE_SCHED)) | SF_NEED_RESET;
     #if M_TEST_VIR_STEP_GPIO
