@@ -405,6 +405,9 @@ void  load_next_pwm_ctrl_data_composite(uint8_t composite_mode, uint8_t composit
                 //g_pwm_ctrl_data.composite_chgb_dcount_run
                 update_composite_chgb_dcount();
                 update_power_pwm_value(g_pwm_ctrl_data.composite_cpower_run);
+                #if M_OUTINFO_EN
+                output("startmove:[%u:%u,%c]",g_pwm_ctrl_data.composite_cindex_dcount_run,g_pwm_ctrl_data.composite_chgb_dcount_run,g_pwm_ctrl_data.composite_cpower_run);                 
+                #endif                  
 
             }
             else
@@ -968,7 +971,7 @@ command_queue_step_pwm(uint32_t *args)
      }
     #if M_OUTINFO_EN
     output("val:[%c,%u,%hu,%hi,:%c,%c,%u,%u]",args[0],args[1],args[2],args[3],m->pwm_on_off,m->mode,m->pwmval,m->speed_pulse_ticks); 
-    output("coff:[%c,%c,%c,%u,%u]",s->composite_mode,s->composite_fifo_index,s->composite_itemlen,s->composite_dcount,s->composite_count_offset); 
+    output("coff:[%c,%c,%c,%u,%u]",m->composite_mode,s->composite_fifo_index,s->composite_itemlen,s->composite_dcount,s->composite_count_offset); 
     #endif
 #endif
     irq_disable();
@@ -1304,6 +1307,7 @@ stepper_stop_pwm(struct trsync_signal *tss, uint8_t reason)
     sched_del_timer(&s->time);
     s->next_step_time = s->time.waketime = 0;
     s->position = -stepper_get_position_pwm(s);
+    s->composite_mode = 0;
     s->count = 0;
     s->flags = (s->flags & (SF_INVERT_STEP|SF_SINGLE_SCHED)) | SF_NEED_RESET;
     #if M_TEST_VIR_STEP_GPIO
