@@ -27,8 +27,8 @@
 #include "common_ptd.h"
 #include <stdarg.h>
 
-
 #define DEBUG_LOGFILE_EN   (1)
+//#define DEBUG_LOGFILE_EN   (0)
 
 
 #define CHECK_LINES 1
@@ -387,10 +387,10 @@ void
 stepcompress_set_power_table(struct stepcompress *p_sc_insk, uint8_t  pdlen,
     uint32_t dist_count, uint8_t *  pddata, uint8_t ddata_len, uint8_t ptagcode)
 {
-    p_sc_insk->ptagcode = ptagcode;
     p_sc_insk->pdlen = pdlen;
-    if (p_sc_insk->pdlen > 0)
+    if ((p_sc_insk->pdlen > 0) && (p_sc_insk->ptagcode != ptagcode))
     {
+        p_sc_insk->ptagcode = ptagcode;
         p_sc_insk->dist_count = dist_count;
         if (ddata_len > MAX_PTABLE_LEN)
             ddata_len = MAX_PTABLE_LEN;
@@ -622,8 +622,7 @@ set_power_table_data_send(struct stepcompress *sc)
 {
     int runflag = 0;
     int power_table_len = sc->pdlen;
-    // log_to_file("bDEBUG: pre_tagcode=%d, tagcode=%d \n", 
-    //         sc->pre_ptagcode, sc->ptagcode);      
+
     if (sc->pre_ptagcode != sc->ptagcode)
     {
         runflag = 1;
@@ -634,8 +633,6 @@ set_power_table_data_send(struct stepcompress *sc)
             sc->ddata[0], power_table_len, sc->dist_count);
     log_to_file("DEBUG: power_table[1]=%d, power_table[2]=%d, power_table[3]=%d\n", 
             sc->ddata[1], sc->ddata[2], sc->ddata[3]); 
-    // log_to_file("DEBUG: pre_tagcode=%d, tagcode=%d \n", 
-    //         sc->pre_ptagcode, sc->ptagcode); 
     #endif  // DEBUG_LOGFILE_EN                   
 
     if (( power_table_len > 0 ) && (runflag))
