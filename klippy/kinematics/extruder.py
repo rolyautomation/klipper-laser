@@ -764,9 +764,11 @@ class PrinterExtruderPWM:
         pwmvalue = 1.0*(move.pwmvalue or 0)
         pwmsw = 1.0*(move.pwmsw or 0)
 
-        speed_pulse_ticks = self.cacl_step_dist_tick(max_cruise_v)
-        
-        
+
+        speed_pulse_ticks = self.cacl_step_dist_tick(max_cruise_v) or 1500
+        # if (speed_pulse_ticks is None):
+        #     speed_pulse_ticks = 1500         
+               
         distance_count = 0
         len_powertable = len(move.power_table or [])
         if len_powertable > 0:
@@ -797,8 +799,7 @@ class PrinterExtruderPWM:
             else:
                 pwmvalue = self.pre_pwmval
          
-        if (speed_pulse_ticks is None):
-            speed_pulse_ticks = 1500 
+
 
         self.trapq_append_extend(self.trapq, print_time,
                           move.accel_t, move.cruise_t, move.decel_t,
