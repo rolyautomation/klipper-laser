@@ -64,8 +64,8 @@ void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val,
 #define  M_COUNT_MUL_TWO          (1)
 #define  M_PWM_OUT_EN             (1)
 
-#define  M_OUTINFO_EN             (1)  //1
-//#define  M_OUTINFO_EN             (0)  //0
+//#define  M_OUTINFO_EN             (1)  //1
+#define  M_OUTINFO_EN             (0)  //0
 
 struct stepper_move_pwm {
     struct move_node node;

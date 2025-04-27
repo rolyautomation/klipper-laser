@@ -27,8 +27,8 @@
 #include "common_ptd.h"
 #include <stdarg.h>
 
-#define DEBUG_LOGFILE_EN   (1)
-//#define DEBUG_LOGFILE_EN   (0)
+//#define DEBUG_LOGFILE_EN   (1)
+#define DEBUG_LOGFILE_EN   (0)
 
 
 #define CHECK_LINES 1
