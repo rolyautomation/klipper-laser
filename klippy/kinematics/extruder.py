@@ -780,7 +780,7 @@ class PrinterExtruderPWM:
                 #self.c_array[:len_powertable] = move.power_table[:len_powertable]
                 distmm = abs(move.axes_d[3+3])
                 distance_count = self.cacl_distance_count(distmm)
-                logging.info("distance_count=%s, distance=%s, len_powertable=%s", distance_count, distmm, len_powertable)
+                #logging.info("distance_count=%s, distance=%s, len_powertable=%s", distance_count, distmm, len_powertable)
                 self.ptagcode = (self.ptagcode % 127) + 1
                 #logging.info("power_table_array=%s", self.c_array)
             else:

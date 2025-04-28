@@ -321,7 +321,7 @@ class GCodeMove:
                     if len(power_table_values) % 2 != 0:
                         raise gcmd.error("Invalid power table format length")
                     power_table_data = power_table_values
-                    logging.info("Power table: %s", power_table_data)
+                    #logging.info("Power table: %s", power_table_data)
 
             for pos, axis in enumerate('XYZ'):
                 if axis in params:

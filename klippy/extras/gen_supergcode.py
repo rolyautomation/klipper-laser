@@ -46,7 +46,7 @@ class GenSuperGcode:
         self.absolute_coord = True  # G90为True，G91为False   
 
         self.cached_cmds = []
-        self.path_points = []  # 存储路径点信息
+        #self.path_points = []  # 存储路径点信息
         self.last_axis_flags = 0
         self.last_abs_pos = [-1.0] * 6
         self.abs_pos_bound = 0
@@ -72,8 +72,8 @@ class GenSuperGcode:
                     itemdata.out_axis_flags |= self.AXIS_X
                     if coord_state:
                         itemdata.curpos[0] = value
-                        if self.last_abs_pos[0] > self.abs_pos_bound:
-                            itemdata.curmd[0] =  value - self.last_abs_pos[0]
+                        #if self.last_abs_pos[0] > self.abs_pos_bound:
+                        itemdata.curmd[0] =  value - self.last_abs_pos[0]
                         self.last_abs_pos[0] = value
                     else:
                         itemdata.curmd[0] = value 
@@ -85,8 +85,8 @@ class GenSuperGcode:
                     itemdata.out_axis_flags |= self.AXIS_Y
                     if coord_state:
                         itemdata.curpos[1] = value
-                        if self.last_abs_pos[1] > self.abs_pos_bound:
-                            itemdata.curmd[1] =  value - self.last_abs_pos[1]
+                        #if self.last_abs_pos[1] > self.abs_pos_bound:
+                        itemdata.curmd[1] =  value - self.last_abs_pos[1]
                         self.last_abs_pos[1] = value                            
                     else:
                         itemdata.curmd[1] = value    
@@ -98,8 +98,8 @@ class GenSuperGcode:
                     itemdata.out_axis_flags |= self.AXIS_Z
                     if coord_state:
                         itemdata.curpos[2] = value
-                        if self.last_abs_pos[2] > self.abs_pos_bound:
-                            itemdata.curmd[2] =  value - self.last_abs_pos[2]
+                        #if self.last_abs_pos[2] > self.abs_pos_bound:
+                        itemdata.curmd[2] =  value - self.last_abs_pos[2]
                         self.last_abs_pos[2] = value                            
                     else:
                         itemdata.curmd[2] = value                           
@@ -111,8 +111,8 @@ class GenSuperGcode:
                     itemdata.out_axis_flags |= self.AXIS_A
                     if coord_state:
                         itemdata.curpos[3] = value
-                        if self.last_abs_pos[3] > self.abs_pos_bound:
-                            itemdata.curmd[3] =  value - self.last_abs_pos[3]
+                        #if self.last_abs_pos[3] > self.abs_pos_bound:
+                        itemdata.curmd[3] =  value - self.last_abs_pos[3]
                         self.last_abs_pos[3] = value                            
                     else:
                         itemdata.curmd[3] = value                           
@@ -124,8 +124,8 @@ class GenSuperGcode:
                     itemdata.out_axis_flags |= self.AXIS_B
                     if coord_state:
                         itemdata.curpos[4] = value
-                        if self.last_abs_pos[4] > self.abs_pos_bound:
-                            itemdata.curmd[4] =  value - self.last_abs_pos[4]
+                        #if self.last_abs_pos[4] > self.abs_pos_bound:
+                        itemdata.curmd[4] =  value - self.last_abs_pos[4]
                         self.last_abs_pos[4] = value                            
                     else:
                         itemdata.curmd[4] = value      
@@ -137,8 +137,8 @@ class GenSuperGcode:
                     itemdata.out_axis_flags |= self.AXIS_C
                     if coord_state:
                         itemdata.curpos[5] = value
-                        if self.last_abs_pos[5] > self.abs_pos_bound:
-                            itemdata.curmd[5] =  value - self.last_abs_pos[5]
+                        #if self.last_abs_pos[5] > self.abs_pos_bound:
+                        itemdata.curmd[5] =  value - self.last_abs_pos[5]
                         self.last_abs_pos[5] = value                            
                     else:
                         itemdata.curmd[5] = value   
@@ -170,7 +170,7 @@ class GenSuperGcode:
         abs_coord = curitem.coord
         max_index = curitem.curmd[:6].index(max(curitem.curmd[:6], key=abs))
         sums = [sum(item.curmd[i] for item in self.cached_cmds) for i in range(6)]
-        dratiotab = [ int(min(item.curmd[max_index]/sums[max_index]*128,128)) for item in self.cached_cmds ]
+        dratiotab = [ round(min(item.curmd[max_index]/sums[max_index]*1000,1000)) for item in self.cached_cmds ]
         pvaltab   = [ int(min(item.curmd[7]/1000*255,255)) for item in self.cached_cmds ]
         tpowerdistr = list(zip(dratiotab, pvaltab))
         ptablstr = "P" + ",".join(f"{dratio},{pval}" for dratio, pval in tpowerdistr)
@@ -292,6 +292,8 @@ class GenSuperGcode:
     def debug_writefile(self, filename, content):
         if DEBUG_FLOG == 0:
             return
+        if not content.endswith('\n'):
+            content += '\n'            
         with open(filename, 'a') as f:
             f.write(content)
      
@@ -319,11 +321,11 @@ class GenSuperGcode:
                 statuscode = 2            
             return statuscode, new_line + linestr     
 
-        if  line.startswith('G1'):
+        if  linestr.startswith('G1'):
             itemdata = self.parse_gcode(linestr, self.absolute_coord, 1)
             statuscode, new_line = self.is_merge_gcode(itemdata)
             return statuscode,new_line
-        elif  line.startswith('G0'):
+        elif  linestr.startswith('G0'):
             itemdata = self.parse_gcode(linestr, self.absolute_coord, 0)  
             new_line = self.check_flush_cache(self.absolute_coord)
             if new_line:

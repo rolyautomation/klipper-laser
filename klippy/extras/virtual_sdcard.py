@@ -290,7 +290,7 @@ class VirtualSD:
                 retstatus, line_gcode = self.gen_supergcode_obj.handle_supercode(line)
                 if retstatus > 0:
                     line = line_gcode
-                    self.gen_supergcode_obj.debug_writefile("/tmp/supergcode.log", line + '\n')
+                    self.gen_supergcode_obj.debug_writefile("/tmp/supergcode.log", line)
                 else:
                     continue    
             try:
