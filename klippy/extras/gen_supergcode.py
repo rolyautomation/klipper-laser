@@ -262,26 +262,27 @@ class GenSuperGcode:
 
 
     def is_merge_gcode(self, itemdata):
-        statuscode =  1
+        statuscode =  0
         new_line_str = ""
         if not self.cached_cmds:
             self.cached_cmds.append(itemdata)
-            return 0, new_line_str
+            return statuscode, new_line_str
 
         if self.is_straight_line(itemdata):
             self.cached_cmds.append(itemdata)
-            statuscode = 0
+            #statuscode = 0
             if len(self.cached_cmds) == self.blocklen:
                 new_line_str = self.check_flush_cache(self.absolute_coord)
                 if new_line_str:
                     statuscode = 2
-            return statuscode, new_line_str
+            #return statuscode, new_line_str
         else:
             new_line_str = self.check_flush_cache(self.absolute_coord)
-            if new_line_str:
-                statuscode = 2
             self.cached_cmds.append(itemdata)
-            return statuscode, new_line_str
+            #statuscode = 0
+            if new_line_str:
+                statuscode = 2            
+            #return statuscode, new_line_str
         return statuscode, new_line_str
 
 
