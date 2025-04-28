@@ -5,9 +5,8 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging, re
 
-
 DEBUG_FLOG = 1
-
+#0.04mm:635DPI
 
 class SGcodeItemData:
     def __init__(self, coord_state, gtype, linestr):
@@ -52,9 +51,13 @@ class GenSuperGcode:
         self.abs_pos_bound = 0
         self.last_speed = 0.0
         self.last_power = 0.0
+        #self.basenum_dist = 1000
+        #self.basenum_dist = 255
+        self.basenum_dist = 128
+        self.outpowertabflag = 0
         #self.last_angle = 0.0
-        
         self.gcode = self.printer.lookup_object('gcode')
+
 
     args_r = re.compile('([A-Z_]+|[A-Z*/])')
     def parse_gcode(self, line, coord_state, gtype):
@@ -170,8 +173,8 @@ class GenSuperGcode:
         abs_coord = curitem.coord
         max_index = curitem.curmd[:6].index(max(curitem.curmd[:6], key=abs))
         sums = [sum(item.curmd[i] for item in self.cached_cmds) for i in range(6)]
-        dratiotab = [ round(min(item.curmd[max_index]/sums[max_index]*1000,1000)) for item in self.cached_cmds ]
-        pvaltab   = [ int(min(item.curmd[7]/1000*255,255)) for item in self.cached_cmds ]
+        dratiotab = [ round(min(item.curmd[max_index]/sums[max_index]*self.basenum_dist, self.basenum_dist)) for item in self.cached_cmds ]
+        pvaltab   = [ int(min(item.curmd[7]/1000*255, 255)) for item in self.cached_cmds ]
         tpowerdistr = list(zip(dratiotab, pvaltab))
         ptablstr = "P" + ",".join(f"{dratio},{pval}" for dratio, pval in tpowerdistr)
         #lpowerdistr = [x for pair in zip(dratiotab, pvaltab) for x in pair]
@@ -253,6 +256,7 @@ class GenSuperGcode:
                 new_line = self.cached_cmds[0].instr + '\n'
             else:
                 new_line = self.merge_gcode_in_cache() + '\n'
+                self.outpowertabflag = 1
             self.cached_cmds = []
         return new_line
 
@@ -286,7 +290,8 @@ class GenSuperGcode:
         self.last_axis_flags = 0
         self.last_abs_pos = [-1.0] * 6
         self.last_speed = 0.0
-        self.last_power = 0.0        
+        self.last_power = 0.0 
+        self.outpowertabflag = 0       
         pass
 
     def debug_writefile(self, filename, content):
