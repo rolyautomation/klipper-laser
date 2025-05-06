@@ -122,7 +122,9 @@ struct stepper_pwm {
     #if POWER_TABLE_SEL_COMPMODE  == DVAR_TYPE
     uint8_t  powertable[M_PTABLE_BYTE_MLEN]; 
     uint8_t  power_idcode; 
-    #endif    
+    #endif 
+    uint8_t  endcid;  
+    uint8_t  pre_endcid;        
     #endif
     uint32_t position;
     struct move_queue_head mq;
@@ -962,17 +964,25 @@ command_queue_step_pwm(uint32_t *args)
     {   
         if (s->composite_mode > 0)
         {
+
             if(s->pwm_on_off == 0)
             {
                 s->composite_mode = 0;
                                 
             }
-            if (s->pre_pwmval != s->pwmval)
+            if (s->pre_endcid != s->endcid)
             {
                 s->composite_mode = 0;
-                s->pre_pwmval = s->pwmval;
-            }
+                s->pre_endcid = s->endcid;
+            }            
+            // if (s->pre_pwmval != s->pwmval)
+            // {
+            //     s->composite_mode = 0;
+            //     s->pre_pwmval = s->pwmval;
+            // }
+                       
         }
+
 
     }
     m->composite_mode = s->composite_mode;
@@ -1155,6 +1165,40 @@ command_set_pticks_lbandwidth_stepper_pwm(uint32_t *args)
 
 }
 DECL_COMMAND(command_set_pticks_lbandwidth_stepper_pwm, "set_pticks_lbandwidth oid=%c pticks=%u");
+
+
+
+void
+command_sync_end_composit_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->endcid = args[1];
+    //s->pre_endcid = 0;
+    irq_enable();
+    #if M_OUTINFO_EN
+    output("sync_endc:[%c]",args[1]); 
+    #endif     
+
+}
+DECL_COMMAND(command_sync_end_composit_stepper_pwm, "sync_end_composite oid=%c endcid=%c");
+
+
+void
+command_set_pwm_sw_endc_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->pwm_on_off = args[1];
+    s->endcid = args[2]; 
+    //s->pre_endcid = 0;   
+    irq_enable();
+    #if M_OUTINFO_EN
+    output("Gx_sync_endc:[%c,%c]",args[1],args[2]); 
+    #endif     
+
+}
+DECL_COMMAND(command_set_pwm_sw_endc_stepper_pwm, "set_pwm_onf_endc oid=%c onf=%c endcid=%c");
 
 
 void
