@@ -34,7 +34,7 @@ class GenSuperGcode:
         self.enable = config.getint('enable', 1, minval=0, maxval=1)
         self.min_distancemm = config.getfloat('min_distance', 0.001, above=0.0)
         #self.pmerge_max = config.getint('pmerge_max', 8, minval=0, maxval=32)
-        self.long_distancemm = config.getfloat('long_distance', 2, above=1.0)
+        self.long_distancemm = config.getfloat('long_distance', 2., above=1.0)
         self.debug_flog_en = config.getint('debug_flog_en', 0, minval=0, maxval=1)
         self.AXIS_X = 0x1
         self.AXIS_Y = 0x2
@@ -166,6 +166,14 @@ class GenSuperGcode:
                     #itemdata.papprochvalue = int(min(value/1000*255, 255))
             except ValueError:
                 continue
+
+        for i in range(6):
+            if abs(itemdata.curmd[i]) > self.long_distancemm:
+                itemdata.longdist_flag = 1
+                break
+        # max_abs_distance = max(abs(x) for x in itemdata.curmd[:6])
+        # if max_abs_distance > self.long_distancemm:
+        #     itemdata.longdist_flag = 1      
         return itemdata
 
 
@@ -358,8 +366,14 @@ class GenSuperGcode:
 
         if  linestr.startswith('G1'):
             itemdata = self.parse_gcode(linestr, self.absolute_coord, 1)
-            statuscode, new_line = self.is_merge_gcode(itemdata)
-            return statuscode,new_line
+            if itemdata.longdist_flag == 0:
+                statuscode, new_line = self.is_merge_gcode(itemdata)
+                return statuscode,new_line
+            else:
+                new_line = self.check_flush_cache(self.absolute_coord)
+                if new_line:
+                    statuscode = 2
+                return statuscode, new_line + line_gcode                
         elif  linestr.startswith('G0'):
             itemdata = self.parse_gcode(linestr, self.absolute_coord, 0)  
             new_line = self.check_flush_cache(self.absolute_coord)
