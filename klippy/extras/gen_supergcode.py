@@ -17,9 +17,10 @@ class SGcodeItemData:
         self.curpos = [0.0] * 8
         self.curmd = [0.0] *  8
         self.angle = 0.0
-        self.mergeflag = 0
-        self.pmergecnt = 0
-        self.papprochvalue = 0
+        self.longdist_flag = 0
+        # self.mergeflag = 0
+        # self.pmergecnt = 0
+        # self.papprochvalue = 0
         self.instr = linestr
 
 class GenSuperGcode:
@@ -32,7 +33,8 @@ class GenSuperGcode:
         self.blocklen = config.getint('blocklen', 8, minval=2, maxval=24)
         self.enable = config.getint('enable', 1, minval=0, maxval=1)
         self.min_distancemm = config.getfloat('min_distance', 0.001, above=0.0)
-        self.pmerge_max = config.getint('pmerge_max', 8, minval=0, maxval=32)
+        #self.pmerge_max = config.getint('pmerge_max', 8, minval=0, maxval=32)
+        self.long_distancemm = config.getfloat('long_distance', 2, above=1.0)
         self.debug_flog_en = config.getint('debug_flog_en', 0, minval=0, maxval=1)
         self.AXIS_X = 0x1
         self.AXIS_Y = 0x2
@@ -161,7 +163,7 @@ class GenSuperGcode:
                     itemdata.axis_flags |= self.PARAM_S
                     itemdata.curmd[7] = value 
                     self.last_power = value
-                    itemdata.papprochvalue = int(min(value/1000*255, 255))
+                    #itemdata.papprochvalue = int(min(value/1000*255, 255))
             except ValueError:
                 continue
         return itemdata
@@ -266,6 +268,8 @@ class GenSuperGcode:
             self.cached_cmds = []
         return new_line
 
+
+    '''
     def check_merge_power(self):
         pass
         return
@@ -283,7 +287,7 @@ class GenSuperGcode:
             else:
                 prelastitem.mergeflag  = 1
         pass  
-
+    '''
 
     def is_merge_gcode(self, itemdata):
         statuscode =  0
