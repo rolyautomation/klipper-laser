@@ -5,7 +5,7 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging, re
 
-DEBUG_FLOG = 1
+#DEBUG_FLOG = 1
 #0.04mm:635DPI
 
 class SGcodeItemData:
@@ -33,6 +33,7 @@ class GenSuperGcode:
         self.enable = config.getint('enable', 1, minval=0, maxval=1)
         self.min_distancemm = config.getfloat('min_distance', 0.001, above=0.0)
         self.pmerge_max = config.getint('pmerge_max', 8, minval=0, maxval=32)
+        self.debug_flog_en = config.getint('debug_flog_en', 0, minval=0, maxval=1)
         self.AXIS_X = 0x1
         self.AXIS_Y = 0x2
         self.AXIS_Z = 0x4
@@ -320,8 +321,8 @@ class GenSuperGcode:
         pass
 
     def debug_writefile(self, filename, content):
-        if DEBUG_FLOG == 0:
-            return
+        # if DEBUG_FLOG == 0:
+        #     return
         if not content.endswith('\n'):
             content += '\n'            
         with open(filename, 'a') as f:

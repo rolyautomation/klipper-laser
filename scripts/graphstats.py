@@ -8,6 +8,7 @@ import optparse, datetime
 import matplotlib
 
 MAXBANDWIDTH=25000.
+#MAXBANDWIDTH=50000.
 MAXBUFFER=2.
 STATS_INTERVAL=5.
 TASK_MAX=0.0025

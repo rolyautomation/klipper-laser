@@ -290,8 +290,11 @@ class VirtualSD:
                 retstatus, line_gcode = self.gen_supergcode_obj.handle_supercode(line)
                 if retstatus > 0:
                     line = line_gcode
-                    self.gen_supergcode_obj.debug_writefile("/tmp/supergcode.log", line)
+                    if self.gen_supergcode_obj.debug_flog_en:
+                        self.gen_supergcode_obj.debug_writefile("/tmp/supergcode.log", line)
                 else:
+                    self.cmd_from_sd = False
+                    self.file_position = self.next_file_position
                     continue    
             try:
                 self.gcode.run_script(line)
