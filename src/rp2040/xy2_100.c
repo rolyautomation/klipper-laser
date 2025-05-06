@@ -1197,7 +1197,7 @@ int  setup_pio_pwm(uint pwmpin, uint32_t period,uint32_t level, uint pin_start, 
 
 
 
-#define M_PIO_CTRL_DCMOTOR
+//#define M_PIO_CTRL_DCMOTOR
 #ifdef  M_PIO_CTRL_DCMOTOR
 
 #define M_SEL_PIO_DCM     (pio1)

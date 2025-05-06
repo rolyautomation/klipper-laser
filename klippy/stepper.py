@@ -161,7 +161,7 @@ class MCU_stepper:
 
                 self._setminpower_cmd =  self._mcu.lookup_command(
                     "setminpower oid=%c pv=%c")    
-
+                
                 set_pwmpower_msgtag = self._mcu.lookup_command(
                     "set_pwmpower_lbandwidth oid=%c pwmval=%c").get_command_tag()   
                 set_plusticks_msgtag = self._mcu.lookup_command(
@@ -169,8 +169,9 @@ class MCU_stepper:
 
                 set_powerftable_msgtag = self._mcu.lookup_command(
                     "set_powerfunc_table oid=%c tdc=%u data=%*s").get_command_tag()   
-                set_powerftable_sp_msgtag = self._mcu.lookup_command(
-                    "set_powerfunc_speed_table oid=%c pticks=%u tdc=%u data=%*s").get_command_tag()                                                                                                                  
+                
+                # set_powerftable_sp_msgtag = self._mcu.lookup_command(
+                #     "set_powerfunc_speed_table oid=%c pticks=%u tdc=%u data=%*s").get_command_tag()                                                                                                                  
 
                 step_cmd_tag = self.convert_tag_to_signed(step_cmd_tag)
                 dir_cmd_tag = self.convert_tag_to_signed(dir_cmd_tag)

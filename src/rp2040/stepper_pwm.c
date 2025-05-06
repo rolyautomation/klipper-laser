@@ -434,9 +434,9 @@ void  load_next_pwm_ctrl_data_composite(uint8_t composite_mode, uint8_t composit
         }
  
 
-    } 
- 
-
+    }
+    
+    
 }
 
 
@@ -1206,7 +1206,7 @@ command_powerfunc_table_stepper_pwm(uint32_t *args)
 }
 DECL_COMMAND(command_powerfunc_table_stepper_pwm, "set_powerfunc_table oid=%c tdc=%u data=%*s");
 
-
+#if 0
 void
 command_powerfunc_speed_table_stepper_pwm(uint32_t *args)
 {
@@ -1252,7 +1252,7 @@ command_powerfunc_speed_table_stepper_pwm(uint32_t *args)
 
 }
 DECL_COMMAND(command_powerfunc_speed_table_stepper_pwm, "set_powerfunc_speed_table oid=%c pticks=%u tdc=%u data=%*s");
-
+#endif 
 
 void 
 set_pwm_pulse_width(uint8_t flag,uint8_t pwd_oid, uint32_t val)

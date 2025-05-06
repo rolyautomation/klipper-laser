@@ -70,7 +70,7 @@ class CommandQueryWrapper:
         try:
             return xh.get_response(cmds, self._cmd_queue, minclock, reqclock)
         except serialhdl.error as e:
-            if self._serial.mcu.non_critical_disconnected:
+            if self._serial.mcu.non_critical_disconnected and self._serial.mcu.is_non_critical:
                 return None
             raise self._error(str(e))
     def send(self, data=(), minclock=0, reqclock=0):
@@ -790,14 +790,14 @@ class MCU:
             if prev_crc is None:
                 logging.info("Sending MCU '%s' printer configuration...",
                              self._name)
-                for c in local_config_cmds:
-                    self._serial.send(c)
+                    for c in local_config_cmds:
+                        self._serial.send(c)
             else:
                 for c in self._restart_cmds:
                     self._serial.send(c)
             # Transmit init messages
-            for c in self._init_cmds:
-                self._serial.send(c)
+                for c in self._init_cmds:
+                    self._serial.send(c)
         except msgproto.enumeration_error as e:
             enum_name, enum_value = e.get_enum_params()
             if enum_name == 'pin':
@@ -812,7 +812,7 @@ class MCU:
             "config is_config=%c crc=%u is_shutdown=%c move_count=%hu")
         if self.is_fileoutput():
             return { 'is_config': 0, 'move_count': 500, 'crc': 0 }
-        config_params = get_config_cmd.send()
+            config_params = get_config_cmd.send()
         if self._is_shutdown:
             raise error("MCU '%s' error during config: %s" % (
                 self._name, self._shutdown_msg))

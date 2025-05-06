@@ -16,7 +16,10 @@
 //#include "stepper.h" // stepper_event
 //#include "xy2_stepper.h"  // 
 //#include "trsync.h" // trsync_add_signal
+#define M_DCM_MOTIONCTRL_ENABLE   (0)
 
+
+#if  M_DCM_MOTIONCTRL_ENABLE
 //int  send_dcmctrlrun_instr(uint ab_pin, uint32_t dcm_instr);
 int  send_dcmctrlrun_instr(unsigned int ab_pin, uint32_t dcm_instr);
 
@@ -175,4 +178,5 @@ command_rinstr_ab_dcmotor(uint32_t *args)
    
 }
 DECL_COMMAND(command_rinstr_ab_dcmotor, "rinstr_ab_dcmotor oid=%c rtm=%u wtm=%u dir=%c wmod=%c");
+#endif
 

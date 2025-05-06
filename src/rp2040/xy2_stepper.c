@@ -437,11 +437,11 @@ stepper_shutdown_vir(void)
 }
 DECL_SHUTDOWN(stepper_shutdown_vir);
 
-
+#if M_FIFO_MODE_EN == 0
 static struct task_wake xy2_100_wake;
+#endif
 
 #if 0
-
 
 struct xy2_stepper_move {
     struct move_node node;
@@ -1149,6 +1149,20 @@ struct xy2_stepper {
 
 
 
+
+#if     M_FIFO_MODE_EN
+uint_fast8_t
+xy2_stepper_event_tm(struct timer *t)
+{
+    struct xy2_stepper *s = container_of(t, struct xy2_stepper, time);
+    uint32_t curtime = timer_read_time();
+    uint32_t min_next_time = curtime + timer_from_us(1000);
+	s->time.waketime = min_next_time;
+    return SF_DONE;
+	
+}
+
+#else
 uint_fast8_t
 xy2_stepper_event_tm(struct timer *t)
 {
@@ -1167,9 +1181,7 @@ xy2_stepper_event_tm(struct timer *t)
 
 	
 }
-
-
-
+#endif
 
 
 void
@@ -1559,6 +1571,7 @@ DECL_COMMAND(command_xy2_stepper_stop_on_trigger,
 #define M_TESTSCAN_MODE  (0)
 
 
+#if M_FIFO_MODE_EN == 0
 void
 xy2_100_task(void)
 {
@@ -1586,6 +1599,7 @@ xy2_100_task(void)
 	
 }
 DECL_TASK(xy2_100_task);
+#endif
 
 
 
