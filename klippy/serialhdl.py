@@ -312,7 +312,7 @@ class SerialReader:
         self.pending_notifications[nid] = completion
         self.ffi_lib.serialqueue_send(self.serialqueue, cmd_queue,
                                       cmd, len(cmd), minclock, reqclock, nid)
-            params = completion.wait()
+        params = completion.wait()
         if params is None:
             self._error("Serial connection closed")
         return params
