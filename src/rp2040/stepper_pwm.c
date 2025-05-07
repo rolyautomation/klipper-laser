@@ -64,8 +64,8 @@ void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val,
 #define  M_COUNT_MUL_TWO          (1)
 #define  M_PWM_OUT_EN             (1)
 
-//#define  M_OUTINFO_EN             (1)  //1
-#define  M_OUTINFO_EN             (0)  //0
+#define  M_OUTINFO_EN             (1)  //1
+//#define  M_OUTINFO_EN             (0)  //0
 
 struct stepper_move_pwm {
     struct move_node node;
@@ -958,7 +958,12 @@ command_queue_step_pwm(uint32_t *args)
     {
         s->composite_mode =  s->req_composite_mode;
         s->req_composite_mode = 0;
-        s->pre_pwmval = s->pwmval;
+        // s->pre_pwmval = s->pwmval;
+        if (s->composite_dcount  == 0)
+        {
+            s->composite_mode = 0;
+        }
+
     }
     else
     {   
@@ -974,6 +979,9 @@ command_queue_step_pwm(uint32_t *args)
             {
                 s->composite_mode = 0;
                 s->pre_endcid = s->endcid;
+                #if M_OUTINFO_EN
+                output("restart gcode:[%c]",s->endcid); 
+                #endif                  
             }            
             // if (s->pre_pwmval != s->pwmval)
             // {
@@ -1150,6 +1158,9 @@ command_set_pwmpower_lbandwidth_stepper_pwm(uint32_t *args)
     //s->composite_mode = 0;  
     s->pwmval = args[1];
     irq_enable();
+    #if M_OUTINFO_EN
+    output("update pwmv:[%c]",s->pwmval); 
+    #endif     
 
 }
 DECL_COMMAND(command_set_pwmpower_lbandwidth_stepper_pwm, "set_pwmpower_lbandwidth oid=%c pwmval=%c");
