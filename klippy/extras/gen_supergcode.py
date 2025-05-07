@@ -57,7 +57,7 @@ class GenSuperGcode:
         self.last_abs_pos = [-1.0] * 6
         self.abs_pos_bound = 0
         self.last_speed = 0.0
-        self.last_power = 0.0
+        self.last_power = 0
         #self.basenum_dist = 1000
         #self.basenum_dist = 255
         self.basenum_dist = 128
@@ -162,7 +162,7 @@ class GenSuperGcode:
                 elif param == 'S': 
                     itemdata.axis_flags |= self.PARAM_S
                     itemdata.curmd[7] = value 
-                    self.last_power = value
+                    self.last_power = int(value)
                     #itemdata.papprochvalue = int(min(value/1000*255, 255))
             except ValueError:
                 continue
@@ -328,7 +328,7 @@ class GenSuperGcode:
         self.last_axis_flags = 0
         self.last_abs_pos = [-1.0] * 6
         self.last_speed = 0.0
-        self.last_power = 0.0 
+        self.last_power = 0
         self.outpowertabflag = 0       
         pass
 
@@ -366,13 +366,15 @@ class GenSuperGcode:
 
         if  linestr.startswith('G1'):
             itemdata = self.parse_gcode(linestr, self.absolute_coord, 1)
-            if itemdata.longdist_flag == 0:
+            if (itemdata.longdist_flag == 0) and (itemdata.axis_flags & self.PARAM_S):
                 statuscode, new_line = self.is_merge_gcode(itemdata)
                 return statuscode,new_line
             else:
                 new_line = self.check_flush_cache(self.absolute_coord)
                 if new_line:
                     statuscode = 2
+                if not 'S' in linestr:
+                    line_gcode = line_gcode.rstrip() + f" S{self.last_power}"
                 return statuscode, new_line + line_gcode                
         elif  linestr.startswith('G0'):
             itemdata = self.parse_gcode(linestr, self.absolute_coord, 0)  
