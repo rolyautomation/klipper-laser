@@ -114,6 +114,8 @@ class MCU_stepper:
         set_plusticks_msgtag = 0
         set_powerftable_msgtag = 0
         set_powerftable_sp_msgtag = 0
+        set_sync_endc_msgtag = 0
+        set_pwm_sw_endc_msgtag = 0
 
         # logging.info("mname=%s rbothedge=%s pulse=%s sbe=%s] \n", self._name,
         #     self._req_step_both_edge, self._step_pulse_duration, self._step_both_edge)         
@@ -169,6 +171,11 @@ class MCU_stepper:
 
                 set_powerftable_msgtag = self._mcu.lookup_command(
                     "set_powerfunc_table oid=%c tdc=%u data=%*s").get_command_tag()   
+
+                set_sync_endc_msgtag = self._mcu.lookup_command(
+                    "sync_end_composite oid=%c endcid=%c").get_command_tag()
+                set_pwm_sw_endc_msgtag = self._mcu.lookup_command(
+                    "set_pwm_onf_endc oid=%c onf=%c endcid=%c").get_command_tag()
                 
                 # set_powerftable_sp_msgtag = self._mcu.lookup_command(
                 #     "set_powerfunc_speed_table oid=%c pticks=%u tdc=%u data=%*s").get_command_tag()                                                                                                                  
@@ -182,6 +189,8 @@ class MCU_stepper:
                 set_plusticks_msgtag = self.convert_tag_to_signed(set_plusticks_msgtag)
                 set_powerftable_msgtag = self.convert_tag_to_signed(set_powerftable_msgtag)
                 set_powerftable_sp_msgtag = self.convert_tag_to_signed(set_powerftable_sp_msgtag)
+                set_sync_endc_msgtag = self.convert_tag_to_signed(set_sync_endc_msgtag)
+                set_pwm_sw_endc_msgtag = self.convert_tag_to_signed(set_pwm_sw_endc_msgtag)
                 step_ctag_typef = 1
 
             else:
@@ -234,7 +243,7 @@ class MCU_stepper:
 
         ffi_lib.stepcompress_fill_ext(self._stepqueue, set_pwmpower_msgtag,
                                   set_plusticks_msgtag, set_powerftable_msgtag,
-                                  set_powerftable_sp_msgtag)  
+                                  set_powerftable_sp_msgtag, set_sync_endc_msgtag, set_pwm_sw_endc_msgtag)  
 
 
 

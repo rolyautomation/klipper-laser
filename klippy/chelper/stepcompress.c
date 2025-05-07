@@ -66,6 +66,8 @@ struct stepcompress {
 
     uint8_t  ptagcode;
     uint8_t  pre_ptagcode;
+    uint8_t  psynccode;
+    uint8_t  pre_psynccode;
     uint8_t  pdlen; 
     uint8_t  ddata[MAX_PTABLE_LEN];
     uint32_t dist_count;     
@@ -79,6 +81,8 @@ struct stepcompress {
     int32_t set_plusticks_msgtag;
     int32_t set_powerftable_msgtag;
     int32_t set_powerftable_sp_msgtag;
+    int32_t set_sync_endc_msgtag;    
+    int32_t set_pwm_sw_endc_msgtag;
 
 };
 
@@ -302,12 +306,15 @@ stepcompress_fill(struct stepcompress *sc, uint32_t max_error
 }
 
 void __visible
-stepcompress_fill_ext(struct stepcompress *sc, int32_t set_pwmpower_msgtag, int32_t set_plusticks_msgtag, int32_t set_powerftable_msgtag, int32_t set_powerftable_sp_msgtag)
+stepcompress_fill_ext(struct stepcompress *sc, int32_t set_pwmpower_msgtag, int32_t set_plusticks_msgtag, int32_t set_powerftable_msgtag, int32_t set_powerftable_sp_msgtag
+    , int32_t set_sync_endc_msgtag, int32_t set_pwm_sw_endc_msgtag)
 {
     sc->set_pwmpower_msgtag = set_pwmpower_msgtag;
     sc->set_plusticks_msgtag = set_plusticks_msgtag;
     sc->set_powerftable_msgtag = set_powerftable_msgtag;
     sc->set_powerftable_sp_msgtag = set_powerftable_sp_msgtag;
+    sc->set_sync_endc_msgtag = set_sync_endc_msgtag;
+    sc->set_pwm_sw_endc_msgtag = set_pwm_sw_endc_msgtag;
 }
 
 
@@ -385,8 +392,9 @@ stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uin
 
 void
 stepcompress_set_power_table(struct stepcompress *p_sc_insk, uint8_t  pdlen,
-    uint32_t dist_count, uint8_t *  pddata, uint8_t ddata_len, uint8_t ptagcode)
+    uint32_t dist_count, uint8_t *  pddata, uint8_t ddata_len, uint8_t ptagcode, uint8_t psynccode)
 {
+    p_sc_insk->psynccode = psynccode;
     p_sc_insk->pdlen = pdlen;
     if ((p_sc_insk->pdlen > 0) && (p_sc_insk->ptagcode != ptagcode))
     {
@@ -520,22 +528,46 @@ set_pwm_on_off_send(struct stepcompress *sc)
     if ( sc->pre_on_off != sc->on_off )
     {
         sc->pre_on_off = sc->on_off;
-        runflag = 1;
+        runflag = runflag | 0x01;
     }
-    if (runflag)
+    if (sc->pre_psynccode != sc->psynccode)
+    {
+        sc->pre_psynccode = sc->psynccode;
+        runflag = runflag | 0x02;
+    }
+    if (runflag > 0)
     {
 
-        uint32_t msg[3] = {
-            sc->set_pwm_sw_msgtag, sc->oid, sc->on_off
-        };
-        struct queue_message *qm = message_alloc_and_encode(msg, 3);
+        uint32_t msg[4] = {0}; 
+        int msg_len = 0;
+        if (runflag  == 1)
+        {
+            msg[0] = sc->set_pwm_sw_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->on_off;
+            msg_len = 3;
+        } else if (runflag  == 2)
+        {
+            msg[0] = sc->set_sync_endc_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->psynccode;
+            msg_len = 3;
+        }
+        else
+        {
+            msg[0] = sc->set_pwm_sw_endc_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->on_off;
+            msg[3] = sc->psynccode;
+            msg_len = 4;
+        }
+        struct queue_message *qm = message_alloc_and_encode(msg, msg_len);
         qm->req_clock = sc->last_step_clock;
         list_add_tail(&qm->node, &sc->msg_queue);
         return 0;
-        
+
     }
     return 0;
-
 
 }
 
@@ -660,7 +692,8 @@ static int
 check_syncdata_send(struct stepcompress *sc)
 {
     int runflag = 0;
-    if (( sc->pre_pwm_mode != sc->pwm_mode ) || (sc->pre_pwmval != sc->pwmval) || (sc->pre_speed_pulse_ticks != sc->speed_pulse_ticks) || ( sc->pre_on_off != sc->on_off ))
+    if (( sc->pre_pwm_mode != sc->pwm_mode ) || (sc->pre_pwmval != sc->pwmval) || (sc->pre_speed_pulse_ticks != sc->speed_pulse_ticks)
+             || ( sc->pre_on_off != sc->on_off ) || (sc->pre_psynccode != sc->psynccode))
     {
        runflag = 1;
     }

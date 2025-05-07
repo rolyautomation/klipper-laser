@@ -541,10 +541,11 @@ class PrinterExtruderPWM:
         else:
             self.lasermin_power = int(laser_minpower + 0.5)  
 
-        self.diff_pwmval = config.getfloat(
-            'diff_pwmval', 0., minval=0., maxval=255.) 
-
+        # self.diff_pwmval = config.getfloat(
+        #     'diff_pwmval', 0., minval=0., maxval=255.) 
         
+        self.pre_ptagcode = 0
+        self.psynccode = 0
         self.ptagcode = 0
         self.ep_step_dist_tick = None
         self.powertable_max = 64
@@ -602,7 +603,7 @@ class PrinterExtruderPWM:
         self._laser_type = 0
         self._pwm_prf = 0
         self.last_min_power = 0 
-        self.pre_pwmval = 0
+        #self.pre_pwmval = 0
         #RSYNCPOWER_M
         gcode.register_mux_command("RSYNCPOWER", "LASER",
                                    self.name, self.cmd_RSYNCPOWER,
@@ -763,6 +764,7 @@ class PrinterExtruderPWM:
         pwmmode = 1.0*(move.pwmmode or 0)
         pwmvalue = 1.0*(move.pwmvalue or 0)
         pwmsw = 1.0*(move.pwmsw or 0)
+        power_type  = 0
 
 
         speed_pulse_ticks = self.cacl_step_dist_tick(max_cruise_v) or 1500
@@ -782,6 +784,7 @@ class PrinterExtruderPWM:
                 distance_count = self.cacl_distance_count(distmm)
                 #logging.info("distance_count=%s, distance=%s, len_powertable=%s", distance_count, distmm, len_powertable)
                 self.ptagcode = (self.ptagcode % 127) + 1
+                power_type  = 1
                 #logging.info("power_table_array=%s", self.c_array)
             else:
                 len_powertable = 0
@@ -791,15 +794,19 @@ class PrinterExtruderPWM:
         #power_table_carray = self.c_array_NULL
         #power_table_ptr = ffi_main.from_buffer(power_table_carray)
 
-        if self.diff_pwmval > 0:
-            if pwmvalue == 0:
-                self.pre_pwmval = 0
-            elif abs(pwmvalue - self.pre_pwmval) > self.diff_pwmval:
-                self.pre_pwmval = pwmvalue
-            else:
-                pwmvalue = self.pre_pwmval
+        # if self.diff_pwmval > 0:
+        #     if pwmvalue == 0:
+        #         self.pre_pwmval = 0
+        #     elif abs(pwmvalue - self.pre_pwmval) > self.diff_pwmval:
+        #         self.pre_pwmval = pwmvalue
+        #     else:
+        #         pwmvalue = self.pre_pwmval
+        if power_type == 0:
+            if self.pre_ptagcode != self.ptagcode:
+                self.pre_ptagcode = self.ptagcode
+                self.psynccode = (self.psynccode % 127) + 1
+        current_psynccode = self.psynccode
          
-
 
         self.trapq_append_extend(self.trapq, print_time,
                           move.accel_t, move.cruise_t, move.decel_t,
@@ -808,7 +815,8 @@ class PrinterExtruderPWM:
                           1., can_pressure_advance, self._restartcmd_sn,
                           pwmmode, pwmvalue, speed_pulse_ticks,
                           start_v, cruise_v, accel, 1, 
-                          self.power_table_ptr, len_powertable, distance_count, current_ptagcode)
+                          self.power_table_ptr, len_powertable, distance_count, 
+                          current_ptagcode, current_psynccode)
         
         self.last_position = move.end_pos[3+3]
         

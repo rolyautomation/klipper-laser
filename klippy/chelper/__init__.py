@@ -41,7 +41,8 @@ defs_stepcompress = """
         , int32_t queue_step_msgtag, int32_t set_next_step_dir_msgtag, int32_t step_ctag_typef
         , int32_t set_pwm_sw_msgtag, int32_t set_pwm_modepower_msgtag);
     void stepcompress_fill_ext(struct stepcompress *sc, int32_t set_pwmpower_msgtag
-        , int32_t set_plusticks_msgtag, int32_t set_powerftable_msgtag, int32_t set_powerftable_sp_msgtag);
+        , int32_t set_plusticks_msgtag, int32_t set_powerftable_msgtag, int32_t set_powerftable_sp_msgtag
+        , int32_t set_sync_endc_msgtag, int32_t set_pwm_sw_endc_msgtag);
     void stepcompress_set_invert_sdir(struct stepcompress *sc
         , uint32_t invert_sdir);
     void stepcompress_free(struct stepcompress *sc);
@@ -111,7 +112,8 @@ defs_trapq = """
         , double axes_r_x, double axes_r_y, double axes_r_z
         , double axes_r_a, double axes_r_b, double axes_r_c             
         , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en
-        , unsigned char * power_table, unsigned char len_power_table, unsigned int dist_count, unsigned char ptagcode);
+        , unsigned char * power_table, unsigned char len_power_table, unsigned int dist_count
+        , unsigned char ptagcode, unsigned char psynccode);
     void trapq_finalize_moves(struct trapq *tq, double print_time
         , double clear_history_time);
     void trapq_set_position(struct trapq *tq, double print_time
