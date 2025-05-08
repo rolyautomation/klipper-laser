@@ -64,8 +64,8 @@ void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val,
 #define  M_COUNT_MUL_TWO          (1)
 #define  M_PWM_OUT_EN             (1)
 
-#define  M_OUTINFO_EN             (1)  //1
-//#define  M_OUTINFO_EN             (0)  //0
+//#define  M_OUTINFO_EN             (1)  //1
+#define  M_OUTINFO_EN             (0)  //0
 
 struct stepper_move_pwm {
     struct move_node node;
@@ -1178,6 +1178,21 @@ command_set_pticks_lbandwidth_stepper_pwm(uint32_t *args)
 DECL_COMMAND(command_set_pticks_lbandwidth_stepper_pwm, "set_pticks_lbandwidth oid=%c pticks=%u");
 
 
+//add clear composite mode at 250508
+void
+command_clear_compositem_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->req_composite_mode = 0;
+    s->composite_mode = 0;
+    s->pre_endcid = 0; 
+    irq_enable();
+
+}
+//DECL_COMMAND(command_clear_compositem_stepper_pwm, "clear_compositem oid=%c flag=%c");
+DECL_COMMAND(command_clear_compositem_stepper_pwm, "clear_compositem oid=%c");
+
 
 void
 command_sync_end_composit_stepper_pwm(uint32_t *args)
@@ -1210,6 +1225,24 @@ command_set_pwm_sw_endc_stepper_pwm(uint32_t *args)
 
 }
 DECL_COMMAND(command_set_pwm_sw_endc_stepper_pwm, "set_pwm_onf_endc oid=%c onf=%c endcid=%c");
+
+
+//add pwm power and endcid at 250508
+void
+command_set_pwmpower_endc_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    irq_disable();
+    s->pwmval = args[1];
+    s->endcid = args[2];
+    //s->pre_endcid = 0;   
+    irq_enable();
+    #if M_OUTINFO_EN
+    output("pwmval_sync_endc:[%c,%c]",args[1],args[2]); 
+    #endif     
+
+}
+DECL_COMMAND(command_set_pwmpower_endc_stepper_pwm, "set_pwmpower_endc oid=%c pwmval=%c endcid=%c");
 
 
 void
