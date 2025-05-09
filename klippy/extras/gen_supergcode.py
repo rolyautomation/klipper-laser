@@ -54,7 +54,7 @@ class GenSuperGcode:
         self.cached_cmds = []
         #self.path_points = []  # 存储路径点信息
         self.last_axis_flags = 0
-        self.last_abs_pos = [-1.0] * 6
+        self.last_abs_pos = [0.0] * 6
         self.abs_pos_bound = 0
         self.last_speed = 0.0
         self.last_power = 0
@@ -64,6 +64,7 @@ class GenSuperGcode:
         self.outpowertabflag = 0
         #self.last_angle = 0.0
         self.gcode = self.printer.lookup_object('gcode')
+        self.gcode_move_pos = None
 
 
     args_r = re.compile('([A-Z_]+|[A-Z*/])')
@@ -323,10 +324,17 @@ class GenSuperGcode:
         return statuscode, new_line_str
 
 
+    def get_last_position(self):
+        if self.gcode_move_pos is None:
+            self.gcode_move_pos = self.printer.lookup_object('gcode_move')
+        self.last_abs_pos = self.gcode_move_pos.get_last_position_superg()
+        #logging.info("last:%s",self.last_abs_pos)
+        return self.last_abs_pos
+ 
     def clean_cache_cmd(self):
         self.cached_cmds = []
         self.last_axis_flags = 0
-        self.last_abs_pos = [-1.0] * 6
+        self.last_abs_pos = [0.0] * 6
         self.last_speed = 0.0
         self.last_power = 0
         self.outpowertabflag = 0       
@@ -353,6 +361,7 @@ class GenSuperGcode:
             
         if 'G90' in linestr:
             self.absolute_coord = True
+            self.get_last_position()
             new_line = self.check_flush_cache(self.absolute_coord)
             if new_line:
                 statuscode = 2

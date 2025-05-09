@@ -152,6 +152,13 @@ class GCodeMove:
         if self.is_printer_ready:
             self.last_position = self.position_with_transform()
 
+    def get_last_position_superg(self):
+        lpos = list(self.last_position[:6])
+        if self.galvo_coord_confactor is not None:
+            lpos[4] -= self.galvo_coord_confactor
+            lpos[5] -= self.galvo_coord_confactor
+        return lpos 
+
     def cmd_M222_LASER_POWER(self, gcmd):  
         value = gcmd.get_int('S', 100) 
         adj_value = self.laser_power_factor 
