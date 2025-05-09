@@ -190,7 +190,21 @@ class GenSuperGcode:
         abs_coord = curitem.coord
         max_index = curitem.curmd[:6].index(max(curitem.curmd[:6], key=abs))
         sums = [sum(item.curmd[i] for item in self.cached_cmds) for i in range(6)]
-        dratiotab = [ round(min(item.curmd[max_index]/sums[max_index]*self.basenum_dist, self.basenum_dist)) for item in self.cached_cmds ]
+        #dratiotab = [ round(min(item.curmd[max_index]/sums[max_index]*self.basenum_dist, self.basenum_dist)) for item in self.cached_cmds ]
+        ratios = [item.curmd[max_index]/sums[max_index]*self.basenum_dist for item in self.cached_cmds]
+        remaining = self.basenum_dist
+        dratiotab = []
+        decimals = [] 
+        for ratio in ratios:
+            floor_val = int(ratio)  
+            decimal = ratio - floor_val  
+            dratiotab.append(floor_val)
+            decimals.append(decimal)
+            remaining -= floor_val
+        indices = sorted(range(len(decimals)), key=lambda i: decimals[i], reverse=True)
+        for i in range(int(remaining)):
+            dratiotab[indices[i]] += 1
+            
         pvaltab   = [ int(min(item.curmd[7]/1000*255, 255)) for item in self.cached_cmds ]
         tpowerdistr = list(zip(dratiotab, pvaltab))
         ptablstr = "P" + ",".join(f"{dratio},{pval}" for dratio, pval in tpowerdistr)
