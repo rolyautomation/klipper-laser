@@ -23,11 +23,10 @@ void  set_pwm_pulse_width(uint8_t flag,uint8_t pwd_oid, uint32_t val);
 extern void  direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val, uint8_t  pwm_on_off);
 void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val, uint8_t  pwm_on_off);
 
-#define  FIFO_TYPE   (1)
-#define  DVAR_TYPE   (2)
 
+#define  DVAR_TYPE   (2)
 #define  POWER_TABLE_SEL_COMPMODE  (DVAR_TYPE)
-//#define  POWER_TABLE_SEL_COMPMODE  (FIFO_TYPE)
+
 
 #define  M_PTABLE_BYTE_MLEN (64)
 #define  M_FIFO_DATA_LEN   M_PTABLE_BYTE_MLEN
@@ -64,8 +63,9 @@ void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val,
 #define  M_COUNT_MUL_TWO          (1)
 #define  M_PWM_OUT_EN             (1)
 
-//#define  M_OUTINFO_EN             (1)  //1
-#define  M_OUTINFO_EN             (0)  //0
+#define  M_OUTINFO_EN             (1)  //1
+//#define  M_OUTINFO_EN             (0)  //0
+#define  M_TRACK_POWER_EN         (1)  //1
 
 struct stepper_move_pwm {
     struct move_node node;
@@ -211,88 +211,6 @@ typedef struct pwm_ctrl_s_t pwm_ctrl_s_t;
 pwm_ctrl_s_t  g_pwm_ctrl_data;
 
 
-
-
-#if POWER_TABLE_SEL_COMPMODE  == FIFO_TYPE
-
-struct fifo_buff_s_t {
-    uint8_t  buff[M_FIFO_NUM_MAX][M_FIFO_DATA_LEN]; 
-    uint8_t  head;
-    uint8_t  tail;
-};
-
-
-typedef enum {
-    FIFO_SUCCESS = 0,
-    FIFO_ERR_INVALID_LEN = -1,
-    FIFO_ERR_FULL = -2,
-    FIFO_ERR_EMPTY = -3,
-    FIFO_ERR_INVALID_INDEX = -4
-} fifo_error_t;
-
-
-
-typedef struct fifo_buff_s_t fifo_buff_s_t;
-fifo_buff_s_t  g_fifo_buff_data;
-
-
-static inline uint8_t is_fifo_empty(void) {
-    return g_fifo_buff_data.head == g_fifo_buff_data.tail;
-}
-
-static inline uint8_t is_fifo_full(void) {
-    return ((g_fifo_buff_data.head + 1) % M_FIFO_NUM_MAX) == g_fifo_buff_data.tail;
-}
-
-static inline uint8_t get_fifo_used_count(void) {
-    return (g_fifo_buff_data.head + M_FIFO_NUM_MAX - g_fifo_buff_data.tail) % M_FIFO_NUM_MAX;
-}
-
-void init_fifo_buff_compmode(void)
-{
-    g_fifo_buff_data.head = 0;
-    g_fifo_buff_data.tail = 0;
-}
-
-int8_t push_fifo_buff_compmode(uint8_t *data, uint8_t len)
-{
-    int8_t iret = 0;
-    if(data == NULL ||len == 0 || len > M_FIFO_DATA_LEN)
-        return FIFO_ERR_INVALID_LEN;    
-    if((g_fifo_buff_data.head + 1) % M_FIFO_NUM_MAX == g_fifo_buff_data.tail)
-        return FIFO_ERR_FULL;
-    memcpy(g_fifo_buff_data.buff[g_fifo_buff_data.head], data, len);
-    iret = g_fifo_buff_data.head;
-    g_fifo_buff_data.head = (g_fifo_buff_data.head + 1) % M_FIFO_NUM_MAX;
-    return iret;
-}
-
-
-
-int  pop_fifo_buff_compmode(uint8_t curindex)
-{
-    if(g_fifo_buff_data.head == g_fifo_buff_data.tail)
-        return FIFO_ERR_EMPTY;
-    if(curindex != g_fifo_buff_data.tail)
-        return FIFO_ERR_INVALID_INDEX;
-    g_fifo_buff_data.tail = (g_fifo_buff_data.tail + 1) % M_FIFO_NUM_MAX;
-    return FIFO_SUCCESS;
-
-}
-
-uint8_t * get_fifo_buff_compmode(uint8_t curindex)
-{
-    if(g_fifo_buff_data.head == g_fifo_buff_data.tail)
-        return NULL;
-    if(curindex != g_fifo_buff_data.tail)
-        return NULL;
-    return g_fifo_buff_data.buff[g_fifo_buff_data.tail];
-
-}
-
-#endif
-
-
 void  set_pwm_ctrl_data(uint8_t oid_pwm_flag, uint8_t  oid_pwm, uint8_t  laser_type)
 {
     if(oid_pwm_flag > 0)
@@ -316,17 +234,23 @@ void set_pwm_min_power_value(uint8_t min_power_value)
 
 }
 
-void  load_next_pwm_ctrl_data(uint32_t interval, int16_t  add, uint16_t count, uint8_t  mode, uint8_t  pwm_on_off, uint16_t pwmval, uint32_t speed_pulse_ticks)
+void  load_next_pwm_ctrl_data(uint32_t interval, int16_t  add, uint16_t count, uint8_t  mode, uint8_t  pwm_on_off, uint16_t pwmval, uint32_t speed_pulse_ticks, uint8_t composite_mode)
 {
       
     g_pwm_ctrl_data.interval = interval;
     g_pwm_ctrl_data.add = add;
     g_pwm_ctrl_data.count = count;
     g_pwm_ctrl_data.mode = mode;
-    g_pwm_ctrl_data.pwm_on_off = pwm_on_off;    
-    g_pwm_ctrl_data.pwmval = pwmval;
-    g_pwm_ctrl_data.speed_pulse_ticks = speed_pulse_ticks;     
-
+    g_pwm_ctrl_data.pwm_on_off = pwm_on_off;  
+    //g_pwm_ctrl_data.pwmval = pwmval; 
+    if (composite_mode == 0) 
+    {
+        g_pwm_ctrl_data.pwmval = pwmval;
+    }
+    g_pwm_ctrl_data.speed_pulse_ticks = speed_pulse_ticks;  
+    #if  M_TRACK_POWER_EN
+    output("next_old:[%c]",g_pwm_ctrl_data.pwmval); 
+    #endif       
 
 }
 
@@ -343,18 +267,12 @@ void  update_composite_chgb_dcount(void)
     {
         g_pwm_ctrl_data.composite_chgb_dcount_run = g_pwm_ctrl_data.composite_dcount;
         //last item
-        #if POWER_TABLE_SEL_COMPMODE  == FIFO_TYPE
-        pop_fifo_buff_compmode(g_pwm_ctrl_data.composite_fifo_index); 
-        #if M_OUTINFO_EN
-        output("popfifo:[%c]",g_pwm_ctrl_data.composite_fifo_index); 
-        #endif 
-        #else
+        #if POWER_TABLE_SEL_COMPMODE  == DVAR_TYPE
         #if M_OUTINFO_EN
         output("pt last item:[%c]",g_pwm_ctrl_data.composite_cindex_run); 
         #endif                 
         #endif
  
-
 
     }
 
@@ -365,7 +283,10 @@ static inline void  update_power_pwm_value(uint16_t pwmval)
 {
 
     g_pwm_ctrl_data.pwmval = pwmval;
-
+    // #if  M_TRACK_POWER_EN
+    // output("comp:[%c]",pwmval); 
+    // #endif
+    
 }
 
 
@@ -383,9 +304,7 @@ void  load_next_pwm_ctrl_data_composite(uint8_t composite_mode, uint8_t composit
         g_pwm_ctrl_data.composite_count_offset = composite_count_offset;
         if (composite_count_offset == 0)  
         {
-            #if POWER_TABLE_SEL_COMPMODE  == FIFO_TYPE
-            g_pwm_ctrl_data.p_power_table = get_fifo_buff_compmode(composite_fifo_index);
-            #else
+            #if POWER_TABLE_SEL_COMPMODE  == DVAR_TYPE
             if ((move_power_idcode > 0)&& (move_power_table != NULL))
             {
                 #if M_OUTINFO_EN
@@ -409,6 +328,9 @@ void  load_next_pwm_ctrl_data_composite(uint8_t composite_mode, uint8_t composit
                 //g_pwm_ctrl_data.composite_chgb_dcount_run
                 update_composite_chgb_dcount();
                 update_power_pwm_value(g_pwm_ctrl_data.composite_cpower_run);
+                #if  M_TRACK_POWER_EN
+                output("s:[%u:%c]",g_pwm_ctrl_data.composite_cindex_dcount_run,g_pwm_ctrl_data.composite_cpower_run); 
+                #endif                   
                 #if M_OUTINFO_EN
                 output("startmove:[%u:%u,%c]",g_pwm_ctrl_data.composite_cindex_dcount_run,g_pwm_ctrl_data.composite_chgb_dcount_run,g_pwm_ctrl_data.composite_cpower_run);                 
                 #endif                  
@@ -432,6 +354,9 @@ void  load_next_pwm_ctrl_data_composite(uint8_t composite_mode, uint8_t composit
             #endif             
             g_pwm_ctrl_data.composite_cindex_dcount_run = g_pwm_ctrl_data.composite_count_offset;
             update_power_pwm_value(g_pwm_ctrl_data.composite_cpower_run);
+            #if  M_TRACK_POWER_EN
+            output("re:[%u:%c]",g_pwm_ctrl_data.composite_cindex_dcount_run,g_pwm_ctrl_data.composite_cpower_run); 
+            #endif             
 
         }
  
@@ -458,6 +383,9 @@ void  update_composite_cindex_dcount(void)
                 g_pwm_ctrl_data.composite_cpower_run = g_pwm_ctrl_data.p_power_table[index + 1];
                 update_composite_chgb_dcount();
                 update_power_pwm_value(g_pwm_ctrl_data.composite_cpower_run);
+                #if  M_TRACK_POWER_EN
+                output("r:[%u:%c]",g_pwm_ctrl_data.composite_cindex_dcount_run,g_pwm_ctrl_data.composite_cpower_run); 
+                #endif                
                 #if M_OUTINFO_EN
                 output("next item:[%c]",g_pwm_ctrl_data.composite_cindex_run); 
                 output("value:[%u:%u,%c]",g_pwm_ctrl_data.composite_cindex_dcount_run,g_pwm_ctrl_data.composite_chgb_dcount_run,g_pwm_ctrl_data.composite_cpower_run);                 
@@ -753,10 +681,8 @@ stepper_load_next_pwm(struct stepper_pwm *s)
     #endif   
     #ifdef M_PWM_OUT_EN
     //set_pwm_pulse_width(s->oid_pwm_flag,s->oid_pwm, 50);
-    load_next_pwm_ctrl_data(m->interval, s->add, s->count, m->mode, m->pwm_on_off, m->pwmval, m->speed_pulse_ticks);
-    #if POWER_TABLE_SEL_COMPMODE  == FIFO_TYPE
-    load_next_pwm_ctrl_data_composite(m->composite_mode, m->composite_fifo_index, m->composite_itemlen, m->composite_count_offset, m->composite_dcount, 0, NULL);
-    #else
+    load_next_pwm_ctrl_data(m->interval, s->add, s->count, m->mode, m->pwm_on_off, m->pwmval, m->speed_pulse_ticks, m->composite_mode);
+    #if POWER_TABLE_SEL_COMPMODE  == DVAR_TYPE
     load_next_pwm_ctrl_data_composite(m->composite_mode, m->composite_fifo_index, m->composite_itemlen, m->composite_count_offset, m->composite_dcount,m->power_idcode, m->powertable);
     #endif
     update_next_pwm_ctrl_data(M_PROCESS_PWM_START, s->count, m->interval);   //+s->add
@@ -896,9 +822,6 @@ command_config_stepper_pwm(uint32_t *args)
     set_pwm_ctrl_data(0, 0, 0);
     set_pwm_pause_resume_flag(0);
     set_pwm_min_power_value(0);
-    #if POWER_TABLE_SEL_COMPMODE  == FIFO_TYPE
-    init_fifo_buff_compmode();
-    #endif
     #endif
     s->dir_pin = gpio_out_setup(args[2], 0);
     s->position = -POSITION_BIAS;
@@ -975,6 +898,8 @@ command_queue_step_pwm(uint32_t *args)
                 s->composite_mode = 0;
                                 
             }
+            #if  1
+            // bug  
             if (s->pre_endcid != s->endcid)
             {
                 s->composite_mode = 0;
@@ -982,7 +907,8 @@ command_queue_step_pwm(uint32_t *args)
                 #if M_OUTINFO_EN
                 output("restart gcode:[%c]",s->endcid); 
                 #endif                  
-            }            
+            }  
+            #endif          
             // if (s->pre_pwmval != s->pwmval)
             // {
             //     s->composite_mode = 0;
@@ -1010,6 +936,7 @@ command_queue_step_pwm(uint32_t *args)
         if (s->composite_count_offset >= s->composite_dcount)
         {
             s->composite_mode = 0;
+
         }
     }
 #endif
@@ -1256,27 +1183,7 @@ command_powerfunc_table_stepper_pwm(uint32_t *args)
     uint8_t data_len = args[2];
     uint8_t *data = command_decode_ptr(args[3]); 
     //irq_enable();
-    #if POWER_TABLE_SEL_COMPMODE  == FIFO_TYPE
-    int8_t iret = push_fifo_buff_compmode(data, data_len);
-    if(iret < 0)
-    {
-        if (iret == FIFO_ERR_FULL)
-        {
-            shutdown("FIFO buffer overflow");
-        }
-        else
-        {
-            shutdown("FIFO buffer invalid length");
-        }
-    }
-    else
-    {
-        if (data_len & 0x01)
-            shutdown("Invalid length, must be even");        
-        s->composite_itemlen = data_len >> 1 ; //data_len/2
-        s->composite_fifo_index = iret;
-    }
-    #else
+    #if POWER_TABLE_SEL_COMPMODE  == DVAR_TYPE
     s->power_idcode =  (s->power_idcode & M_MAX_IDCODE_MASK) + 1;
     if (data_len & 0x01)
         shutdown("Invalid length, must be even");
@@ -1308,27 +1215,7 @@ command_powerfunc_speed_table_stepper_pwm(uint32_t *args)
     uint8_t data_len = args[3];
     uint8_t *data = command_decode_ptr(args[4]); 
     irq_enable();
-    #if POWER_TABLE_SEL_COMPMODE  == FIFO_TYPE
-    int8_t iret = push_fifo_buff_compmode(data, data_len);
-    if(iret < 0)
-    {
-        if (iret == FIFO_ERR_FULL)
-        {
-            shutdown("FIFO buffer overflow");
-        }
-        else
-        {
-            shutdown("FIFO buffer invalid length");
-        }
-    }
-    else
-    {
-        if (data_len & 0x01)
-            shutdown("Invalid length, must be even");
-        s->composite_itemlen = data_len >> 1 ; //data_len/2
-        s->composite_fifo_index = iret;
-    }
-    #else
+    #if POWER_TABLE_SEL_COMPMODE  == DVAR_TYPE
     s->power_idcode =  (s->power_idcode & M_MAX_IDCODE_MASK) + 1;
     if (data_len & 0x01)
         shutdown("Invalid length, must be even");
