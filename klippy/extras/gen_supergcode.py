@@ -32,7 +32,7 @@ class GenSuperGcode:
 
         self.blocklen = config.getint('blocklen', 8, minval=2, maxval=24)
         self.enable = config.getint('enable', 1, minval=0, maxval=1)
-        self.min_distancemm = config.getfloat('min_distance', 0.001, above=0.0)
+        self.min_distancemm = config.getfloat('min_distance', 0.0005, above=0.0)
         #self.pmerge_max = config.getint('pmerge_max', 8, minval=0, maxval=32)
         self.long_distancemm = config.getfloat('long_distance', 2., above=1.0)
         self.debug_flog_en = config.getint('debug_flog_en', 0, minval=0, maxval=1)
@@ -387,7 +387,7 @@ class GenSuperGcode:
                 statuscode = 2            
             return statuscode, new_line + linestr     
 
-        if  linestr.startswith('G1'):
+        if  linestr.startswith('G1') and ('P' not in linestr):
             itemdata = self.parse_gcode(linestr, self.absolute_coord, 1)
             if (itemdata.longdist_flag == 0) and (itemdata.axis_flags & self.PARAM_S):
                 statuscode, new_line = self.is_merge_gcode(itemdata)

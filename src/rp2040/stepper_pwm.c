@@ -1217,7 +1217,7 @@ command_set_pwm_sw_endc_stepper_pwm(uint32_t *args)
     irq_disable();
     s->pwm_on_off = args[1];
     s->endcid = args[2]; 
-    s->pre_endcid = 0;   
+    //s->pre_endcid = 0;   
     irq_enable();
     #if M_OUTINFO_EN
     output("Gx_sync_endc:[%c,%c]",args[1],args[2]); 
@@ -1235,7 +1235,7 @@ command_set_pwmpower_endc_stepper_pwm(uint32_t *args)
     irq_disable();
     s->pwmval = args[1];
     s->endcid = args[2];
-    s->pre_endcid = 0;   
+    //s->pre_endcid = 0;   
     irq_enable();
     #if M_OUTINFO_EN
     output("pwmval_sync_endc:[%c,%c]",args[1],args[2]); 
