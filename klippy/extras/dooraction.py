@@ -4,15 +4,18 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
+#True: key is pressed
+#False: key is released
+
 
 class DoorAction:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.name = config.get_name().split(' ')[-1]
-        self.left_state = 0
-        self.right_state = 0
-        self.last_state = 0
-        self.pre_laststate = 0
+        self.left_state = False
+        self.right_state = False
+        self.last_state = False
+        self.pre_laststate = None
         
         self.inside_handlegcode = False
         buttons = self.printer.load_object(config, "buttons")
@@ -21,9 +24,9 @@ class DoorAction:
         self.closedoor_template = gcode_macro.load_template(config,
                                                           'closedoor_gcode', '')
         self.gcode = self.printer.lookup_object('gcode')
-        self.gcode.register_mux_command("QUERY_DOOR", "DOOR", self.name,
-                                        self.cmd_QUERY_DOOR,
-                                        desc=self.cmd_QUERY_DOOR_help)
+        # self.gcode.register_mux_command("QUERY_DOOR", "DOOR", self.name,
+        #                                 self.cmd_QUERY_DOOR,
+        #                                 desc=self.cmd_QUERY_DOOR_help)
 
         self.register_doorbutton(config, 'left_pin', self.left_callback)
         chkleftpin = config.get('left_pin', None)
@@ -34,6 +37,8 @@ class DoorAction:
         if chkrightpin is None:
             self.right_state = True          
 
+        self.gcode.register_command("QUERY_DOOR", self.cmd_QUERY_DOOR,
+                                    desc=self.cmd_QUERY_DOOR_help)
         self.gcode.register_command("CHK_DOOR", self.cmd_CHK_DOOR)  
 
     def cmd_CHK_DOOR(self, gcmd):
@@ -81,16 +86,14 @@ class DoorAction:
 
     cmd_QUERY_DOOR_help = "Report on the state of a door"
     def cmd_QUERY_DOOR(self, gcmd):
-        gcmd.respond_info(self.name + ": " + self.get_status()['state'])
+        gcmd.respond_info(self.name + ": " + self.get_status()['state'] + ", left: " + str(self.get_status()['lstate']) + ", right: " + str(self.get_status()['rstate']))
 
     def door_callback(self, eventtime):
-        #self.last_state = False
         cur_state = False
         if self.left_state and self.right_state:
-            #self.last_state = True
             cur_state = True  
         self.last_state =  cur_state
-        if  self.pre_laststate !=  self.last_state:     
+        if self.pre_laststate is None or self.pre_laststate != self.last_state:     
             #template = self.opendoor_template
             template = self.closedoor_template
             state = self.last_state
@@ -109,16 +112,13 @@ class DoorAction:
         self.pre_laststate  = self.last_state         
 
     def get_status(self, eventtime=None):
-        if self.last_state:
-            return {
-                   'state': "CLOSE",
-                   'isclose': self.last_state
-                   }
-                   
         return {
-                'state': "OPEN",
-                'isclose': self.last_state                
-                }
+            'state': "CLOSE" if self.last_state else "OPEN",
+            'isclose': self.last_state,
+            'lstate': self.left_state,
+            'rstate': self.right_state
+        }
+
 
 def load_config_prefix(config):
     return DoorAction(config)

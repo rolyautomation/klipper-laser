@@ -12,14 +12,21 @@ Y_MAX_IND = 3
 Z_MIN_IND = 4
 Z_MAX_IND = 5
 
+X_ORIGIN_IND = 0
+Y_ORIGIN_IND = 1
+Z_ORIGIN_IND = 2
+
+
 
 class LimitSwitchCheck:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.name = config.get_name().split(' ')[-1]
+        self.reactor = self.printer.get_reactor()
         #self.switch_enalbe = [1, 1, 1, 1, 1, 1]
         self.switch_enalbe = [0, 0, 0, 0, 0, 0]
         self.last_state = [0, 0, 0, 0, 0, 0]
+        self.original_state = [0, 0, 0]
         self.inside_handlegcode = False
         buttons = self.printer.load_object(config, "buttons")
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
@@ -38,32 +45,77 @@ class LimitSwitchCheck:
         self.register_switchbutton(config, 'z_min_pin', self.z_min_callback)
         self.register_switchbutton(config, 'z_max_pin', self.z_max_callback)  
 
+        self.auto_recover = config.getboolean('auto_recover', True)  
+        self.recovery_delay = config.getfloat('recovery_delay', 5., above=0.)   
+
         '''
         self.printer.register_event_handler("homing:home_rails_begin",
                                             self._handle_home_rails_begin)
         self.printer.register_event_handler("homing:home_rails_end",
                                             self._handle_home_rails_end)
         '''                                    
+        self.printer.register_event_handler("klippy:shutdown",
+                                          self.handle_shutdown_hit) 
 
-        self.gcode.register_command("OPEN_LSWCHECK", self.cmd_OPEN_LSWCHECK)                                            
+        self.gcode.register_command("OPEN_LSWCHECK", self.cmd_OPEN_LSWCHECK)  
+        self.gcode.register_command("CRASH_LIMIT", self.cmd_CRASH_LIMIT) 
+        self.crash_limit_exist = False
+        
+        self.printer.register_event_handler("limitswitch:xyz_origin",
+                                    self.handle_xyz_origin)  
 
+
+    def handle_xyz_origin(self, axis_num):
+        logging.info("handle_xyz_origin=%d",axis_num) 
+        self.original_state[axis_num] = 1
+
+    def handle_shutdown_hit(self):
+        if not self.auto_recover:
+            return
+        if not self.crash_limit_exist:
+            return
+        self.reactor.register_callback(
+            self.do_auto_recovery, self.reactor.monotonic() + self.recovery_delay)
+    
+    def do_auto_recovery(self, eventtime):
+        try:
+            logging.info("do auto recovery start :%s\n\n",self.crash_limit_exist)  
+            # wait time 5s
+            self.gcode.run_script('FIRMWARE_RESTART')
+            #self.gcode.run_script('RESTART')
+            #self.crash_limit_exist = False
+            logging.info("do auto recovery end :%s\n\n",self.crash_limit_exist)   
+            #self.reactor.pause(self.recovery_delay)
+            #self.gcode.run_script('G28')
+            # if self.is_paused:
+            #     self.cmd_RESUME(None)
+        except:
+            logging.exception("Auto recovery failed")   
+
+    def cmd_CRASH_LIMIT(self, gcmd):
+        self.original_state = [0, 0, 0]
+        self.crash_limit_exist = True
+        self.printer.invoke_shutdown("Shutdown due to crash limit")
+        
     def cmd_OPEN_LSWCHECK(self, gcmd):
         en_flag  =  gcmd.get_int('E', 1, minval=0, maxval=10)
-        states = [0, 0, 0, 0, 0, 0]
         if  en_flag > 3 :
+            states = [1, 1, 0, 1, 1, 1]
+        elif en_flag == 3:    
             states = [1, 1, 1, 1, 1, 0]
         elif en_flag == 2:    
             states = [1, 1, 0, 1, 1, 0]    
         elif en_flag == 1:    
-            states = [1, 1, 1, 1, 1, 1]    
-
-        switches = [X_MIN_IND, Y_MIN_IND, Z_MIN_IND, 
-                   X_MAX_IND, Y_MAX_IND, Z_MAX_IND]
-        for switch, state in zip(switches, states):
-            self.switch_enalbe[switch] = state
+            states = [1, 1, 1, 1, 1, 1] 
+        elif en_flag == 0:    
+            states = [0, 0, 0, 0, 0, 0]    
+        if en_flag >= 0:
+            switches = [X_MIN_IND, Y_MIN_IND, Z_MIN_IND, 
+                       X_MAX_IND, Y_MAX_IND, Z_MAX_IND]
+            for switch, state in zip(switches, states):
+                self.switch_enalbe[switch] = state
         msgstr = "sw_enalbe:" + str(self.switch_enalbe)
         gcmd.respond_info(msgstr)
-
 
     def get_zlsw(self):
         return self.last_state[Z_MIN_IND], self.last_state[Z_MAX_IND]
@@ -189,6 +241,7 @@ class LimitSwitchCheck:
         lsw_status['y_max'] = self.last_state[Y_MAX_IND]
         lsw_status['z_min'] = self.last_state[Z_MIN_IND]
         lsw_status['z_max'] = self.last_state[Z_MAX_IND]        
+        lsw_status['cl_exist'] = self.crash_limit_exist    
         return dict(lsw_status)
 
 
