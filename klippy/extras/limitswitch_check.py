@@ -26,6 +26,7 @@ class LimitSwitchCheck:
         #self.switch_enalbe = [1, 1, 1, 1, 1, 1]
         self.switch_enalbe = [0, 0, 0, 0, 0, 0]
         self.last_state = [0, 0, 0, 0, 0, 0]
+        self.cur_limit_state = 0
         self.original_state = [0, 0, 0]
         self.origin_mask = 0
         self.inside_handlegcode = False
@@ -184,6 +185,7 @@ class LimitSwitchCheck:
             buttons.register_adc_button(pin, amin, amax, pullup, callback)
 
     def lswt_callback(self, eventtime):
+        self.cur_limit_state = sum(1 << i for i, val in enumerate(self.last_state) if val != 0) 
         state = 0
         for index, value in enumerate(self.switch_enalbe):
             if value and self.last_state[index] :
@@ -247,6 +249,7 @@ class LimitSwitchCheck:
         lsw_status['z_min'] = self.last_state[Z_MIN_IND]
         lsw_status['z_max'] = self.last_state[Z_MAX_IND]        
         #lsw_status['cl_exist'] = self.crash_limit_exist 
+        lsw_status['climit_state'] = self.cur_limit_state
         lsw_status['org_mask'] = self.origin_mask            
         return dict(lsw_status)
 
