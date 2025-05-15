@@ -12,8 +12,9 @@ class DoorAction:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.name = config.get_name().split(' ')[-1]
-        self.left_state = False
-        self.right_state = False
+        self.reactor = self.printer.get_reactor()
+        self.left_state = 0
+        self.right_state = 0
         self.last_state = False
         self.pre_laststate = None
         
@@ -31,15 +32,28 @@ class DoorAction:
         self.register_doorbutton(config, 'left_pin', self.left_callback)
         chkleftpin = config.get('left_pin', None)
         if chkleftpin is None:
-            self.left_state = True    
+            self.left_state = 1    
         self.register_doorbutton(config, 'right_pin', self.right_callback)
         chkrightpin = config.get('right_pin', None)
         if chkrightpin is None:
-            self.right_state = True          
+            self.right_state = 1          
 
         self.gcode.register_command("QUERY_DOOR", self.cmd_QUERY_DOOR,
                                     desc=self.cmd_QUERY_DOOR_help)
         self.gcode.register_command("CHK_DOOR", self.cmd_CHK_DOOR)  
+
+        self.printer.register_event_handler("klippy:connect",
+                                            self.handle_connect)        
+
+    def handle_connect(self):
+        #eventtm = self.reactor.monotonic()
+        #self.door_callback(eventtm)
+        cur_state = False
+        if self.left_state and self.right_state:
+            cur_state = True  
+        self.last_state =  cur_state  
+        self.pre_laststate = self.last_state      
+        pass        
 
     def cmd_CHK_DOOR(self, gcmd):
         if self.last_state:
@@ -93,6 +107,7 @@ class DoorAction:
         if self.left_state and self.right_state:
             cur_state = True  
         self.last_state =  cur_state
+        #logging.info("door callback :%s\n\n",self.last_state)  
         if self.pre_laststate is None or self.pre_laststate != self.last_state:     
             #template = self.opendoor_template
             template = self.closedoor_template
@@ -103,6 +118,7 @@ class DoorAction:
                     #template = self.closedoor_template
                     template = self.opendoor_template
                 try:
+                    #logging.info("door action :%s\n\n",state)  
                     self.gcode.run_script(template.render())
                 except:
                     logging.exception("Script running error")
