@@ -27,6 +27,7 @@ class LimitSwitchCheck:
         self.switch_enalbe = [0, 0, 0, 0, 0, 0]
         self.last_state = [0, 0, 0, 0, 0, 0]
         self.original_state = [0, 0, 0]
+        self.origin_mask = 0
         self.inside_handlegcode = False
         buttons = self.printer.load_object(config, "buttons")
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
@@ -67,8 +68,11 @@ class LimitSwitchCheck:
 
     def handle_xyz_origin(self, axis_num):
         logging.info("handle_xyz_origin=%d",axis_num) 
-        self.original_state[axis_num] = 1
-
+        if axis_num >= 0 and axis_num <= 2:
+            self.original_state[axis_num] = 1
+            # Calculate binary mask where index i corresponds to 2^i
+            self.origin_mask = sum(1 << i for i, val in enumerate(self.original_state) if val != 0)  
+    
     def handle_shutdown_hit(self):
         if not self.auto_recover:
             return
@@ -76,15 +80,16 @@ class LimitSwitchCheck:
             return
         self.reactor.register_callback(
             self.do_auto_recovery, self.reactor.monotonic() + self.recovery_delay)
+        self.crash_limit_exist = False            
     
     def do_auto_recovery(self, eventtime):
         try:
-            logging.info("do auto recovery start :%s\n\n",self.crash_limit_exist)  
+            #logging.info("do auto recovery start :%s\n\n",self.crash_limit_exist)  
             # wait time 5s
             self.gcode.run_script('FIRMWARE_RESTART')
             #self.gcode.run_script('RESTART')
             #self.crash_limit_exist = False
-            logging.info("do auto recovery end :%s\n\n",self.crash_limit_exist)   
+            #logging.info("do auto recovery end :%s\n\n",self.crash_limit_exist)   
             #self.reactor.pause(self.recovery_delay)
             #self.gcode.run_script('G28')
             # if self.is_paused:
@@ -241,7 +246,8 @@ class LimitSwitchCheck:
         lsw_status['y_max'] = self.last_state[Y_MAX_IND]
         lsw_status['z_min'] = self.last_state[Z_MIN_IND]
         lsw_status['z_max'] = self.last_state[Z_MAX_IND]        
-        lsw_status['cl_exist'] = self.crash_limit_exist    
+        #lsw_status['cl_exist'] = self.crash_limit_exist 
+        lsw_status['org_mask'] = self.origin_mask            
         return dict(lsw_status)
 
 

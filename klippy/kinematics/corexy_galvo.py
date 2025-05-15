@@ -195,8 +195,9 @@ class CoreXYGalvoKinematics:
 
 
     def send_axis_origin_msg(self, axis_num):
-        if axis_num == 2:
-            self.printer.send_event("zctrlpanel:zaxis_origin", axis_num)
+        self.printer.send_event("limitswitch:xyz_origin", axis_num)
+        # if axis_num == 2:
+        #     self.printer.send_event("zctrlpanel:zaxis_origin", axis_num)
 
 
     def jogrun_sta(self, axes_xyz):

@@ -131,9 +131,11 @@ class ZctrlPanel:
         self.gcode.register_command("SW_AS_KEYM", self.cmd_SW_AS_KEYM)  
         self.gcode.register_command("LOOK_AS_KEYM", self.cmd_LOOK_AS_KEYM)   
 
-        self.printer.register_event_handler("zctrlpanel:zaxis_origin",
-                                            self.handle_zaxis_origin)          
+        # self.printer.register_event_handler("zctrlpanel:zaxis_origin",
+        #                                     self.handle_zaxis_origin)          
 
+        self.printer.register_event_handler("limitswitch:xyz_origin",
+                                            self.handle_zaxis_origin)  
 
 
     def handle_zaxis_origin(self, axis_num):

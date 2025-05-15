@@ -4,6 +4,7 @@
 
 #define MAX_PTABLE_LEN  (64)
 //M_FIFO_DATA_LEN
+//M_PTABLE_BYTE_MLEN
 
 struct power_table_s {
     unsigned char ddata[MAX_PTABLE_LEN];
