@@ -124,7 +124,7 @@ class DoorAction:
                     logging.exception("Script running error")
                 self.inside_handlegcode = False
             else:
-                logging.exception("Script running repeat, switch fast") 
+                logging.warning("script running repeat, door switch fast") 
         self.pre_laststate  = self.last_state         
 
     def get_status(self, eventtime=None):
