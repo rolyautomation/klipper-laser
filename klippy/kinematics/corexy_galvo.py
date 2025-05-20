@@ -177,6 +177,11 @@ class CoreXYGalvoKinematics:
     def home(self, homing_state):
         # Each axis is homed independently and in order
         for axis in homing_state.get_axes():
+            if axis < 2:
+                if self.lswcheck is None:
+                    self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
+                if self.lswcheck is not None:
+                    self.lswcheck.set_home_pstatus(True)                
             rail = self.rails[axis]
             # Determine movement
             position_min, position_max = rail.get_range()
@@ -302,6 +307,26 @@ class CoreXYGalvoKinematics:
                 if self.limits[i][0] > self.limits[i][1]:
                     raise move.move_error("Must home axis ABC first")
                 raise move.move_error()
+
+        if self.lswcheck is None:
+            self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
+        if self.lswcheck is not None and self.lswcheck.cur_limit_state and not self.lswcheck.allow_gmove01:
+            limit_state = self.lswcheck.cur_limit_state
+            msg = "Cannot move: "
+            if limit_state & 0x01:
+                msg += "X_MIN "
+            if limit_state & 0x02:
+                msg += "X_MAX "                
+            if limit_state & 0x04:
+                msg += "Y_MIN "
+            if limit_state & 0x08:
+                msg += "Y_MAX "
+            msg += "limit switch triggered,home axis first"
+            raise move.move_error(msg)
+        elif self.lswcheck is not None and self.lswcheck.cur_limit_state and self.lswcheck.allow_gmove01:
+            # move: G0 X0 Y0
+            pass
+            
 
     def check_move(self, move):      
         # Check endstops as needed

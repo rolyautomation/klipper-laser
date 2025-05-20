@@ -12,6 +12,8 @@ Y_MAX_IND = 3
 Z_MIN_IND = 4
 Z_MAX_IND = 5
 
+XY_BITMASK = 0x000F
+
 X_ORIGIN_IND = 0
 Y_ORIGIN_IND = 1
 Z_ORIGIN_IND = 2
@@ -24,7 +26,8 @@ class LimitSwitchCheck:
         self.name = config.get_name().split(' ')[-1]
         self.reactor = self.printer.get_reactor()
         #self.switch_enalbe = [1, 1, 1, 1, 1, 1]
-        self.switch_enalbe = [0, 0, 0, 0, 0, 0]
+        #self.switch_enalbe = [0, 0, 0, 0, 0, 0]
+        self.switch_enalbe = [1, 1, 1, 1, 0, 0]
         self.last_state = [0, 0, 0, 0, 0, 0]
         self.cur_limit_state = 0
         self.original_state = [0, 0, 0]
@@ -62,18 +65,74 @@ class LimitSwitchCheck:
         self.gcode.register_command("OPEN_LSWCHECK", self.cmd_OPEN_LSWCHECK)  
         self.gcode.register_command("CRASH_LIMIT", self.cmd_CRASH_LIMIT) 
         self.crash_limit_exist = False
-        
+        self.is_home_pstatus = False         
+        self.allow_trigger = False
+        # False: check limit switch, True: allow gmove01 is True,when limit switch triggered
+        self.allow_gmove01 = False
+        self.gcode.register_command("SET_HOME_STATUS", self.cmd_SET_HOME_STATUS)
+        self.gcode.register_command("SET_ALLOW_TRIGGER", self.cmd_SET_ALLOW_TRIGGER)
+        self.gcode.register_command("CHK_ALLOW_TRIGGER", self.cmd_CHK_ALLOW_TRIGGER)
+        self.gcode.register_command("SET_ALLOW_GMOVE01", self.cmd_SET_ALLOW_GMOVE01)
+        self.gcode.register_command("CHK_ALLOW_GMOVE01", self.cmd_CHK_ALLOW_GMOVE01)
         self.printer.register_event_handler("limitswitch:xyz_origin",
                                     self.handle_xyz_origin)  
 
+    def cmd_SET_HOME_STATUS(self, gcmd):
+        shome_status = gcmd.get_int('S',1, minval=0, maxval=10) 
+        if shome_status == 1:
+            self.is_home_pstatus = True 
+        elif shome_status == 0:
+            self.is_home_pstatus = False 
+        msg = "home status=%s " % (self.is_home_pstatus, )            
+        gcmd.respond_info(msg) 
+
+    def cmd_SET_ALLOW_TRIGGER(self, gcmd):
+        allow_trigger_en = gcmd.get_int('S',1, minval=0, maxval=10) 
+        if allow_trigger_en == 1:
+            self.allow_trigger = True 
+        elif allow_trigger_en == 0:
+            self.allow_trigger = False 
+        msg = "allow trigger=%s " % (self.allow_trigger, )            
+        gcmd.respond_info(msg) 
+
+    #  use once in soft G28
+    def cmd_CHK_ALLOW_TRIGGER(self, gcmd):
+        chk_trigger_en = gcmd.get_int('S',1, minval=0, maxval=10) 
+        if self.cur_limit_state == 0 and chk_trigger_en == 1:
+            self.allow_trigger = True 
+        elif self.cur_limit_state > 0 and chk_trigger_en == 1:
+            self.allow_trigger = False 
+        msg = "chk allow trigger=%s " % (self.allow_trigger, )            
+        gcmd.respond_info(msg)   
+
+    def cmd_SET_ALLOW_GMOVE01(self, gcmd):
+        stype = gcmd.get_int('S',1, minval=0, maxval=10) 
+        #restrict  G32  XY  
+        if stype == 1 and self.origin_mask >= 3 and self.cur_limit_state > 0:
+            self.allow_gmove01 = True 
+        elif stype == 0:
+            self.allow_gmove01 = False 
+        msg = "allow gmove01=%s " % (self.allow_gmove01, )            
+        gcmd.respond_info(msg) 
+
+    def cmd_CHK_ALLOW_GMOVE01(self, gcmd):
+        pass        
 
     def handle_xyz_origin(self, axis_num):
         logging.info("handle_xyz_origin=%d",axis_num) 
         if axis_num >= 0 and axis_num <= 2:
             self.original_state[axis_num] = 1
             # Calculate binary mask where index i corresponds to 2^i
-            self.origin_mask = sum(1 << i for i, val in enumerate(self.original_state) if val != 0)  
-    
+            self.origin_mask = sum(1 << i for i, val in enumerate(self.original_state) if val != 0)
+            if axis_num != 2:
+                self.set_home_pstatus(False)
+            #if self.origin_mask >= 3:
+            #    self.is_home_pstatus = False
+    def set_home_pstatus(self, status):                
+        self.is_home_pstatus = status
+        self.allow_trigger = False
+
+
     def handle_shutdown_hit(self):
         if not self.auto_recover:
             return
@@ -184,24 +243,43 @@ class LimitSwitchCheck:
         else:
             buttons.register_adc_button(pin, amin, amax, pullup, callback)
 
+
     def lswt_callback(self, eventtime):
-        self.cur_limit_state = sum(1 << i for i, val in enumerate(self.last_state) if val != 0) 
+        self.cur_limit_state = (sum(1 << i for i, val in enumerate(self.last_state) if val != 0)) & XY_BITMASK
+        if  self.is_home_pstatus:
+            return
         state = 0
         for index, value in enumerate(self.switch_enalbe):
             if value and self.last_state[index] :
                 state = state + 1
         if not self.inside_handlegcode :
             self.inside_handlegcode = True
-            if  state:
+            logging.info("lswt:%s,%s\n",state,self.allow_trigger) 
+            if  state and self.allow_trigger:
                 template = self.press_template
+                self.allow_trigger = False
+                logging.info("trigger once\n")
+            elif not state and self.allow_trigger:
+                #template = ""
+                logging.info("normal mode\n")
+                return
+            elif not state and not self.allow_trigger:
+                #manual mode, allow move continue in soft G28
+                self.allow_trigger = True            
+                logging.info("auto start allow_trigger=%s\n", self.allow_trigger)                
+                return
+            else:
+                # state for 1 and allow_trigger for 0
+                logging.info("stop ignored state,allow_trigger=%s\n", self.allow_trigger) 
+                pass
+                return
                 try:
                     self.gcode.run_script(template.render())
                 except:
                     logging.exception("Script running error")
-            self.inside_handlegcode = False
+            self.inside_handlegcode = False            
         else:
-            logging.exception("Script running repeat, limit switch fast")    
-
+            logging.warning("Script running repeat,lswt switch fast")    
 
     cmd_QUERY_LSWT_help = "Report on the state of limit switch"
     def cmd_QUERY_LSWT(self, gcmd):
@@ -250,7 +328,9 @@ class LimitSwitchCheck:
         lsw_status['z_max'] = self.last_state[Z_MAX_IND]        
         #lsw_status['cl_exist'] = self.crash_limit_exist 
         lsw_status['climit_state'] = self.cur_limit_state
-        lsw_status['org_mask'] = self.origin_mask            
+        lsw_status['org_mask'] = self.origin_mask  
+        lsw_status['is_home_pstatus'] = self.is_home_pstatus
+        lsw_status['allow_trigger'] = self.allow_trigger          
         return dict(lsw_status)
 
 
