@@ -132,6 +132,7 @@ class CoreXYGalvoKinematics:
         
         # Set placeholder limits
         self.limits = [(1.0, -1.0)] * (3+3)
+        self.lswcheck = None
 
     def get_steppers(self):
         return [s for rail in self.rails for s in rail.get_steppers()]
@@ -308,6 +309,9 @@ class CoreXYGalvoKinematics:
                     raise move.move_error("Must home axis ABC first")
                 raise move.move_error()
 
+
+
+    def _check_limitswitch(self, move):
         if self.lswcheck is None:
             self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
         if self.lswcheck is not None and self.lswcheck.cur_limit_state and not self.lswcheck.allow_gmove01:
@@ -326,7 +330,6 @@ class CoreXYGalvoKinematics:
         elif self.lswcheck is not None and self.lswcheck.cur_limit_state and self.lswcheck.allow_gmove01:
             # move: G0 X0 Y0
             pass
-            
 
     def check_move(self, move):      
         # Check endstops as needed
@@ -339,7 +342,8 @@ class CoreXYGalvoKinematics:
             self._check_endstops(move)
         elif move.axes_d[2]:
             self._check_endstops(move)
-
+        # Check limitswitch    
+        self._check_limitswitch(move)
         # For G0 moves, set the speed to preset g0 speed
         if not move.pwmsw:
             move.set_speed_for_g0(self.g0_galvo_velocity)

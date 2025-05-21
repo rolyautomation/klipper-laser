@@ -163,7 +163,7 @@ class LimitSwitchCheck:
         self.printer.invoke_shutdown("Shutdown due to crash limit")
         
     def cmd_OPEN_LSWCHECK(self, gcmd):
-        en_flag  =  gcmd.get_int('E', 1, minval=0, maxval=10)
+        en_flag  =  gcmd.get_int('E', 1, minval=-10, maxval=10)
         if  en_flag > 3 :
             states = [1, 1, 0, 1, 1, 1]
         elif en_flag == 3:    
