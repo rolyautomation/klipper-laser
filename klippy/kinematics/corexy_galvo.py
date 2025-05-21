@@ -314,6 +314,8 @@ class CoreXYGalvoKinematics:
     def _check_limitswitch(self, move):
         if self.lswcheck is None:
             self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
+        if  self.is_home_pstatus:
+            return            
         if self.lswcheck is not None and self.lswcheck.cur_limit_state and not self.lswcheck.allow_gmove01:
             limit_state = self.lswcheck.cur_limit_state
             msg = "Cannot move: "

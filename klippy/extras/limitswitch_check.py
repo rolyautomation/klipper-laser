@@ -334,7 +334,8 @@ class LimitSwitchCheck:
         lsw_status['climit_state'] = self.cur_limit_state
         lsw_status['org_mask'] = self.origin_mask  
         lsw_status['is_home_pstatus'] = self.is_home_pstatus
-        lsw_status['allow_trigger'] = self.allow_trigger          
+        lsw_status['allow_trigger'] = self.allow_trigger
+        lsw_status['allow_g01'] = self.allow_gmove01          
         return dict(lsw_status)
 
 
