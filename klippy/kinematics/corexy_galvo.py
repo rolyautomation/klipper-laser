@@ -133,6 +133,7 @@ class CoreXYGalvoKinematics:
         # Set placeholder limits
         self.limits = [(1.0, -1.0)] * (3+3)
         self.lswcheck = None
+        self.gcode = None
 
     def get_steppers(self):
         return [s for rail in self.rails for s in rail.get_steppers()]
@@ -181,8 +182,11 @@ class CoreXYGalvoKinematics:
             self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
         if self.lswcheck is not None:
             self.lswcheck.set_home_pstatus(True)  
-        #logging.info("homing axes: %s \n",homing_state.get_axes())              
-        for axis in homing_state.get_axes():
+        #logging.info("homing axes: %s \n",homing_state.get_axes())
+        axes_home = homing_state.get_axes()  
+        if self.gcode is None:
+            self.gcode = self.printer.lookup_object('gcode',None)           
+        for axis in axes_home:
             # if axis < 2:
             #     if self.lswcheck is None:
             #         self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
@@ -204,6 +208,15 @@ class CoreXYGalvoKinematics:
             #reason: A: soft reset zero 
             self.send_axis_origin_msg(axis)
         if self.lswcheck is not None:
+            runstr = None
+            if 0 in axes_home and 1 in axes_home:
+                runstr = "G90\n G0 X0 Y0"
+            elif 0 in axes_home:
+                runstr = "G90\n G0 X0"
+            elif 1 in axes_home:
+                runstr = "G90\n G0 Y0"
+            if runstr is not None and self.gcode is not None:
+                self.gcode.run_script_from_command(runstr)
             self.printer.send_event("limitswitch:xyz_origin", 4)
         
     def send_axis_origin_msg(self, axis_num):
