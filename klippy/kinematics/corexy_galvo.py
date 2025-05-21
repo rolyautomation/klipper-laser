@@ -177,12 +177,17 @@ class CoreXYGalvoKinematics:
         self.limits[2] = (1.0, -1.0)
     def home(self, homing_state):
         # Each axis is homed independently and in order
+        if self.lswcheck is None:
+            self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
+        if self.lswcheck is not None:
+            self.lswcheck.set_home_pstatus(True)  
+        #logging.info("homing axes: %s \n",homing_state.get_axes())              
         for axis in homing_state.get_axes():
-            if axis < 2:
-                if self.lswcheck is None:
-                    self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
-                if self.lswcheck is not None:
-                    self.lswcheck.set_home_pstatus(True)                
+            # if axis < 2:
+            #     if self.lswcheck is None:
+            #         self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
+            #     if self.lswcheck is not None:
+            #         self.lswcheck.set_home_pstatus(True)                
             rail = self.rails[axis]
             # Determine movement
             position_min, position_max = rail.get_range()
@@ -198,14 +203,14 @@ class CoreXYGalvoKinematics:
             homing_state.home_rails([rail], forcepos, homepos)
             #reason: A: soft reset zero 
             self.send_axis_origin_msg(axis)
-
-
+        if self.lswcheck is not None:
+            self.printer.send_event("limitswitch:xyz_origin", 4)
+        
     def send_axis_origin_msg(self, axis_num):
-        self.printer.send_event("limitswitch:xyz_origin", axis_num)
-        # if axis_num == 2:
-        #     self.printer.send_event("zctrlpanel:zaxis_origin", axis_num)
-
-
+        if axis_num == 2:
+            self.printer.send_event("zctrlpanel:zaxis_origin", axis_num)
+        self.printer.send_event("limitswitch:xyz_origin", axis_num)            
+            
     def jogrun_sta(self, axes_xyz):
         # Each axis is homed independently and in order
         #for axis in axes_xyz:
@@ -314,9 +319,10 @@ class CoreXYGalvoKinematics:
     def _check_limitswitch(self, move):
         if self.lswcheck is None:
             self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
-        if  self.is_home_pstatus:
-            return            
+          
         if self.lswcheck is not None and self.lswcheck.cur_limit_state and not self.lswcheck.allow_gmove01:
+            if self.lswcheck.is_home_pstatus:
+                return  
             limit_state = self.lswcheck.cur_limit_state
             msg = "Cannot move: "
             if limit_state & 0x01:

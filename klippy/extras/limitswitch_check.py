@@ -126,8 +126,8 @@ class LimitSwitchCheck:
             self.original_state[axis_num] = 1
             # Calculate binary mask where index i corresponds to 2^i
             self.origin_mask = sum(1 << i for i, val in enumerate(self.original_state) if val != 0)
-            if axis_num != 2:
-                self.set_home_pstatus(False)
+        if axis_num == 4:
+            self.set_home_pstatus(False)
             #if self.origin_mask >= 3:
             #    self.is_home_pstatus = False
     def set_home_pstatus(self, status):                
