@@ -112,6 +112,8 @@ class LimitSwitchCheck:
             self.allow_gmove01 = True 
         elif stype == 0:
             self.allow_gmove01 = False 
+        elif stype == 2:
+            self.allow_gmove01 = True 
         msg = "allow gmove01=%s " % (self.allow_gmove01, )            
         gcmd.respond_info(msg) 
 
