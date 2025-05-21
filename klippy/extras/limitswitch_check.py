@@ -140,7 +140,7 @@ class LimitSwitchCheck:
             return
         self.reactor.register_callback(
             self.do_auto_recovery, self.reactor.monotonic() + self.recovery_delay)
-        self.crash_limit_exist = False            
+        #self.crash_limit_exist = False            
     
     def do_auto_recovery(self, eventtime):
         try:
@@ -148,7 +148,7 @@ class LimitSwitchCheck:
             # wait time 5s
             self.gcode.run_script('FIRMWARE_RESTART')
             #self.gcode.run_script('RESTART')
-            #self.crash_limit_exist = False
+            self.crash_limit_exist = False
             #logging.info("do auto recovery end :%s\n\n",self.crash_limit_exist)   
             #self.reactor.pause(self.recovery_delay)
             #self.gcode.run_script('G28')
@@ -245,41 +245,43 @@ class LimitSwitchCheck:
 
 
     def lswt_callback(self, eventtime):
-        self.cur_limit_state = (sum(1 << i for i, val in enumerate(self.last_state) if val != 0)) & XY_BITMASK
+        self.cur_limit_state = (sum(1 << i for i, val in enumerate(self.last_state) if val ) & XY_BITMASK)
         if  self.is_home_pstatus:
             return
-        state = 0
-        for index, value in enumerate(self.switch_enalbe):
-            if value and self.last_state[index] :
-                state = state + 1
+        # state = 0
+        # for index, value in enumerate(self.switch_enalbe):
+        #     if value and self.last_state[index] :
+        #         state = state + 1
+        state = sum((b and s) for b, s in zip(self.switch_enalbe, self.last_state))
         if not self.inside_handlegcode :
-            self.inside_handlegcode = True
-            logging.info("lswt:%s,%s\n",state,self.allow_trigger) 
-            if  state and self.allow_trigger:
-                template = self.press_template
-                self.allow_trigger = False
-                logging.info("trigger once\n")
-            elif not state and self.allow_trigger:
-                #template = ""
-                logging.info("normal mode\n")
-                return
-            elif not state and not self.allow_trigger:
-                #manual mode, allow move continue in soft G28
-                self.allow_trigger = True            
-                logging.info("auto start allow_trigger=%s\n", self.allow_trigger)                
-                return
-            else:
-                # state for 1 and allow_trigger for 0
-                logging.info("stop ignored state,allow_trigger=%s\n", self.allow_trigger) 
-                pass
-                return
-                try:
-                    self.gcode.run_script(template.render())
-                except:
-                    logging.exception("Script running error")
-            self.inside_handlegcode = False            
+            try:
+                self.inside_handlegcode = True
+                template = None
+                logging.info("lswt state:%s, allow_trigger:%s\n", state, self.allow_trigger) 
+                if  state and self.allow_trigger:
+                    template = self.press_template
+                    self.allow_trigger = False
+                    logging.info("Limit switch triggered\n")
+                elif not state and self.allow_trigger:
+                    logging.info("Normal mode - no trigger\n")
+                elif not state and not self.allow_trigger:
+                    #manual mode, allow move continue in soft G28
+                    self.allow_trigger = True            
+                    logging.info("Auto start enabled, allow_trigger=%s\n", self.allow_trigger)                
+                else:
+                    # state for 1 and allow_trigger for 0
+                    logging.debug("Ignored state (state=%s, allow_trigger=%s)", 
+                                state, self.allow_trigger)
+                    pass
+                if template is not None:
+                    try:
+                        self.gcode.run_script(template.render())
+                    except:
+                        logging.exception("Script running error")
+            finally:    
+                self.inside_handlegcode = False            
         else:
-            logging.warning("Script running repeat,lswt switch fast")    
+            logging.warning("Script running repeat,lswt switch fast") 
 
     cmd_QUERY_LSWT_help = "Report on the state of limit switch"
     def cmd_QUERY_LSWT(self, gcmd):
