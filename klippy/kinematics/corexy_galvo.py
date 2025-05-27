@@ -332,8 +332,9 @@ class CoreXYGalvoKinematics:
     def _check_limitswitch(self, move):
         if self.lswcheck is None:
             self.lswcheck = self.printer.lookup_object('limitswitch_check lswcheck',None)  
-          
-        if self.lswcheck is not None and self.lswcheck.cur_limit_state and not self.lswcheck.allow_gmove01:
+            if self.lswcheck is None:
+                return             
+        if self.lswcheck.cur_limit_state and not self.lswcheck.allow_gmove01:
             if self.lswcheck.is_home_pstatus:
                 return  
             limit_state = self.lswcheck.cur_limit_state
@@ -348,9 +349,11 @@ class CoreXYGalvoKinematics:
                 msg += "Y_MAX "
             msg += "limit switch triggered,home axis first"
             raise move.move_error(msg)
-        elif self.lswcheck is not None and self.lswcheck.cur_limit_state and self.lswcheck.allow_gmove01:
+        elif self.lswcheck.cur_limit_state and self.lswcheck.allow_gmove01:
             # move: G0 X0 Y0
             pass
+        elif not self.lswcheck.cur_limit_state and not self.lswcheck.is_print_move:
+            self.lswcheck.set_pmove_en(True)
 
     def check_move(self, move):      
         # Check endstops as needed

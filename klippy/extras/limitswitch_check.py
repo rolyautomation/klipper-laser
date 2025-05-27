@@ -69,11 +69,14 @@ class LimitSwitchCheck:
         self.allow_trigger = False
         # False: check limit switch, True: allow gmove01 is True,when limit switch triggered
         self.allow_gmove01 = False
+        # move , idle
+        self.is_print_move = False
         self.gcode.register_command("SET_HOME_STATUS", self.cmd_SET_HOME_STATUS)
         self.gcode.register_command("SET_ALLOW_TRIGGER", self.cmd_SET_ALLOW_TRIGGER)
         self.gcode.register_command("CHK_ALLOW_TRIGGER", self.cmd_CHK_ALLOW_TRIGGER)
         self.gcode.register_command("SET_ALLOW_GMOVE01", self.cmd_SET_ALLOW_GMOVE01)
         self.gcode.register_command("CHK_ALLOW_GMOVE01", self.cmd_CHK_ALLOW_GMOVE01)
+        self.gcode.register_command("SET_PMOVE_EN", self.cmd_SET_PMOVE_EN)
         self.printer.register_event_handler("limitswitch:xyz_origin",
                                     self.handle_xyz_origin)  
 
@@ -105,6 +108,7 @@ class LimitSwitchCheck:
         msg = "chk allow trigger=%s " % (self.allow_trigger, )            
         gcmd.respond_info(msg)   
 
+    # galvo mode usage
     def cmd_SET_ALLOW_GMOVE01(self, gcmd):
         stype = gcmd.get_int('S',1, minval=0, maxval=10) 
         #restrict  G32  XY  
@@ -118,7 +122,22 @@ class LimitSwitchCheck:
         gcmd.respond_info(msg) 
 
     def cmd_CHK_ALLOW_GMOVE01(self, gcmd):
-        pass        
+        pass  
+
+    def cmd_SET_PMOVE_EN(self, gcmd):
+        pmove_en = gcmd.get_int('S',1, minval=0, maxval=10) 
+        if pmove_en == 1:
+            self.is_print_move = True 
+        elif pmove_en == 0:
+            self.is_print_move = False 
+        msg = "print move=%s " % (self.is_print_move, )            
+        gcmd.respond_info(msg)     
+
+    def set_pmove_en(self, mv_en):                
+        self.is_print_move = mv_en
+        if self.is_print_move:  
+            self.allow_trigger = True
+        logging.info("set_pmove_en=%d",mv_en) 
 
     def handle_xyz_origin(self, axis_num):
         logging.info("handle_xyz_origin=%d",axis_num) 
@@ -245,6 +264,18 @@ class LimitSwitchCheck:
         else:
             buttons.register_adc_button(pin, amin, amax, pullup, callback)
 
+    def disp_limit_info(self): 
+        limit_state = self.cur_limit_state              
+        msg = "Limit switch triggered: "
+        if limit_state & 0x01:
+            msg += "X_MIN "
+        if limit_state & 0x02:
+            msg += "X_MAX "                
+        if limit_state & 0x04:
+            msg += "Y_MIN "
+        if limit_state & 0x08:
+            msg += "Y_MAX "
+        return msg       
 
     def lswt_callback(self, eventtime):
         self.cur_limit_state = (sum(1 << i for i, val in enumerate(self.last_state) if val ) & XY_BITMASK)
@@ -258,12 +289,18 @@ class LimitSwitchCheck:
         if not self.inside_handlegcode :
             try:
                 self.inside_handlegcode = True
-                template = None
+                #template = None
+                runcmd_gcode = None
                 logging.info("lswt state:%s, allow_trigger:%s\n", state, self.allow_trigger) 
                 if  state and self.allow_trigger:
-                    template = self.press_template
-                    self.allow_trigger = False
-                    logging.info("Limit switch triggered\n")
+                    if self.is_print_move:
+                        template = self.press_template
+                        runcmd_gcode = template.render()
+                        self.allow_trigger = False
+                        logging.info("Limit switch triggered\n")
+                    else:
+                        runcmd_gcode = "M118 idle %s" % (self.disp_limit_info(),)
+                        logging.info("Limit switch triggered by manual mode\n")
                 elif not state and self.allow_trigger:
                     logging.info("Normal mode - no trigger\n")
                 elif not state and not self.allow_trigger:
@@ -272,12 +309,13 @@ class LimitSwitchCheck:
                     logging.info("Auto start enabled, allow_trigger=%s\n", self.allow_trigger)                
                 else:
                     # state for 1 and allow_trigger for 0
+                    #runcmd_gcode = "M118 ignored %s" % (self.disp_limit_info(),)
                     logging.debug("Ignored state (state=%s, allow_trigger=%s)", 
                                 state, self.allow_trigger)
                     pass
-                if template is not None:
+                if runcmd_gcode is not None:
                     try:
-                        self.gcode.run_script(template.render())
+                        self.gcode.run_script(runcmd_gcode)
                     except:
                         logging.exception("Script running error")
             finally:    
@@ -335,7 +373,8 @@ class LimitSwitchCheck:
         lsw_status['org_mask'] = self.origin_mask  
         lsw_status['is_home_pstatus'] = self.is_home_pstatus
         lsw_status['allow_trigger'] = self.allow_trigger
-        lsw_status['allow_g01'] = self.allow_gmove01          
+        lsw_status['allow_g01'] = self.allow_gmove01  
+        lsw_status['is_print_move'] = self.is_print_move        
         return dict(lsw_status)
 
 
