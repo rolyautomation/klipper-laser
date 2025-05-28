@@ -26,26 +26,26 @@ class Move:
         velocity = min(speed, toolhead.max_velocity)
         self.is_kinematic_move = True
         # include E axis
-        self.axes_d = axes_d = [end_pos[i] - start_pos[i] for i in (0, 1, 2, 3, 4, 5, 6)]
+        self.axes_d = axes_d = [end_pos[i] - start_pos[i] for i in (0, 1, 2, 3, 4, 5, 6, 7)]
         # We pick the maximum between B/C and X/Y moves if they are not in the same direction
         if axes_d[0] * axes_d[4] < 0 or axes_d[1] * axes_d[5] < 0:
-            xy_move_d = math.sqrt(sum([axes_d[0]**2, axes_d[1]**2, axes_d[2]**2, axes_d[3]**2]))
-            bc_move_d = math.sqrt(sum([axes_d[4]**2, axes_d[5]**2, axes_d[2]**2, axes_d[3]**2]))
+            xy_move_d = math.sqrt(sum([axes_d[0]**2, axes_d[1]**2, axes_d[2]**2, axes_d[3]**2, axes_d[6]**2]))
+            bc_move_d = math.sqrt(sum([axes_d[4]**2, axes_d[5]**2, axes_d[2]**2, axes_d[3]**2, axes_d[6]**2]))
             self.move_d = move_d = max(xy_move_d, bc_move_d)
         # Otherwise we add X/B and Y/C together
         else:
             self.move_d = move_d = math.sqrt(sum([(axes_d[0] + axes_d[4])**2, 
                                               (axes_d[1] + axes_d[5])**2, 
-                                              axes_d[2]**2, axes_d[3]**2
+                                              axes_d[2]**2, axes_d[3]**2, axes_d[6]**2
                                               ]))
         if move_d < .000000001:
             # Extrude only move
             self.end_pos = (start_pos[0], start_pos[1], start_pos[2],
-                            start_pos[0+3], start_pos[1+3], start_pos[2+3],
-                            end_pos[3+3])
+                            start_pos[0+3], start_pos[1+3], start_pos[2+3], start_pos[0+6],
+                            end_pos[3+4])
             axes_d[0] = axes_d[1] = axes_d[2] = 0.
-            axes_d[0+3] = axes_d[1+3] = axes_d[2+3] = 0.
-            self.move_d = move_d = abs(axes_d[3+3])
+            axes_d[0+3] = axes_d[1+3] = axes_d[2+3] = axes_d[0+6] = 0.
+            self.move_d = move_d = abs(axes_d[3+4])
             inv_move_d = 0.
             if move_d:
                 inv_move_d = 1. / move_d
@@ -99,7 +99,8 @@ class Move:
         junction_cos_theta = -((axes_r[0] + axes_r[4]) * (prev_axes_r[0] + prev_axes_r[4])
                                + (axes_r[1] + axes_r[5]) * (prev_axes_r[1] + prev_axes_r[5])
                                + axes_r[2] * prev_axes_r[2]
-                               + axes_r[3] * prev_axes_r[3])
+                               + axes_r[3] * prev_axes_r[3]
+                               + axes_r[6] * prev_axes_r[6])
                
         if junction_cos_theta > 0.999999:
             return
@@ -491,22 +492,22 @@ class ToolHead:
         return self.reactor.NEVER
     # Movement commands
     # selected function
-    def predict_move_distance_old(self,newpos):
+    def predict_move_distance(self,newpos):
         start_pos_in = self.commanded_pos
         end_pos_in   = newpos
         start_pos_use = tuple(start_pos_in)
         end_pos_use  = tuple(end_pos_in)
-        axes_d = [end_pos_use[i] - start_pos_use[i] for i in (0, 1, 2, 3, 4, 5, 6)]
+        axes_d = [end_pos_use[i] - start_pos_use[i] for i in (0, 1, 2, 3, 4, 5, 6, 7)]
          # We pick the maximum between B/C and X/Y moves if they are not in the same direction
         if axes_d[0] * axes_d[4] < 0 or axes_d[1] * axes_d[5] < 0:
-            xy_move_d = math.sqrt(sum([axes_d[0]**2, axes_d[1]**2, axes_d[2]**2, axes_d[3]**2]))
-            bc_move_d = math.sqrt(sum([axes_d[4]**2, axes_d[5]**2, axes_d[2]**2, axes_d[3]**2]))
+            xy_move_d = math.sqrt(sum([axes_d[0]**2, axes_d[1]**2, axes_d[2]**2, axes_d[3]**2, axes_d[6]**2]))
+            bc_move_d = math.sqrt(sum([axes_d[4]**2, axes_d[5]**2, axes_d[2]**2, axes_d[3]**2, axes_d[6]**2]))
             move_d = max(xy_move_d, bc_move_d)
         # Otherwise we add X/B and Y/C together
         else:
             move_d = math.sqrt(sum([(axes_d[0] + axes_d[4])**2, 
                                               (axes_d[1] + axes_d[5])**2, 
-                                              axes_d[2]**2, axes_d[3]**2
+                                              axes_d[2]**2, axes_d[3]**2, axes_d[6]**2
                                               ]))
         if move_d < .000000001:
             move_d = 0.01
@@ -517,9 +518,9 @@ class ToolHead:
     def predict_move_distance(self,newpos):
         resd = 0.01
         if self.powervary_mode > 0 :
-            resd = self.predict_move_distance_old(newpos)    
+            resd = self.predict_move_distance(newpos)    
         else:
-            resd = self.predict_move_distance_old(newpos)
+            resd = self.predict_move_distance(newpos)
         return(resd)
          
     def soft_homing_BC_AXIS(self):
