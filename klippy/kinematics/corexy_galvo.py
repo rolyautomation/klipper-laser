@@ -387,7 +387,7 @@ class CoreXYGalvoKinematics:
             #     logging.info("m_s_a=%s z_s_a=%s a_s_a=%s \n",m_capped_accel, z_capped_accel, a_capped_accel)   
         
     def get_status(self, eventtime):
-        axes = [a for a, (l, h) in zip("xyzabc", self.limits) if l <= h]
+        axes = [a for a, (l, h) in zip("xyzabcd", self.limits) if l <= h]
         return {
             'homed_axes': "".join(axes),
             'axis_minimum': self.axes_min,
