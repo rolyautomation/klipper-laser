@@ -251,7 +251,7 @@ class ToolHead:
         self.mcu = self.all_mcus[0]
         self.lookahead = LookAheadQueue(self)
         self.lookahead.set_flush_time(BUFFER_TIME_HIGH)
-        self.commanded_pos = [0., 0., 0., 0., 0., 0., 0.]
+        self.commanded_pos = [0., 0., 0., 0., 0., 0., 0., 0.]
 
         self.powervary_mode = config.getint('powervary_mode', 0, minval=0)
         self.powervary_factor = config.getfloat('powervary_factor', 0.5, above=0.2,maxval=1.)

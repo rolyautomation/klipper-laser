@@ -55,9 +55,9 @@ class GCodeMove:
         self.absolute_coord = self.absolute_extrude = True
         # Use relative distances 
         self.absolute_extrude = False
-        self.base_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.last_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.homing_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.base_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.last_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.homing_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.speed = 25.
         self.speed_factor = 1. / 60.
         self.extrude_factor = 1.
@@ -89,7 +89,7 @@ class GCodeMove:
         self.saved_states = {}
         self.move_transform = self.move_with_transform = None
         self.predict_move_distance_with_transform  = None
-        self.position_with_transform = (lambda: [0., 0., 0., 0., 0.0, 0.0, 0.0])
+        self.position_with_transform = (lambda: [0., 0., 0., 0., 0.0, 0.0, 0.0, 0.0])
     def _handle_ready(self):
         self.is_printer_ready = True
         if self.move_transform is None:
@@ -455,8 +455,8 @@ class GCodeMove:
         self.extrude_factor = new_extrude_factor
     cmd_SET_GCODE_OFFSET_help = "Set a virtual offset to g-code positions"
     def cmd_SET_GCODE_OFFSET(self, gcmd):
-        move_delta = [0., 0., 0., 0., 0., 0., 0.]
-        for pos, axis in enumerate('XYZABCE'):
+        move_delta = [0., 0., 0., 0., 0., 0., 0., 0.]
+        for pos, axis in enumerate('XYZABCDE'):
             offset = gcmd.get_float(axis, None)
             if offset is None:
                 offset = gcmd.get_float(axis + '_ADJUST', None)
