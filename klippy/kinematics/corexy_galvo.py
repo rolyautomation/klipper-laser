@@ -318,10 +318,22 @@ class CoreXYGalvoKinematics:
             move.set_speed_for_g0(self.g0_galvo_velocity)
 
         # Limit speed based on movement ratios between different axis
-        if (move.axes_d[0] or move.axes_d[1] or move.axes_d[2] or move.axes_d[3]):
-            m_capped_speed = z_capped_speed = a_capped_speed = self.max_h_velocity
-            m_capped_accel = z_capped_accel = a_capped_accel = self.max_h_accel
+        if (move.axes_d[0] or move.axes_d[1] or move.axes_d[2] or move.axes_d[3] or move.axes_d[6]):
+            d_capped_speed = m_capped_speed = z_capped_speed = a_capped_speed = self.max_h_velocity
+            d_capped_accel = m_capped_accel = z_capped_accel = a_capped_accel = self.max_h_accel
             
+            if move.axes_d[6]:
+                d_ratio = move.move_d / abs(move.axes_d[6])
+                if not move.pwmsw:
+                    if self.g0_d_ratio > 0:
+                        d_ratio = min(d_ratio, self.g0_d_ratio)
+                    d_capped_speed = self.g0_d_velocity * d_ratio
+                else:
+                    if self.g1_d_ratio > 0:
+                        d_ratio = min(d_ratio, self.g1_d_ratio)
+                    d_capped_speed = self.max_d_velocity * d_ratio
+                d_capped_accel = self.max_d_accel * d_ratio                
+    
             if move.axes_d[0] or move.axes_d[1]:
                 # Baseline: The overall acceleration of the move cannot exceed m-values if there are no galvo moves
                 m_ratio = 1.0
@@ -366,8 +378,8 @@ class CoreXYGalvoKinematics:
                     a_capped_speed = self.max_a_velocity * a_ratio
                 a_capped_accel = self.max_a_accel * a_ratio
             
-            capped_speed = min(m_capped_speed, z_capped_speed, a_capped_speed)
-            capped_accel = min(m_capped_accel, z_capped_accel, a_capped_accel)
+            capped_speed = min(m_capped_speed, z_capped_speed, a_capped_speed, d_capped_speed)
+            capped_accel = min(m_capped_accel, z_capped_accel, a_capped_accel, d_capped_accel)
             move.limit_speed(capped_speed, capped_accel)
             # if not move.pwmsw:
             #     logging.info("g0_v=%s g0_a=%s \n",capped_speed,capped_accel) 
