@@ -113,7 +113,8 @@ class DumpTrapQ:
         dist = (move.start_v + .5 * move.accel * move_time) * move_time;
         pos = (move.start_x + move.x_r * dist, move.start_y + move.y_r * dist,
                move.start_z + move.z_r * dist, move.start_a + move.a_r * dist,
-               move.start_b + move.b_r * dist, move.start_c + move.c_r * dist)
+               move.start_b + move.b_r * dist, move.start_c + move.c_r * dist, 
+               move.start_d + move.d_r * dist)
         velocity = move.start_v + move.accel * move_time
         return pos, velocity
     def _process_batch(self, eventtime):
@@ -205,7 +206,7 @@ class PrinterMotionReport:
         if eventtime < self.next_status_time or not self.trapqs:
             return self.last_status
         self.next_status_time = eventtime + STATUS_REFRESH_TIME
-        #add abc axis
+        #add abcd axis
         xyzpos = (0., 0., 0., 0., 0., 0., 0.)
         epos = (0.,)
         xyzvelocity = evelocity = 0.
