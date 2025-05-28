@@ -244,9 +244,9 @@ class PrinterExtruder:
         self.trapq_append(self.trapq, print_time,
                           move.accel_t, move.cruise_t, move.decel_t,
                           move.start_pos[3], 0., 0.,
-                          0., 0., 0.,
+                          0., 0., 0., 0.,
                           1., can_pressure_advance, 0.,
-                          0., 0., 0.,
+                          0., 0., 0., 0.,
                           start_v, cruise_v, accel, 0)
         self.last_position = move.end_pos[3]
     def find_past_position(self, print_time):
@@ -716,7 +716,7 @@ class PrinterExtruderPWM:
         #return False, "expwmstates=%d" % (1,)
         
     def check_move(self, move):
-        axis_r = move.axes_r[3+3]
+        axis_r = move.axes_r[3+4]
         '''
         if not self.heater.can_extrude:
             raise self.printer.command_error(
@@ -748,13 +748,13 @@ class PrinterExtruderPWM:
 
     # Dummy function that always returns the max V-squared value
     def calc_junction(self, prev_move, move):
-        diff_r = move.axes_r[3+3] - prev_move.axes_r[3+3]
+        diff_r = move.axes_r[3+4] - prev_move.axes_r[3+4]
         if diff_r:
             return (self.instant_corner_v / abs(diff_r))**2
         return move.max_cruise_v2
     
     def move(self, print_time, move):
-        axis_r = move.axes_r[3+3]
+        axis_r = move.axes_r[3+4]
         accel = move.accel * axis_r
         start_v = move.start_v * axis_r
         cruise_v = move.cruise_v * axis_r
@@ -780,7 +780,7 @@ class PrinterExtruderPWM:
                 for i in range(len_powertable):
                     self.c_array[i] = min(move.power_table[i], 255)
                 #self.c_array[:len_powertable] = move.power_table[:len_powertable]
-                distmm = abs(move.axes_d[3+3])
+                distmm = abs(move.axes_d[3+4])
                 distance_count = self.cacl_distance_count(distmm)
                 #logging.info("distance_count=%s, distance=%s, len_powertable=%s", distance_count, distmm, len_powertable)
                 self.ptagcode = (self.ptagcode % 127) + 1
@@ -810,15 +810,15 @@ class PrinterExtruderPWM:
 
         self.trapq_append_extend(self.trapq, print_time,
                           move.accel_t, move.cruise_t, move.decel_t,
-                          move.start_pos[3+3], 0., 0.,
-                          0., 0., pwmsw,
+                          move.start_pos[3+4], 0., 0.,
+                          0., 0., pwmsw, 0.,
                           1., can_pressure_advance, self._restartcmd_sn,
-                          pwmmode, pwmvalue, speed_pulse_ticks,
+                          pwmmode, pwmvalue, speed_pulse_ticks, 0.,
                           start_v, cruise_v, accel, 1, 
                           self.power_table_ptr, len_powertable, distance_count, 
                           current_ptagcode, current_psynccode)
         
-        self.last_position = move.end_pos[3+3]
+        self.last_position = move.end_pos[3+4]
         
     def find_past_position(self, print_time):
         if self.extruder_stepper is None:

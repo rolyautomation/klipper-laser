@@ -85,7 +85,7 @@ class Move:
     def move_error(self, msg="Move out of range"):
         ep = self.end_pos
         #m = "%s: %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[3])
-        m = "%s: %.3f %.3f %.3f %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[0+3], ep[1+3], ep[2+3], ep[3+3])
+        m = "%s: %.3f %.3f %.3f %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[0+3], ep[1+3], ep[2+3], ep[0+6],ep[3+4])
         return self.toolhead.printer.command_error(m)
     
     def calc_junction(self, prev_move):
@@ -383,11 +383,11 @@ class ToolHead:
                     self.trapq, next_move_time,
                     move.accel_t, move.cruise_t, move.decel_t,
                     move.start_pos[0], move.start_pos[1], move.start_pos[2],
-                    move.start_pos[0+3], move.start_pos[1+3], move.start_pos[2+3],
+                    move.start_pos[0+3], move.start_pos[1+3], move.start_pos[2+3], move.start_pos[0+6],
                     move.axes_r[0], move.axes_r[1], move.axes_r[2],
-                    move.axes_r[0+3], move.axes_r[1+3], move.axes_r[2+3],
+                    move.axes_r[0+3], move.axes_r[1+3], move.axes_r[2+3], move.axes_r[0+6],
                     move.start_v, move.cruise_v, move.accel, 0)
-            if move.axes_d[3+3]:
+            if move.axes_d[3+4]:
                 self.extruder.move(next_move_time, move)
             next_move_time = (next_move_time + move.accel_t
                               + move.cruise_t + move.decel_t)
@@ -531,7 +531,7 @@ class ToolHead:
         ffi_main, ffi_lib = chelper.get_ffi()
         ffi_lib.trapq_set_position(self.trapq, self.print_time,
                                    newpos[0], newpos[1], newpos[2],
-                                   newpos[0+3], newpos[1+3], newpos[2+3], newpos[3+3])
+                                   newpos[0+3], newpos[1+3], newpos[2+3], newpos[0+6])
         self.commanded_pos[:] = newpos
         self.kin.set_position(newpos, homing_axes)
         self.printer.send_event("toolhead:set_position")
@@ -541,7 +541,7 @@ class ToolHead:
             return
         if move.is_kinematic_move:
             self.kin.check_move(move)
-        if move.axes_d[3+3]:    
+        if move.axes_d[3+4]:    
             self.extruder.check_move(move)
         self.commanded_pos[:] = move.end_pos
         self.lookahead.add_move(move)
@@ -582,7 +582,7 @@ class ToolHead:
             eventtime = self.reactor.pause(eventtime + 0.100)
     def set_extruder(self, extruder, extrude_pos):
         self.extruder = extruder
-        self.commanded_pos[3+3] = extrude_pos
+        self.commanded_pos[3+4] = extrude_pos
     def get_extruder(self):
         return self.extruder
     # Homing "drip move" handling
