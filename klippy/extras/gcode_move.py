@@ -112,7 +112,7 @@ class GCodeMove:
     def _handle_activate_extruder(self):
         self.reset_last_position()
         self.extrude_factor = 1.
-        self.base_position[3+3] = self.last_position[3+3]
+        self.base_position[3+4] = self.last_position[3+4]
     def _handle_home_rails_end(self, homing_state, rails):
         self.reset_last_position()
         for axis in homing_state.get_axes():
@@ -130,7 +130,7 @@ class GCodeMove:
         return old_transform
     def _get_gcode_position(self):
         p = [lp - bp for lp, bp in zip(self.last_position, self.base_position)]
-        p[3+3] /= self.extrude_factor
+        p[3+4] /= self.extrude_factor
         return p
     def _get_gcode_speed(self):
         return self.speed / self.speed_factor
@@ -153,7 +153,7 @@ class GCodeMove:
             self.last_position = self.position_with_transform()
 
     def get_last_position_superg(self):
-        lpos = list(self.last_position[:6])
+        lpos = list(self.last_position[:7])
         if self.galvo_coord_confactor is not None:
             lpos[4] -= self.galvo_coord_confactor
             lpos[5] -= self.galvo_coord_confactor
@@ -358,22 +358,29 @@ class GCodeMove:
                         # value relative to base coordinate position
                         #self.last_position[pos+3] = v + self.base_position[pos+3]
                         self.last_position[pos+3] = v + self.base_position[pos+3] + offset_absolute_pos
-                        
-
-            if 'E' in params:
-                v = float(params['E']) * self.extrude_factor
-                if not self.absolute_coord or not self.absolute_extrude:
+            if 'D' in params:
+                v = float(params['D'])
+                if not self.absolute_coord:
                     # value relative to position of last move
                     self.last_position[3+3] += v
                 else:
                     # value relative to base coordinate position
                     self.last_position[3+3] = v + self.base_position[3+3]
 
+            if 'E' in params:
+                v = float(params['E']) * self.extrude_factor
+                if not self.absolute_coord or not self.absolute_extrude:
+                    # value relative to position of last move
+                    self.last_position[3+4] += v
+                else:
+                    # value relative to base coordinate position
+                    self.last_position[3+4] = v + self.base_position[3+4]
+
                 logging.info("\nG1: absolute_coord=%s absolute_extrude=%s"
                      " base_position=%s last_position=%s "
                      " speed_factor=%s extrude_factor=%s speed=%s\n",
                      self.absolute_coord, self.absolute_extrude,
-                     self.base_position[6], self.last_position[6],
+                     self.base_position[7], self.last_position[7],
                      self.speed_factor, 
                      self.extrude_factor, self.speed)
                      
@@ -389,7 +396,7 @@ class GCodeMove:
                 if self.predict_move_distance_with_transform is not None:
                     move_e_axis_d = self.predict_move_distance_with_transform(self.last_position)
                     # value relative to position of last move
-                    self.last_position[3+3] += move_e_axis_d
+                    self.last_position[3+4] += move_e_axis_d
 
 
         except ValueError as e:
@@ -449,9 +456,9 @@ class GCodeMove:
     def cmd_M221(self, gcmd):
         # Set extrude factor override percentage
         new_extrude_factor = gcmd.get_float('S', 100., above=0.) / 100.
-        last_e_pos = self.last_position[3+3]
-        e_value = (last_e_pos - self.base_position[3+3]) / self.extrude_factor
-        self.base_position[3+3] = last_e_pos - e_value * new_extrude_factor
+        last_e_pos = self.last_position[3+4]
+        e_value = (last_e_pos - self.base_position[3+4]) / self.extrude_factor
+        self.base_position[3+4] = last_e_pos - e_value * new_extrude_factor
         self.extrude_factor = new_extrude_factor
     cmd_SET_GCODE_OFFSET_help = "Set a virtual offset to g-code positions"
     def cmd_SET_GCODE_OFFSET(self, gcmd):
@@ -500,12 +507,12 @@ class GCodeMove:
         self.speed_factor = state['speed_factor']
         self.extrude_factor = state['extrude_factor']
         # Restore the relative E position
-        e_diff = self.last_position[3+3] - state['last_position'][3+3]
-        self.base_position[3+3] += e_diff
+        e_diff = self.last_position[3+4] - state['last_position'][3+4]
+        self.base_position[3+4] += e_diff
         # Move the toolhead back if requested
         if gcmd.get_int('MOVE', 0):
             speed = gcmd.get_float('MOVE_SPEED', self.speed, above=0.)
-            self.last_position[:6] = state['last_position'][:6]
+            self.last_position[:7] = state['last_position'][:7]
             self.move_with_transform(self.last_position, speed)
     cmd_GET_POSITION_help = (
         "Return information on the current location of the toolhead")
