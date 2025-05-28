@@ -13,7 +13,7 @@ class CoreXYGalvoKinematics:
     def __init__(self, toolhead, config):
         # Setup axis rails
         self.rails = [stepper.LookupMultiRail(config.getsection('stepper_' + n))
-                      for n in 'xyzabc']
+                      for n in 'xyzabcd']
         for s in self.rails[1].get_steppers():
             self.rails[0].get_endstops()[0][0].add_stepper(s)
         for s in self.rails[0].get_steppers():
@@ -56,6 +56,10 @@ class CoreXYGalvoKinematics:
                                   self._hradiation_angle, self._focus_distance,
                                   self._half_distance_galvo, self._magnify_factor)  
 
+        self.rails[6].setup_itersolve('galvo_stepper_alloc', b'd',
+                                  self._hradiation_angle, self._focus_distance,
+                                  self._half_distance_galvo, self._magnify_factor)  
+
         ranges = [r.get_range() for r in self.rails]
         self.axes_min = toolhead.Coord(*[r[0] for r in ranges], e=0.)
         self.axes_max = toolhead.Coord(*[r[1] for r in ranges], e=0.)    
@@ -71,28 +75,28 @@ class CoreXYGalvoKinematics:
                 ma3_config = config.getsection('rollergp_a3') 
 
             self.rails.append(stepper.LookupMultiRail(ma1_config))
-            self.rails[6].setup_itersolve('galvo_stepper_alloc', b'a', 
+            self.rails[6+1].setup_itersolve('galvo_stepper_alloc', b'a', 
                                   self._hradiation_angle, self._focus_distance,
                                   self._half_distance_galvo, self._magnify_factor) 
 
             ma_rail_0 =  mmsa_modes.MultiMotorAxisRail(self.rails[3], 3, 0, CUR_SEL_A)
-            ma_rail_1 =  mmsa_modes.MultiMotorAxisRail(self.rails[6], 3, 1, CUR_SEL_A)
+            ma_rail_1 =  mmsa_modes.MultiMotorAxisRail(self.rails[6+1], 3, 1, CUR_SEL_A)
             ma_rail_2 =  None 
             ma_rail_3 =  None 
 
             if ma2_config is not None:
                 self.rails.append(stepper.LookupMultiRail(ma2_config))
-                self.rails[7].setup_itersolve('galvo_stepper_alloc', b'a', 
+                self.rails[7+1].setup_itersolve('galvo_stepper_alloc', b'a', 
                                   self._hradiation_angle, self._focus_distance,
                                   self._half_distance_galvo, self._magnify_factor) 
-                ma_rail_2 =  mmsa_modes.MultiMotorAxisRail(self.rails[7], 3, 2, CUR_SEL_A)                                   
+                ma_rail_2 =  mmsa_modes.MultiMotorAxisRail(self.rails[7+1], 3, 2, CUR_SEL_A)                                   
 
             if ma3_config is not None:
                 self.rails.append(stepper.LookupMultiRail(ma3_config))
-                self.rails[8].setup_itersolve('galvo_stepper_alloc', b'a', 
+                self.rails[8+1].setup_itersolve('galvo_stepper_alloc', b'a', 
                                   self._hradiation_angle, self._focus_distance,
                                   self._half_distance_galvo, self._magnify_factor)
-                ma_rail_3 =  mmsa_modes.MultiMotorAxisRail(self.rails[8], 3, 3, CUR_SEL_A)                                   
+                ma_rail_3 =  mmsa_modes.MultiMotorAxisRail(self.rails[8+1], 3, 3, CUR_SEL_A)                                   
 
             self.ma_module = mmsa_modes.MultiMotorAxis(
                                                 ma1_config, ma_rail_0, ma_rail_1,
@@ -224,77 +228,6 @@ class CoreXYGalvoKinematics:
             self.printer.send_event("zctrlpanel:zaxis_origin", axis_num)
         self.printer.send_event("limitswitch:xyz_origin", axis_num)            
             
-    def jogrun_sta(self, axes_xyz):
-        # Each axis is homed independently and in order
-        #for axis in axes_xyz:
-        axis = axes_xyz[0]
-        rail = self.rails[axis]
-            # Determine movement
-        position_min, position_max = rail.get_range()
-            #hi = rail.get_homing_info()
-            #homepos = [None, None, None, None]
-            #homepos[axis] = hi.position_endstop
-            #forcepos = list(homepos)
-            #if hi.positive_dir:
-            #    forcepos[axis] -= 1.5 * (hi.position_endstop - position_min)
-            #else:
-            #    forcepos[axis] += 1.5 * (position_max - hi.position_endstop)
-            # Perform homing
-            #jogrun_state.jogrun_rails([rail], forcepos, homepos)
-            #jogrun_state.jogrun_rails([rail])
-            #reason: A: soft reset zero
-        raildata = { 
-                    'rail':[rail],
-                    'min' : position_min,
-                    'max' : position_max,
-                    }            
-        return raildata     
-
-    def jogrun_end(self, jogrun_state):
-        # Each axis is homed independently and in order
-        for axis in jogrun_state.get_axes():
-            rail = self.rails[axis]
-            # Determine movement
-            position_min, position_max = rail.get_range()
-            #hi = rail.get_homing_info()
-            #homepos = [None, None, None, None]
-            #homepos[axis] = hi.position_endstop
-            #forcepos = list(homepos)
-            #if hi.positive_dir:
-            #    forcepos[axis] -= 1.5 * (hi.position_endstop - position_min)
-            #else:
-            #    forcepos[axis] += 1.5 * (position_max - hi.position_endstop)
-            # Perform homing
-            #jogrun_state.jogrun_rails([rail], forcepos, homepos)
-            jogrun_state.jogrun_rails([rail])
-            #reason: A: soft reset zero    
-
-    def jogrun_drip(self, jogrun_state):
-        # Each axis is homed independently and in order
-        for axis in jogrun_state.get_axes():
-            rail = self.rails[axis]
-            position_min, position_max = rail.get_range()
-            # Determine movement
-            dripparam = jogrun_state.get_dripparam()
-            godist = dripparam[0]
-            if dripparam[1] < 2:
-                if  dripparam[1] == 1:
-                    godist = position_max
-                else:
-                    godist = position_min  
-            #hi = rail.get_homing_info()
-            homepos = [None, None, None, None]
-            #homepos[axis] = hi.position_endstop
-            gopos = list(homepos)
-            gopos[axis] = godist
-            #if hi.positive_dir:
-            #    forcepos[axis] -= 1.5 * (hi.position_endstop - position_min)
-            #else:
-            #    forcepos[axis] += 1.5 * (position_max - hi.position_endstop)
-            # Perform homing
-            #homing_state.jogrun_rails_drip([rail], forcepos, homepos)
-            jogrun_state.jogrun_rails_drip([rail], gopos)
-
     def get_machine_pos(self):
         axes_xyz = [0,1,2]
         posdata = []

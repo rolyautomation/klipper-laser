@@ -206,7 +206,7 @@ class PrinterMotionReport:
             return self.last_status
         self.next_status_time = eventtime + STATUS_REFRESH_TIME
         #add abc axis
-        xyzpos = (0., 0., 0., 0., 0., 0.)
+        xyzpos = (0., 0., 0., 0., 0., 0., 0.)
         epos = (0.,)
         xyzvelocity = evelocity = 0.
         # Calculate current requested toolhead position
@@ -214,7 +214,7 @@ class PrinterMotionReport:
         print_time = mcu.estimated_print_time(eventtime)
         pos, velocity = self.trapqs['toolhead'].get_trapq_position(print_time)
         if pos is not None:
-            xyzpos = pos[:6]
+            xyzpos = pos[:7]
             xyzvelocity = velocity
         # Calculate requested position of currently active extruder
         toolhead = self.printer.lookup_object('toolhead')

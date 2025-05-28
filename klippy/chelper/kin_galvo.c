@@ -71,6 +71,13 @@ cart_stepper_a_calc_position(struct stepper_kinematics *sk, struct move *m
 
 }
 
+static double
+cart_stepper_d_calc_position(struct stepper_kinematics *sk, struct move *m
+                             , double move_time)
+{
+    return move_get_coord(m, move_time).d;
+
+}
 
 
 struct stepper_kinematics * __visible
@@ -99,6 +106,11 @@ galvo_stepper_alloc(char type,double hradiation_angle, double focus_distance, do
     {
           gs->sk.calc_position_cb = cart_stepper_a_calc_position;
           gs->sk.active_flags = AF_A;
+    }
+    else if (type == 'd')
+    {
+        gs->sk.calc_position_cb = cart_stepper_d_calc_position;
+        gs->sk.active_flags = AF_D;
     }
     return &gs->sk;
     

@@ -4,7 +4,7 @@
 #include <stdint.h> // int32_t
 
 enum {
-    AF_X = 1 << 0, AF_Y = 1 << 1, AF_Z = 1 << 2, AF_A = 1 << 3, AF_B = 1 << 4, AF_C = 1 << 5,
+    AF_X = 1 << 0, AF_Y = 1 << 1, AF_Z = 1 << 2, AF_A = 1 << 3, AF_B = 1 << 4, AF_C = 1 << 5, AF_D = 1 << 6,
 };
 
 struct stepper_kinematics;
