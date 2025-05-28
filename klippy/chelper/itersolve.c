@@ -157,7 +157,8 @@ check_active(struct stepper_kinematics *sk, struct move *m)
             || (af & AF_Z && m->axes_r.z != 0.)
             || (af & AF_A && m->axes_r.a != 0.)
             || (af & AF_B && m->axes_r.b != 0.)
-            || (af & AF_C && m->axes_r.c != 0.) );
+            || (af & AF_C && m->axes_r.c != 0.)
+            || (af & AF_D && m->axes_r.d != 0.) );
 
 }
 
@@ -263,7 +264,7 @@ itersolve_is_active_axis(struct stepper_kinematics *sk, char axis)
     {
         return (sk->active_flags & (AF_X << (axis - 'x'))) != 0;
     }
-    else if  (axis >= 'a' && axis <= 'c')
+    else if  (axis >= 'a' && axis <= 'd')
     {
         return (sk->active_flags & (AF_A << (axis - 'a'))) != 0;
     }

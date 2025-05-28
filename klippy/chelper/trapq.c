@@ -38,7 +38,8 @@ move_get_coord(struct move *m, double move_time)
         .z = m->start_pos.z + m->axes_r.z * move_dist, 
         .a = m->start_pos.a + m->axes_r.a * move_dist,
         .b = m->start_pos.b + m->axes_r.b * move_dist,
-        .c = m->start_pos.c + m->axes_r.c * move_dist };
+        .c = m->start_pos.c + m->axes_r.c * move_dist,
+        .d = m->start_pos.d + m->axes_r.d * move_dist };
 }
 
 #define NEVER_TIME 9999999999999999.9
@@ -123,9 +124,9 @@ void __visible
 trapq_append(struct trapq *tq, double print_time
              , double accel_t, double cruise_t, double decel_t
              , double start_pos_x, double start_pos_y, double start_pos_z
-             , double start_pos_a, double start_pos_b, double start_pos_c
+             , double start_pos_a, double start_pos_b, double start_pos_c, double start_pos_d
              , double axes_r_x, double axes_r_y, double axes_r_z
-             , double axes_r_a, double axes_r_b, double axes_r_c             
+             , double axes_r_a, double axes_r_b, double axes_r_c, double axes_r_d             
              , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en)
 {
 
@@ -137,9 +138,9 @@ trapq_append(struct trapq *tq, double print_time
         start_pos_c = 0;
     }
     struct coord start_pos = { .x=start_pos_x, .y=start_pos_y, .z=start_pos_z 
-                              ,.a=start_pos_a, .b=start_pos_b, .c=start_pos_c  };
+                              ,.a=start_pos_a, .b=start_pos_b, .c=start_pos_c, .d=start_pos_d };
     struct coord axes_r = { .x=axes_r_x, .y=axes_r_y, .z=axes_r_z 
-                           ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
+                           ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c, .d=axes_r_d };
 
     struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pdlen=pdlen, .ptagcode=0, .psynccode=0
                                  , .pwmmode=axes_r_a, .pwmval=axes_r_b,.speed_pulse_ticks=axes_r_c, .frestartcmd_sn = axes_r_z};   
@@ -194,9 +195,9 @@ void __visible
 trapq_append_extend(struct trapq *tq, double print_time
              , double accel_t, double cruise_t, double decel_t
              , double start_pos_x, double start_pos_y, double start_pos_z
-             , double start_pos_a, double start_pos_b, double start_pos_c
+             , double start_pos_a, double start_pos_b, double start_pos_c, double start_pos_d
              , double axes_r_x, double axes_r_y, double axes_r_z
-             , double axes_r_a, double axes_r_b, double axes_r_c             
+             , double axes_r_a, double axes_r_b, double axes_r_c, double axes_r_d
              , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en
              , unsigned char * power_table, unsigned char len_power_table, unsigned int dist_count
              , unsigned char ptagcode, unsigned char psynccode)
@@ -220,9 +221,9 @@ trapq_append_extend(struct trapq *tq, double print_time
         
     }
     struct coord start_pos = { .x=start_pos_x, .y=start_pos_y, .z=start_pos_z 
-                              ,.a=start_pos_a, .b=start_pos_b, .c=start_pos_c  };
+                              ,.a=start_pos_a, .b=start_pos_b, .c=start_pos_c, .d=start_pos_d };
     struct coord axes_r = { .x=axes_r_x, .y=axes_r_y, .z=axes_r_z 
-                           ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c };
+                           ,.a=axes_r_a, .b=axes_r_b, .c=axes_r_c, .d=axes_r_d };
 
     struct pwm_synci pwm_syncd = { .enf=pwm_sync_en, .acd_val=0, .on_off=on_off, .pdlen=pdlen, .ptagcode=ptagcode, .psynccode=psynccode
                                  , .pwmmode=axes_r_a, .pwmval=axes_r_b,.speed_pulse_ticks=axes_r_c, .frestartcmd_sn = axes_r_z};   
@@ -322,7 +323,7 @@ trapq_finalize_moves(struct trapq *tq, double print_time
 void __visible
 trapq_set_position(struct trapq *tq, double print_time
                    , double pos_x, double pos_y, double pos_z
-                   , double pos_a, double pos_b, double pos_c)
+                   , double pos_a, double pos_b, double pos_c, double pos_d)
 {
     // Flush all moves from trapq
     trapq_finalize_moves(tq, NEVER_TIME, 0);
@@ -348,7 +349,8 @@ trapq_set_position(struct trapq *tq, double print_time
     
     m->start_pos.a = pos_a;
     m->start_pos.b = pos_b;
-    m->start_pos.c = pos_c;    
+    m->start_pos.c = pos_c;
+    m->start_pos.d = pos_d;
     list_add_head(&m->node, &tq->history);
 }
 
@@ -375,6 +377,7 @@ trapq_extract_old(struct trapq *tq, struct pull_move *p, int max
         p->start_a = m->start_pos.a;
         p->start_b = m->start_pos.b;
         p->start_c = m->start_pos.c;
+        p->start_d = m->start_pos.d;
 
         p->x_r = m->axes_r.x;
         p->y_r = m->axes_r.y;
@@ -382,7 +385,8 @@ trapq_extract_old(struct trapq *tq, struct pull_move *p, int max
 
         p->a_r = m->axes_r.a;
         p->b_r = m->axes_r.b;
-        p->c_r = m->axes_r.c;        
+        p->c_r = m->axes_r.c;
+        p->d_r = m->axes_r.d;        
         p++;
         res++;
     }
