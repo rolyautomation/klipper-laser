@@ -289,7 +289,7 @@ itersolve_set_stepcompress(struct stepper_kinematics *sk
 double __visible
 itersolve_calc_position_from_coord(struct stepper_kinematics *sk
                                    , double x, double y, double z
-                                   , double a, double b, double c)
+                                   , double a, double b, double c, double d)
 {
     struct move m;
     memset(&m, 0, sizeof(m));
@@ -300,6 +300,7 @@ itersolve_calc_position_from_coord(struct stepper_kinematics *sk
     m.start_pos.a = a;
     m.start_pos.b = b;
     m.start_pos.c = c;    
+    m.start_pos.d = d;
     m.move_t = 1000.;
     return sk->calc_position_cb(sk, &m, 500.);
 }
@@ -307,9 +308,9 @@ itersolve_calc_position_from_coord(struct stepper_kinematics *sk
 void __visible
 itersolve_set_position(struct stepper_kinematics *sk
                        , double x, double y, double z
-                       , double a, double b, double c)
+                       , double a, double b, double c, double d)
 {
-    sk->commanded_pos = itersolve_calc_position_from_coord(sk, x, y, z, a, b, c);
+    sk->commanded_pos = itersolve_calc_position_from_coord(sk, x, y, z, a, b, c, d);
 }
 
 double __visible
