@@ -117,6 +117,9 @@ class CoreXYGalvoKinematics:
         self.max_z_accel = config.getfloat('max_z_accel', max_accel, above=0., maxval=max_accel)
         self.max_a_velocity = config.getfloat('max_a_velocity', max_velocity, above=0., maxval=max_velocity)
         self.max_a_accel = config.getfloat('max_a_accel', max_accel, above=0., maxval=max_accel)
+
+        self.max_d_velocity = config.getfloat('max_d_velocity', max_velocity, above=0., maxval=max_velocity)
+        self.max_d_accel = config.getfloat('max_d_accel', max_accel, above=0., maxval=max_accel)        
         self.max_h_velocity = max_velocity
         self.max_h_accel = max_accel
         # Set G0 speeds
@@ -125,17 +128,24 @@ class CoreXYGalvoKinematics:
         self.g0_a_velocity = config.getfloat('g0_speed_a', 50, minval=0.)
         self.g0_z_velocity = config.getfloat('g0_speed_z', 50, minval=0.)
 
+        self.g0_d_velocity = config.getfloat('g0_speed_d', 50, minval=0.)
+
         self.g0_m_ratio = config.getfloat('g0_ratio_xy', 0., minval=0.)
         self.g0_a_ratio = config.getfloat('g0_ratio_a', 0., minval=0.)
         self.g0_z_ratio = config.getfloat('g0_ratio_z', 0., minval=0.)
 
+        self.g0_d_ratio = config.getfloat('g0_ratio_d', 0., minval=0.)
+
         self.g1_m_ratio = config.getfloat('g1_ratio_xy', 0., minval=0.)
         self.g1_a_ratio = config.getfloat('g1_ratio_a', 0., minval=0.)
         self.g1_z_ratio = config.getfloat('g1_ratio_z', 0., minval=0.)
+
+        self.g1_d_ratio = config.getfloat('g1_ratio_d', 0., minval=0.)
+        
         self.printer = config.get_printer()
         
         # Set placeholder limits
-        self.limits = [(1.0, -1.0)] * (3+3)
+        self.limits = [(1.0, -1.0)] * (3+4)
         self.lswcheck = None
         self.gcode = None
 
@@ -154,9 +164,9 @@ class CoreXYGalvoKinematics:
         
         if ( self.ma_module is not None and 0 != self.ma_module.get_curma_index() ):
             offp = self.ma_module.get_curma_index()
-            return [x, y, pos[2], pos[5+offp], bx, cy]
+            return [x, y, pos[2], pos[5+offp], bx, cy, pos[6]]
         else:
-            return [x, y, pos[2], pos[3], bx, cy]
+            return [x, y, pos[2], pos[3], bx, cy, pos[6]]
 
     def soft_homing_BC_AXIS(self): 
         self.rails[4].soft_homing_BC_AXIS()       
@@ -238,7 +248,7 @@ class CoreXYGalvoKinematics:
         return posdata   
 
     def _motor_off(self, print_time):
-        self.limits = [(1.0, -1.0)] * (3+3)
+        self.limits = [(1.0, -1.0)] * (3+4)
     
     def _check_endstops(self, move):
         end_pos = move.end_pos
@@ -250,14 +260,14 @@ class CoreXYGalvoKinematics:
                     raise move.move_error("Must home axis XYZ first")
                 raise move.move_error()
 
-        for i in (3, 4, 5):
+        for i in (3, 4, 5, 6):
             if (i == 3) :
                 continue             
             if (move.axes_d[i]
                 and (end_pos[i] < self.limits[i][0]
                      or end_pos[i] > self.limits[i][1])):
                 if self.limits[i][0] > self.limits[i][1]:
-                    raise move.move_error("Must home axis ABC first")
+                    raise move.move_error("Must home axis ABCD first")
                 raise move.move_error()
 
 
@@ -298,6 +308,8 @@ class CoreXYGalvoKinematics:
         elif (bpos < limits[4][0] or bpos > limits[4][1] or cpos < limits[5][0] or cpos > limits[5][1]):
             self._check_endstops(move)
         elif move.axes_d[2]:
+            self._check_endstops(move)
+        elif move.axes_d[6]:
             self._check_endstops(move)
         # Check limitswitch    
         self._check_limitswitch(move)
