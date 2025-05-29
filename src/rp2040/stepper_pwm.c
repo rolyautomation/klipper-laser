@@ -27,11 +27,17 @@ void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val,
 #define  DVAR_TYPE   (2)
 #define  POWER_TABLE_SEL_COMPMODE  (DVAR_TYPE)
 
-
-#define  M_PTABLE_BYTE_MLEN (64+6)
+#if  0
+#define  M_PTABLE_BYTE_MLEN (64+2)
 #define  M_FIFO_DATA_LEN   M_PTABLE_BYTE_MLEN
-#define  M_FIFO_NUM_MAX   (3)
+//#define  M_FIFO_NUM_MAX   (3)
 #define  M_MAX_REAL_LENGTH   (64/2)
+#else
+#define  M_PTABLE_BYTE_MLEN (96+2)
+#define  M_FIFO_DATA_LEN   M_PTABLE_BYTE_MLEN
+#define  M_MAX_REAL_LENGTH   (96/2)
+#endif
+
 
 #define M_START_IDCODE      (0)
 #define M_MAX_IDCODE_MASK   (0x3f)
@@ -64,8 +70,8 @@ void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val,
 #define  M_COUNT_MUL_TWO          (1)
 #define  M_PWM_OUT_EN             (1)
 
-#define  M_OUTINFO_EN             (1)  //1
-//#define  M_OUTINFO_EN             (0)  //0
+//#define  M_OUTINFO_EN             (1)  //1
+#define  M_OUTINFO_EN             (0)  //0
 #define  M_TRACK_POWER_EN         (0)  //1
 
 struct stepper_move_pwm {

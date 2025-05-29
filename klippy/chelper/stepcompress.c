@@ -656,6 +656,7 @@ set_power_table_data_send(struct stepcompress *sc)
 {
     int runflag = 0;
     int power_table_len = sc->pdlen;
+    const int BLOCK_SIZE = 48; 
 
     if (sc->pre_ptagcode != sc->ptagcode)
     {
@@ -671,17 +672,51 @@ set_power_table_data_send(struct stepcompress *sc)
 
     if (( power_table_len > 0 ) && (runflag))
     {
+        
+        if (power_table_len > BLOCK_SIZE) {
+            // first send the tail part (tail data)
+            int tail_size = power_table_len - BLOCK_SIZE;
+            uint32_t tail_msg[3] = {
+                sc->set_tailp_pftable_msgtag, sc->oid, BLOCK_SIZE
+            };
+            struct queue_message *tail_qm = message_alloc_and_encode_psbuffer(
+                tail_msg, 3, sc->ddata + BLOCK_SIZE, tail_size);
+            tail_qm->req_clock = sc->last_step_clock;
+            list_add_tail(&tail_qm->node, &sc->msg_queue);
+            #if DEBUG_LOGFILE_EN
+            log_to_file("DEBUG: tail block offset=%d, size=%d\n", 
+                BLOCK_SIZE, tail_size);
+            #endif
+
+            // then send the main part (first 48 bytes)
+            uint32_t main_msg[3] = {
+                sc->set_powerftable_msgtag, sc->oid, sc->dist_count
+            };
+            struct queue_message *main_qm = message_alloc_and_encode_psbuffer(
+                main_msg, 3, sc->ddata, BLOCK_SIZE);
+            main_qm->req_clock = sc->last_step_clock;
+            list_add_tail(&main_qm->node, &sc->msg_queue);
+
+            #if DEBUG_LOGFILE_EN
+            log_to_file("DEBUG: main block offset=0, size=%d\n", BLOCK_SIZE);
+            #endif
+
+        } else {
+            // if data length is less than or equal to 48, use the original way to send
+            uint32_t msg[3] = {
+                sc->set_powerftable_msgtag, sc->oid, sc->dist_count
+            };
+            struct queue_message *qm = message_alloc_and_encode_psbuffer(
+                msg, 3, sc->ddata, power_table_len);
+            qm->req_clock = sc->last_step_clock;
+            list_add_tail(&qm->node, &sc->msg_queue);
+
+            #if  DEBUG_LOGFILE_EN
+            log_to_file("DEBUG: qmlen=%d, power_table_len=%d \n", 
+                qm->len, power_table_len);  
+            #endif  // DEBUG_LOGFILE_EN   
+        }
         sc->pdlen = 0;
-        uint32_t msg[3] = {
-            sc->set_powerftable_msgtag, sc->oid, sc->dist_count
-        };
-        struct queue_message *qm = message_alloc_and_encode_psbuffer(msg, 3, sc->ddata, power_table_len);
-        qm->req_clock = sc->last_step_clock;
-        list_add_tail(&qm->node, &sc->msg_queue);
-        #if  DEBUG_LOGFILE_EN
-        log_to_file("DEBUG: qmlen=%d, power_table_len=%d \n", 
-            qm->len, power_table_len);  
-        #endif  // DEBUG_LOGFILE_EN                    
         return 0;
         
     }
