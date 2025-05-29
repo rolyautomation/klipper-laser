@@ -85,7 +85,7 @@ class Move:
     def move_error(self, msg="Move out of range"):
         ep = self.end_pos
         #m = "%s: %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[3])
-        m = "%s: %.3f %.3f %.3f %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[0+3], ep[1+3], ep[2+3], ep[0+6],ep[3+4])
+        m = "%s: %.3f %.3f %.3f %.3f %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[0+3], ep[1+3], ep[2+3], ep[0+6],ep[3+4])
         return self.toolhead.printer.command_error(m)
     
     def calc_junction(self, prev_move):
