@@ -42,7 +42,7 @@ defs_stepcompress = """
         , int32_t set_pwm_sw_msgtag, int32_t set_pwm_modepower_msgtag);
     void stepcompress_fill_ext(struct stepcompress *sc, int32_t set_pwmpower_msgtag
         , int32_t set_plusticks_msgtag, int32_t set_powerftable_msgtag, int32_t set_powerftable_sp_msgtag
-        , int32_t set_sync_endc_msgtag, int32_t set_pwm_sw_endc_msgtag);
+        , int32_t set_sync_endc_msgtag, int32_t set_pwm_sw_endc_msgtag, int32_t set_tailp_pftable_msgtag);
     void stepcompress_set_invert_sdir(struct stepcompress *sc
         , uint32_t invert_sdir);
     void stepcompress_free(struct stepcompress *sc);

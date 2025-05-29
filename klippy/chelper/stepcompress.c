@@ -81,6 +81,7 @@ struct stepcompress {
     int32_t set_plusticks_msgtag;
     int32_t set_powerftable_msgtag;
     int32_t set_powerftable_sp_msgtag;
+    int32_t set_tailp_pftable_msgtag;
     int32_t set_sync_endc_msgtag;    
     int32_t set_pwm_sw_endc_msgtag;
 
@@ -307,7 +308,7 @@ stepcompress_fill(struct stepcompress *sc, uint32_t max_error
 
 void __visible
 stepcompress_fill_ext(struct stepcompress *sc, int32_t set_pwmpower_msgtag, int32_t set_plusticks_msgtag, int32_t set_powerftable_msgtag, int32_t set_powerftable_sp_msgtag
-    , int32_t set_sync_endc_msgtag, int32_t set_pwm_sw_endc_msgtag)
+    , int32_t set_sync_endc_msgtag, int32_t set_pwm_sw_endc_msgtag, int32_t set_tailp_pftable_msgtag)
 {
     sc->set_pwmpower_msgtag = set_pwmpower_msgtag;
     sc->set_plusticks_msgtag = set_plusticks_msgtag;
@@ -315,6 +316,7 @@ stepcompress_fill_ext(struct stepcompress *sc, int32_t set_pwmpower_msgtag, int3
     sc->set_powerftable_sp_msgtag = set_powerftable_sp_msgtag;
     sc->set_sync_endc_msgtag = set_sync_endc_msgtag;
     sc->set_pwm_sw_endc_msgtag = set_pwm_sw_endc_msgtag;
+    sc->set_tailp_pftable_msgtag = set_tailp_pftable_msgtag;
 }
 
 
