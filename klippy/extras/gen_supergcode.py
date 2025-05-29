@@ -7,6 +7,13 @@ import logging, re
 
 #DEBUG_FLOG = 1
 #0.04mm:635DPI
+#XYZABCFS:8;old
+#XYZABCDFS:9
+NUM_AXIS_FS = 9
+#XYZABC:6;old
+#XYZABCD:7
+NUM_AXIS = 7
+
 
 class SGcodeItemData:
     def __init__(self, coord_state, gtype, linestr):
@@ -14,8 +21,8 @@ class SGcodeItemData:
         self.gtype = gtype
         self.axis_flags = 0
         self.out_axis_flags = 0
-        self.curpos = [0.0] * 8
-        self.curmd = [0.0] *  8
+        self.curpos = [0.0] * NUM_AXIS_FS
+        self.curmd = [0.0] * NUM_AXIS_FS
         self.angle = 0.0
         self.longdist_flag = 0
         # self.mergeflag = 0
@@ -43,19 +50,21 @@ class GenSuperGcode:
         self.AXIS_A = 0x8
         self.AXIS_B = 0x10
         self.AXIS_C = 0x20
-        self.PARAM_F = 0x40
-        self.PARAM_S = 0x80    
+        self.AXIS_D = 0x40
+        self.PARAM_F = 0x80
+        self.PARAM_S = 0x100    
         self.axis_map = [
             (self.AXIS_X, 'X', 0), (self.AXIS_Y, 'Y', 1),
             (self.AXIS_Z, 'Z', 2), (self.AXIS_A, 'A', 3),
-            (self.AXIS_B, 'B', 4), (self.AXIS_C, 'C', 5)
+            (self.AXIS_B, 'B', 4), (self.AXIS_C, 'C', 5),
+            (self.AXIS_D, 'D', 6)
         ]
         self.absolute_coord = True  # G90为True，G91为False   
 
         self.cached_cmds = []
         #self.path_points = []  # 存储路径点信息
         self.last_axis_flags = 0
-        self.last_abs_pos = [0.0] * 6
+        self.last_abs_pos = [0.0] * NUM_AXIS
         self.abs_pos_bound = 0
         self.last_speed = 0.0
         self.last_power = 0
@@ -156,20 +165,35 @@ class GenSuperGcode:
                         itemdata.curmd[5] = value   
                     if abs(itemdata.curmd[5]) < self.min_distancemm:
                         itemdata.curmd[5] = 0.0
-                        itemdata.axis_flags &= ~self.AXIS_C                                                                        
+                        itemdata.axis_flags &= ~self.AXIS_C  
+
+                elif param == 'D': 
+                    itemdata.axis_flags |= self.AXIS_D
+                    itemdata.out_axis_flags |= self.AXIS_D
+                    if coord_state:
+                        itemdata.curpos[6] = value
+                        #if self.last_abs_pos[6] > self.abs_pos_bound:
+                        itemdata.curmd[6] =  value - self.last_abs_pos[6]
+                        self.last_abs_pos[6] = value                            
+                    else:
+                        itemdata.curmd[6] = value                           
+                    if abs(itemdata.curmd[6]) < self.min_distancemm:
+                        itemdata.curmd[6] = 0.0
+                        itemdata.axis_flags &= ~self.AXIS_D
+
                 elif param == 'F': 
                     itemdata.axis_flags |= self.PARAM_F
-                    itemdata.curmd[6] = value 
+                    itemdata.curmd[7] = value 
                     self.last_speed = value
                 elif param == 'S': 
                     itemdata.axis_flags |= self.PARAM_S
-                    itemdata.curmd[7] = value 
+                    itemdata.curmd[8] = value 
                     self.last_power = int(value)
                     #itemdata.papprochvalue = int(min(value/1000*255, 255))
             except ValueError:
                 continue
 
-        for i in range(6):
+        for i in range(NUM_AXIS):
             if abs(itemdata.curmd[i]) > self.long_distancemm:
                 itemdata.longdist_flag = 1
                 break
@@ -189,8 +213,8 @@ class GenSuperGcode:
         curitem = self.cached_cmds[0]
         lastitem = self.cached_cmds[-1]
         abs_coord = curitem.coord
-        max_index = curitem.curmd[:6].index(max(curitem.curmd[:6], key=abs))
-        sums = [sum(item.curmd[i] for item in self.cached_cmds) for i in range(6)]
+        max_index = curitem.curmd[:NUM_AXIS].index(max(curitem.curmd[:NUM_AXIS], key=abs))
+        sums = [sum(item.curmd[i] for item in self.cached_cmds) for i in range(NUM_AXIS)]
         #dratiotab = [ round(min(item.curmd[max_index]/sums[max_index]*self.basenum_dist, self.basenum_dist)) for item in self.cached_cmds ]
         ratios = [item.curmd[max_index]/sums[max_index]*self.basenum_dist for item in self.cached_cmds]
         remaining = self.basenum_dist
@@ -206,7 +230,7 @@ class GenSuperGcode:
         for i in range(int(remaining)):
             dratiotab[indices[i]] += 1
             
-        pvaltab   = [ int(min(item.curmd[7]/1000*255, 255)) for item in self.cached_cmds ]
+        pvaltab   = [ int(min(item.curmd[8]/1000*255, 255)) for item in self.cached_cmds ]
         tpowerdistr = list(zip(dratiotab, pvaltab))
         ptablstr = "P" + ",".join(f"{dratio},{pval}" for dratio, pval in tpowerdistr)
         #lpowerdistr = [x for pair in zip(dratiotab, pvaltab) for x in pair]
@@ -349,7 +373,7 @@ class GenSuperGcode:
     def clean_cache_cmd(self):
         self.cached_cmds = []
         self.last_axis_flags = 0
-        self.last_abs_pos = [0.0] * 6
+        self.last_abs_pos = [0.0] * NUM_AXIS
         self.last_speed = 0.0
         self.last_power = 0
         self.outpowertabflag = 0       
