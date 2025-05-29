@@ -3,6 +3,7 @@
 
 
 #define MAX_PTABLE_LEN  (64)
+//#define MAX_PTABLE_LEN  (96)
 //M_FIFO_DATA_LEN
 //M_PTABLE_BYTE_MLEN
 

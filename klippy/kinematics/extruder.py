@@ -548,7 +548,8 @@ class PrinterExtruderPWM:
         self.psynccode = 0
         self.ptagcode = 0
         self.ep_step_dist_tick = None
-        self.powertable_max = 64
+        #MAX_PTABLE_LEN from 64 to 96
+        self.powertable_max = 96
         self.c_array = array.array('B', [0] * self.powertable_max)  
         #self.c_array_NULL = array.array('B', [0] * 2)            
 

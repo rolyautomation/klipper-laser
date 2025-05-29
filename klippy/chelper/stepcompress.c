@@ -402,9 +402,11 @@ stepcompress_set_power_table(struct stepcompress *p_sc_insk, uint8_t  pdlen,
     {
         p_sc_insk->ptagcode = ptagcode;
         p_sc_insk->dist_count = dist_count;
-        if (ddata_len > MAX_PTABLE_LEN)
-            ddata_len = MAX_PTABLE_LEN;
-        memcpy(p_sc_insk->ddata, pddata, ddata_len);
+        // if (ddata_len > MAX_PTABLE_LEN)
+        //     ddata_len = MAX_PTABLE_LEN;
+        if (p_sc_insk->pdlen > ddata_len)
+            p_sc_insk->pdlen = ddata_len;
+        memcpy(p_sc_insk->ddata, pddata, p_sc_insk->pdlen);
 
     }
 

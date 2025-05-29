@@ -214,6 +214,7 @@ trapq_append_extend(struct trapq *tq, double print_time
         power_tabled.dist_count = dist_count;
         if (len_power_table > MAX_PTABLE_LEN) {
             len_power_table = MAX_PTABLE_LEN;
+            pdlen = len_power_table;
         }
         if (len_power_table > 0) {
             memcpy(power_tabled.ddata, power_table, len_power_table);
