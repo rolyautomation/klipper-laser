@@ -38,7 +38,8 @@ class GenSuperGcode:
         self.ratio_threshold = 0.01
 
         #self.blocklen = config.getint('blocklen', 8, minval=2, maxval=24)
-        self.blocklen = config.getint('blocklen', 8, minval=2, maxval=28)
+        #self.blocklen = config.getint('blocklen', 8, minval=2, maxval=28)
+        self.blocklen = config.getint('blocklen', 8, minval=2, maxval=48)
         self.enable = config.getint('enable', 1, minval=0, maxval=1)
         self.min_distancemm = config.getfloat('min_distance', 0.0005, above=0.0)
         #self.pmerge_max = config.getint('pmerge_max', 8, minval=0, maxval=32)
