@@ -515,13 +515,13 @@ class ToolHead:
             move_d = self.powervary_factor * move_d
         return(move_d)
 
-    def predict_move_distance(self,newpos):
-        resd = 0.01
-        if self.powervary_mode > 0 :
-            resd = self.predict_move_distance(newpos)    
-        else:
-            resd = self.predict_move_distance(newpos)
-        return(resd)
+    # def predict_move_distance(self,newpos):
+    #     resd = 0.01
+    #     if self.powervary_mode > 0 :
+    #         resd = self.predict_move_distance_old(newpos)    
+    #     else:
+    #         resd = self.predict_move_distance_old(newpos)
+    #     return(resd)
          
     def soft_homing_BC_AXIS(self):
         self.kin.soft_homing_BC_AXIS()
