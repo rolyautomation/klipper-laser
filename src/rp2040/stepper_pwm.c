@@ -28,9 +28,10 @@ void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val,
 #define  POWER_TABLE_SEL_COMPMODE  (DVAR_TYPE)
 
 
-#define  M_PTABLE_BYTE_MLEN (64)
+#define  M_PTABLE_BYTE_MLEN (64+6)
 #define  M_FIFO_DATA_LEN   M_PTABLE_BYTE_MLEN
 #define  M_FIFO_NUM_MAX   (3)
+#define  M_MAX_REAL_LENGTH   (64/2)
 
 #define M_START_IDCODE      (0)
 #define M_MAX_IDCODE_MASK   (0x3f)
@@ -63,7 +64,7 @@ void  set_pwm_pulse_width_fiberlaser(uint8_t flag,uint8_t pwd_oid, uint32_t val,
 #define  M_COUNT_MUL_TWO          (1)
 #define  M_PWM_OUT_EN             (1)
 
-#define  M_OUTINFO_EN             (0)  //1
+#define  M_OUTINFO_EN             (1)  //1
 //#define  M_OUTINFO_EN             (0)  //0
 #define  M_TRACK_POWER_EN         (0)  //1
 
@@ -122,6 +123,7 @@ struct stepper_pwm {
     #if POWER_TABLE_SEL_COMPMODE  == DVAR_TYPE
     uint8_t  powertable[M_PTABLE_BYTE_MLEN]; 
     uint8_t  power_idcode; 
+    uint8_t  mpackage_length;
     #endif 
     uint8_t  endcid;  
     uint8_t  pre_endcid;        
@@ -818,7 +820,8 @@ command_config_stepper_pwm(uint32_t *args)
     s->step_pin_num = args[1];
     set_record_axis_info(args[1]);
     #endif
-    #ifdef M_PWM_OUT_EN 
+    #ifdef M_PWM_OUT_EN
+    //s->mpackage_length = 0; 
     set_pwm_ctrl_data(0, 0, 0);
     set_pwm_pause_resume_flag(0);
     set_pwm_min_power_value(0);
@@ -1175,6 +1178,7 @@ DECL_COMMAND(command_set_pwmpower_endc_stepper_pwm, "set_pwmpower_endc oid=%c pw
 void
 command_powerfunc_table_stepper_pwm(uint32_t *args)
 {
+    uint8_t chk_data_len = 0;
     struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
     irq_disable();
     s->req_composite_mode = 1;    
@@ -1191,15 +1195,62 @@ command_powerfunc_table_stepper_pwm(uint32_t *args)
         shutdown("Invalid length, must be less than maxlen");
     memcpy(s->powertable, data, data_len);
     s->composite_itemlen = data_len >> 1 ; //data_len/2
+    if (s->mpackage_length > 0)
+    {
+        chk_data_len =  s->mpackage_length + s->composite_itemlen;
+        s->mpackage_length = 0;
+        if (chk_data_len > M_MAX_REAL_LENGTH)
+        {
+            shutdown("Invalid length, must be less than maxlen");
+        }
+        s->composite_itemlen = chk_data_len;
+
+    }
     #endif 
     irq_enable();
     #if M_OUTINFO_EN
     output("powerf:[%c,%u,%c]",args[0],args[1],args[2]); 
     output("powerval:[%c,%c]",data[0],data[data_len-1]); 
+    output("chkdlen:[%c,%c]",chk_data_len,s->composite_itemlen); 
     #endif     
 
 }
 DECL_COMMAND(command_powerfunc_table_stepper_pwm, "set_powerfunc_table oid=%c tdc=%u data=%*s");
+
+
+//rev_tailp_powertable
+void
+command_rev_tailp_powertable_stepper_pwm(uint32_t *args)
+{
+    struct stepper_pwm *s = stepper_oid_lookup_pwm(args[0]);
+    uint8_t start_index = args[1]; 
+    uint8_t data_len = args[2];
+    uint8_t *data = command_decode_ptr(args[3]);   
+    uint8_t *p_start = s->powertable + start_index;
+    irq_disable();
+    //irq_enable();
+    #if POWER_TABLE_SEL_COMPMODE  == DVAR_TYPE
+    if (data_len & 0x01)
+        shutdown("Invalid length, must be even");
+    if (data_len > M_PTABLE_BYTE_MLEN)
+        shutdown("Invalid length, must be less than maxlen");
+    memcpy(p_start, data, data_len);
+    s->mpackage_length += (data_len >> 1); //data_len/2
+    #endif 
+    irq_enable();
+    if (s->mpackage_length > M_MAX_REAL_LENGTH)
+    {
+        shutdown("Invalid length, must be less than maxlen");
+    }    
+    #if M_OUTINFO_EN
+    output("revtp_powerf:[%c,%u,%c]",args[0],args[1],args[2]); 
+    output("revtp_powerval:[%c,%c]",data[0],data[data_len-1]); 
+    output("revtp_len:[%c,%c]",data_len/2,s->mpackage_length); 
+    #endif     
+
+}
+DECL_COMMAND(command_rev_tailp_powertable_stepper_pwm, "rev_tailp_powertable oid=%c sind=%c data=%*s");
+
 
 #if 0
 void
