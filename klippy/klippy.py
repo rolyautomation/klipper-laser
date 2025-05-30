@@ -322,7 +322,7 @@ def main():
     logging.info("Starting Klippy...")
 
     autoselcfile = importlib.import_module('.autoselcfile', 'extras')
-    autoselcfile.FUN_GPIO_EN = 1
+    autoselcfile.FUN_GPIO_EN = 0
     iret = autoselcfile.open_rpi_gpio6()
     logging.info("rpi_gpio6_runstate:%d",iret)
     newfn = autoselcfile.get_autoselcfile()
