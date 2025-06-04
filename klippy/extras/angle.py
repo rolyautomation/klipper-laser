@@ -670,13 +670,14 @@ class HelperMT6835:
                 crc &= 0xFF
         return crc
     def _read_angle(self, reg):
-        #reg = 0x3000 | reg
-        reg = READANGLECOMMAND | reg
+        reg = 0x3000 | reg
+        #reg = READANGLECOMMAND | reg
         msg = [reg >> 8, reg & 0xff, 0, 0, 0, 0]
         params = self._send_spi(msg)
         resp = bytearray(params['response'])
         #angle = (resp[2] << 7) | (resp[3] >> 1)
         #status = resp[4]
+        #logging.info("vlist:0x%02x,0x%02x,0x%02x,0x%02x,0x%02x,0x%02x", resp[0], resp[1], resp[2], resp[3], resp[4], resp[5])
         angle = (resp[2] << 13) | (resp[3] << 5) | (resp[4] >> 3)
         status = resp[4] & 0x07       
         crc_computed = self.crc8([resp[2], resp[3], resp[4]])

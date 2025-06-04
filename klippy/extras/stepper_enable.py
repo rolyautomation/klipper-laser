@@ -98,7 +98,8 @@ class PrinterStepperEnable:
         enable = setup_enable_pin(self.printer, config.get('enable_pin', None))
         self.enable_lines[name] = EnableTracking(mcu_stepper, enable)
         aaxis_str = "_a"
-        if aaxis_str in name:
+        daxis_str = "_d"
+        if aaxis_str in name or daxis_str in name:
             pass
         else:
             self.enable_lines_disset[name] =  self.enable_lines[name]    
