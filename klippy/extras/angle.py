@@ -634,6 +634,8 @@ class HelperMT6835:
             2: "Calibration Failed",
             3: "Calibration Successful"
         }
+        self.cal_status = self.status_map
+        
     def _build_config(self):
         cmdqueue = self.spi.get_command_queue()
         self.spi_angle_transfer_cmd = self.mcu.lookup_query_command(
@@ -668,12 +670,15 @@ class HelperMT6835:
                 crc &= 0xFF
         return crc
     def _read_angle(self, reg):
-        reg = 0x3000 | reg
+        #reg = 0x3000 | reg
+        reg = READANGLECOMMAND | reg
         msg = [reg >> 8, reg & 0xff, 0, 0, 0, 0]
         params = self._send_spi(msg)
         resp = bytearray(params['response'])
-        angle = (resp[2] << 7) | (resp[3] >> 1)
-        status = resp[4]
+        #angle = (resp[2] << 7) | (resp[3] >> 1)
+        #status = resp[4]
+        angle = (resp[2] << 13) | (resp[3] << 5) | (resp[4] >> 3)
+        status = resp[4] & 0x07       
         crc_computed = self.crc8([resp[2], resp[3], resp[4]])
         crc = resp[5]
         return angle, status, crc, crc_computed
@@ -731,11 +736,13 @@ class HelperMT6835:
         if reg == 0x003:
             angle, status, crc1, crc2 = self._read_angle(reg)
             gcmd.respond_info("ANGLE REG[0x003] = 0x%02x" %
-                              (angle >> 7))
+                              (angle >> 13))
             gcmd.respond_info("ANGLE REG[0x004] = 0x%02x" %
-                              ((angle << 1) & 0xff))
+                              ((angle >> 5) & 0xff))
+            gcmd.respond_info("ANGLE REG[0x005] = 0x%02x" %
+                              (((angle & 0x1f ) << 3) | status))
             gcmd.respond_info("Angle %i ~ %.2f" % (angle,
-                                                   angle * 360 / (1 << 15)))
+                                                   angle * 360 / (1 << 21)))
             gcmd.respond_info("Weak Mag: %i" % (status >> 1 & 0x1))
             gcmd.respond_info("Under Voltage: %i" % (status >> 2 & 0x1))
             gcmd.respond_info("CRC: 0x%02x == 0x%02x" % (crc1, crc2))
