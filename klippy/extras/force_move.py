@@ -83,7 +83,8 @@ class ForceMove:
         toolhead.flush_step_generation()
         prev_sk = stepper.set_stepper_kinematics(self.stepper_kinematics)
         prev_trapq = stepper.set_trapq(self.trapq)
-        stepper.set_position((0., 0., 0.))
+        #stepper.set_position((0., 0., 0.))
+        stepper.set_position((0., 0., 0., 0., 0., 0., 0.))
         axis_r, accel_t, cruise_t, cruise_v = calc_move_time(dist, speed, accel)
         print_time = toolhead.get_last_move_time()
         self.trapq_append(self.trapq, print_time, accel_t, cruise_t, accel_t,

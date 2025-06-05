@@ -901,6 +901,7 @@ class Angle:
     def _process_batch(self, eventtime):
         if self.sensor_helper.is_tcode_absolute:
             self.sensor_helper.update_clock()
+        #logging.info("Processing angle '%s' measurements", self.name)    
         raw_samples = self.bulk_queue.pull_queue()
         if not raw_samples:
             return {}
@@ -908,6 +909,7 @@ class Angle:
         if not samples:
             return {}
         offset = self.calibration.apply_calibration(samples)
+        #logging.info("data '%s' errors %s offset %s", samples, error_count, offset)    
         return {'data': samples, 'errors': error_count,
                 'position_offset': offset}
 
