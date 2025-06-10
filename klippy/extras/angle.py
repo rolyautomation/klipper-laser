@@ -36,10 +36,13 @@ class AngleCalibration:
         self.calibration_reversed = False
         self.calibration = []
         cal = config.get('calibrate', None)
+        #logging.info("calibrate: %s", cal)
         if cal is not None:
             data = [d.strip() for d in cal.split(',')]
             angles = [float(d) for d in data if d]
             self.load_calibration(angles)
+            # logging.info("Forward calibration: %s, reverse calibration: %s",
+            #              self.calibration, self.calibration_reversed)
         # Register commands
         self.printer.register_event_handler("stepper:sync_mcu_position",
                                             self.handle_sync_mcu_pos)
@@ -172,6 +175,7 @@ class AngleCalibration:
         full_step_dist = step_dist * microsteps
         rotation_dist = full_steps * full_step_dist
         align_dist = step_dist * self.get_stepper_phase()
+        #logging.info("Step dist: %s, align dist: %s", step_dist, align_dist)
         move_time = 0.010
         move_speed = full_step_dist / move_time
         move(mcu_stepper, -(rotation_dist+align_dist), move_speed)
@@ -212,6 +216,7 @@ class AngleCalibration:
                 "Failed calibration - incomplete sensor data")
         fcal = { i: cal[i] for i in range(full_steps) }
         rcal = { full_steps-i-1: cal[i+full_steps] for i in range(full_steps) }
+        #logging.info("Forward cal: %s, reverse cal: %s", fcal, rcal)
         return fcal, rcal
     def calc_angles(self, meas):
         total_count = total_variance = 0
