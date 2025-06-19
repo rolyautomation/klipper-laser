@@ -51,6 +51,7 @@ class MoveTracker:
         last_move = self.toolhead.lookahead.get_last()
         self.toolhead.register_lookahead_callback(move_complete)
         self.toolhead.lookahead.flush()
+        #self.toolhead.register_lookahead_callback(move_complete)
         if last_move is not None and last_move != last_move_before:
             self.accel_t = last_move.accel_t
             self.cruise_t = last_move.cruise_t
@@ -58,7 +59,27 @@ class MoveTracker:
             self.move_t = self.accel_t + self.cruise_t + self.decel_t 
             self.last_start_t =1
             self.last_end_t = 2
-            self.last_current_t = 0            
+            self.last_current_t = 0    
+
+            current_time = self.printer.get_reactor().monotonic()
+            est_print_time = self.toolhead.mcu.estimated_print_time(current_time)
+            print_time_delta = self.start_print_time - est_print_time
+            estimated_end_time = current_time + print_time_delta + self.move_t
+            logging.info("current_time: %.3f, est_print_time: %.3f, print_time_delta: %.3f, estimated_end_time: %.3f",current_time, est_print_time,print_time_delta,estimated_end_time)
+            def move_end_callback(eventtime):
+                self.end_move_time = eventtime
+                self.gcode.respond_info(
+                    f"move end time: {self.end_move_time:.3f}\n"
+                    f"move duration: {self.end_move_time - self.start_system_time:.3f} seconds"
+                )
+                return self.printer.get_reactor().NEVER  
+        
+            self.printer.get_reactor().register_timer(
+                move_end_callback, 
+                estimated_end_time
+            )
+
+
             self.gcode.respond_info(
                 f"accel time: {self.accel_t:.3f}\n"
                 f"cruise time: {self.cruise_t:.3f}\n"
