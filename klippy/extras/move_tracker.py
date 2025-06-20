@@ -4,6 +4,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
+import time
 import os
 import subprocess
 
@@ -38,6 +39,8 @@ class MoveTracker:
         self.last_start_t = 0
         self.last_end_t = 0
         self.last_current_t = 0
+        self.start_system_time = 0
+        self.start_system_time_clock = 0
 
 
     def _handle_ready(self):
@@ -77,6 +80,22 @@ class MoveTracker:
                 logging.info("finish eventtime: %.3f", eventtime)
             return self.reactor.NEVER
         return next_time    
+
+    def  send_time_camera(self):
+        #self.start_system_time_clock
+        #self.image_cindex_max
+        #self.move_t
+        #curl -X POST -H "Content-Type: application/json" -d '{"capture": "low", "stime": 0.2, "mduration": 0.2, "num_times": 3}' http://192.168.1.106:8767/process-capture
+        #curl -X POST -H "Content-Type: application/json" -d '{"capture": "low",  "mduration": 2, "num_times": 3}' http://192.168.1.106:8767/process-capture
+        cmd = f'''curl -X POST -H "Content-Type: application/json" -d '{{"capture": "low", "stime": {self.start_system_time_clock}, "mduration": {self.move_t}, "num_times": {self.image_cindex_max}}}' http://192.168.1.106:8767/process-capture'''
+        if DEBUG_MODE:
+            logging.info("cmd: %s", cmd)
+        try:    
+            subprocess.Popen(cmd, shell=True)
+        except subprocess.CalledProcessError as e:
+            logging.error('Failed to capture image: %s' % str(e))  
+        pass
+        
 
     def cmd_TRACK_MOVE(self, gcmd):
         move_cmd = gcmd.get('MOVE', 'G4 P10')
@@ -119,13 +138,18 @@ class MoveTracker:
             #self.last_current_t = 0    
 
             current_time = self.printer.get_reactor().monotonic()
+            current_system_time = time.time()
+            time_diff = current_system_time - current_time
+                        
             est_print_time = self.toolhead.mcu.estimated_print_time(current_time)
             print_time_delta = self.start_print_time - est_print_time
             estimated_end_time = current_time + print_time_delta + self.move_t
             self.last_end_t = estimated_end_time
             self.last_start_t  = self.end_system_time + print_time_delta
             self.last_current_t = current_time
+            self.start_system_time_clock = time_diff + self.last_start_t
             self.reactor.update_timer(self.image_trigger_timer, self.last_start_t)
+            self.send_time_camera()
             if DEBUG_MODE:
                 logging.info("current_time: %.3f, est_print_time: %.3f, print_time_delta: %.3f, estimated_end_time: %.3f",current_time, est_print_time,print_time_delta,estimated_end_time)
             def move_end_callback(eventtime):
@@ -152,7 +176,8 @@ class MoveTracker:
                 f"move end time: {self.last_end_t:.3f}\n"  
                 f"time until start: {self.last_start_t - self.last_current_t:.3f} seconds\n"
                 f"time until end: {self.last_end_t - self.last_current_t:.3f} seconds\n" 
-                f"time interval: {self.image_tinterval:.3f} seconds"                              
+                f"time interval: {self.image_tinterval:.3f} seconds\n"  
+                f"csystem time: {current_system_time:.3f} time diff: {time_diff:.3f} seconds"                            
             )
 
         else:
