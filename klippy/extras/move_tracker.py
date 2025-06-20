@@ -4,8 +4,11 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
+import os
+import subprocess
 
 
+DEBUG_MODE = True
 
 class MoveTracker:
     def __init__(self, config):
@@ -14,7 +17,13 @@ class MoveTracker:
 
         self.max_num  = config.getint('max_num', 10, minval=1) 
         self.time_interval = config.getfloat('time_interval', 0.001, above=0.005, maxval=2)
-        self.image_name = config.get('image_name', "g_tracker_")
+        self.image_name = config.get('image_name', "g_tracker")
+
+        input_image_dir = config.get('image_dir', "rolyvision/temps")
+        self.image_dir = os.path.join(os.path.expanduser('~'), input_image_dir)
+        self.camera_cmd = config.get('camera_cmd', "")
+
+
         self.image_trigger_timer = self.reactor.register_timer(self.image_trigger_fun)  
         self.image_cindex = 0
         self.image_cindex_max = 0
@@ -40,16 +49,32 @@ class MoveTracker:
         
         if self.last_image_time  < eventtime:
             self.last_image_time = eventtime + self.time_interval
-            image_name = self.image_name + str(self.image_cindex)
-            logging.info("image_name: %s, eventtime: %.3f", image_name, eventtime)
+            timestamp = f"{eventtime:.6f}"  
+            image_name = f"{self.image_name}_{self.image_cindex}_{timestamp}"
+            try:
+                if self.camera_cmd:
+                    image_path = f"{self.image_dir}/{image_name}"
+                    cmd = self.camera_cmd.replace('%FILENAME%', image_path)
+                    if DEBUG_MODE:
+                        logging.info("cmd: %s", cmd)
+                    #subprocess.Popen([cmd])
+                    subprocess.Popen(cmd, shell=True)
+            except subprocess.CalledProcessError as e:
+                logging.error('Failed to capture image: %s' % str(e))  
+                return self.reactor.NEVER  
+            #image_name = self.image_name + str(self.image_cindex)
+            #image_name = f"{self.image_name}_{self.image_cindex}"
+            if DEBUG_MODE:
+                logging.info("image_name: %s, eventtime: %.3f", image_name, eventtime)
 
         else:
-            logging.info("time interval too short %.3f, last_image_time: %.3f",self.image_tinterval, self.last_image_time)
+            if DEBUG_MODE:
+                logging.info("time interval too short %.3f, last_image_time: %.3f",self.image_tinterval, self.last_image_time)
             pass
-
         self.image_cindex += 1
         if self.image_cindex >= self.image_cindex_max:
-            logging.info("finish eventtime: %.3f", eventtime)
+            if DEBUG_MODE:
+                logging.info("finish eventtime: %.3f", eventtime)
             return self.reactor.NEVER
         return next_time    
 
@@ -101,7 +126,8 @@ class MoveTracker:
             self.last_start_t  = self.end_system_time + print_time_delta
             self.last_current_t = current_time
             self.reactor.update_timer(self.image_trigger_timer, self.last_start_t)
-            logging.info("current_time: %.3f, est_print_time: %.3f, print_time_delta: %.3f, estimated_end_time: %.3f",current_time, est_print_time,print_time_delta,estimated_end_time)
+            if DEBUG_MODE:
+                logging.info("current_time: %.3f, est_print_time: %.3f, print_time_delta: %.3f, estimated_end_time: %.3f",current_time, est_print_time,print_time_delta,estimated_end_time)
             def move_end_callback(eventtime):
                 self.end_move_time = eventtime
                 self.gcode.respond_info(
@@ -110,11 +136,11 @@ class MoveTracker:
                 )
                 return self.printer.get_reactor().NEVER  
         
-            self.printer.get_reactor().register_timer(
-                move_end_callback, 
-                estimated_end_time
-            )
-
+            if DEBUG_MODE:
+                self.printer.get_reactor().register_timer(
+                    move_end_callback, 
+                    estimated_end_time
+                )
 
             self.gcode.respond_info(
                 f"accel time: {self.accel_t:.3f}\n"
@@ -139,6 +165,8 @@ class MoveTracker:
             "last_move_end_time": self.last_end_t,
             "last_move_duration": self.move_t
         }
+
+
 
 #def load_config_prefix(config):
 def load_config(config):
