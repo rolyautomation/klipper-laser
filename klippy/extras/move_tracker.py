@@ -35,6 +35,12 @@ class MoveTracker:
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode.register_command('TRACK_MOVE', self.cmd_TRACK_MOVE)  
         self.printer.register_event_handler("klippy:ready", self._handle_ready)
+        # Register dump webhooks
+        webhooks = self.printer.lookup_object('webhooks')
+        webhooks.register_endpoint(
+            "move_tracker/tracker_time", self._handle_mtracker_request
+        )
+
         self.move_t = 0         
         self.last_start_t = 0
         self.last_end_t = 0
@@ -183,15 +189,84 @@ class MoveTracker:
         else:
             self.gcode.respond_info("no new move added to queue")
 
+
+    def _handle_mtracker_request(self, web_request):
+        move_cmd = web_request.get_str('move_cmd', 'G4 P10')
+        #total_num = web_request.get_int('total_num', 3)
+
+        self.start_system_time = self.printer.get_reactor().monotonic()
+        self.start_print_time = self.toolhead.get_last_move_time()
+        def move_complete(eventtime):
+            self.end_system_time = self.printer.get_reactor().monotonic()
+            self.end_print_time = eventtime
+            duration = self.end_print_time - self.start_print_time
+            if DEBUG_MODE:
+                self.gcode.respond_info(
+                    f"print move start: {self.start_print_time:.3f}, end time: {self.end_print_time:.3f}, duration: {duration:.3f} seconds\n"
+                    f"start system time: {self.start_system_time:.3f}, end: {self.end_system_time:.3f}, duration: {self.end_system_time - self.start_system_time:.3f} seconds"
+                )
+            return True
+
+        last_move_before = self.toolhead.lookahead.get_last()
+        self.gcode.run_script_from_command(move_cmd)
+        last_move = self.toolhead.lookahead.get_last()
+        self.toolhead.register_lookahead_callback(move_complete)
+        self.toolhead.lookahead.flush()
+        #self.toolhead.register_lookahead_callback(move_complete)
+        result = {
+            'stime': 0,
+            'mduration': 0,
+            'msg': 'not new move added to queue'
+        }        
+        if last_move is not None and last_move != last_move_before:
+            self.accel_t = last_move.accel_t
+            self.cruise_t = last_move.cruise_t
+            self.decel_t = last_move.decel_t
+            self.move_t = self.accel_t + self.cruise_t + self.decel_t 
+            #self.image_tinterval =  self.move_t / (self.image_cindex_max - 1)
+
+            current_time = self.printer.get_reactor().monotonic()
+            current_system_time = time.time()
+            time_diff = current_system_time - current_time
+
+            est_print_time = self.toolhead.mcu.estimated_print_time(current_time)
+            print_time_delta = self.start_print_time - est_print_time
+            estimated_end_time = current_time + print_time_delta + self.move_t
+            self.last_end_t = estimated_end_time
+            self.last_start_t  = self.end_system_time + print_time_delta
+            self.last_current_t = current_time
+            self.start_system_time_clock = time_diff + self.last_start_t
+            #self.reactor.update_timer(self.image_trigger_timer, self.last_start_t)
+            #self.send_time_camera()
+            if DEBUG_MODE:
+                logging.info("current_time: %.3f, est_print_time: %.3f, print_time_delta: %.3f, estimated_end_time: %.3f",current_time, est_print_time,print_time_delta,estimated_end_time)
+            def move_end_callback(eventtime):
+                self.end_move_time = eventtime
+                self.gcode.respond_info(
+                    f"move end time: {self.end_move_time:.3f}\n"
+                    f"move duration: {self.end_move_time - self.start_system_time:.3f} seconds"
+                )
+                return self.printer.get_reactor().NEVER  
+
+            if DEBUG_MODE:
+                self.printer.get_reactor().register_timer(
+                    move_end_callback, 
+                    estimated_end_time
+                )
+            result['stime'] = self.start_system_time_clock
+            result['mduration'] = self.move_t
+            result['msg'] = 'new move added to queue'
+        web_request.send(result)
+
+
     def get_status(self, eventtime):
         return {
+            "start_system_time_clock": self.start_system_time_clock,
             "current_time": self.last_current_t,
             "last_move_start_time": self.last_start_t,
             "last_move_end_time": self.last_end_t,
             "last_move_duration": self.move_t
         }
-
-
 
 #def load_config_prefix(config):
 def load_config(config):
