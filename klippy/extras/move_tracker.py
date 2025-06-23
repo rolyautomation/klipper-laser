@@ -203,7 +203,7 @@ class MoveTracker:
             if DEBUG_MODE:
                 self.gcode.respond_info(
                     f"print move start: {self.start_print_time:.3f}, end time: {self.end_print_time:.3f}, duration: {duration:.3f} seconds\n"
-                    f"start system time: {self.start_system_time:.3f}, end: {self.end_system_time:.3f}, duration: {self.end_system_time - self.start_system_time:.3f} seconds"
+                    f"start system time: {self.start_system_time:.6f}, end: {self.end_system_time:.6f}, duration: {self.end_system_time - self.start_system_time:.6f} seconds"
                 )
             return True
 
@@ -216,6 +216,9 @@ class MoveTracker:
         result = {
             'stime': 0,
             'mduration': 0,
+            'accel_t': 0,
+            'cruise_t': 0,
+            'decel_t': 0,
             'msg': 'not new move added to queue'
         }        
         if last_move is not None and last_move != last_move_before:
@@ -240,6 +243,7 @@ class MoveTracker:
             #self.send_time_camera()
             if DEBUG_MODE:
                 logging.info("current_time: %.3f, est_print_time: %.3f, print_time_delta: %.3f, estimated_end_time: %.3f",current_time, est_print_time,print_time_delta,estimated_end_time)
+                logging.info("start_system_time_clock: %.6f, move_t: %.6f",self.start_system_time_clock, self.move_t)
             def move_end_callback(eventtime):
                 self.end_move_time = eventtime
                 self.gcode.respond_info(
@@ -255,6 +259,9 @@ class MoveTracker:
                 )
             result['stime'] = self.start_system_time_clock
             result['mduration'] = self.move_t
+            result['accel_t'] = self.accel_t
+            result['cruise_t'] = self.cruise_t
+            result['decel_t'] = self.decel_t
             result['msg'] = 'new move added to queue'
         web_request.send(result)
 
