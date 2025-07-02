@@ -1196,6 +1196,59 @@ int  setup_pio_pwm(uint pwmpin, uint32_t period,uint32_t level, uint pin_start, 
 #endif
 
 
+#define M_PIO_SET_PULSE_WIDTH
+#ifdef  M_PIO_SET_PULSE_WIDTH
+
+
+
+#define M_SEL_PIO_PW     (pio1)
+#define M_SEL_SM_PW      (2)
+// -------------------- //
+// fiber_set_pulsewidth //
+// -------------------- //
+
+#define fiber_set_pulsewidth_wrap_target 0
+#define fiber_set_pulsewidth_wrap 10
+
+static const uint16_t fiber_set_pulsewidth_program_instructions[] = {
+            //     .wrap_target
+    0x80a0, //  0: pull   block           side 0     
+    0xe001, //  1: set    pins, 1         side 0     
+    0xa042, //  2: nop                    side 0     
+    0xe05f, //  3: set    y, 31           side 0     
+    0x6001, //  4: out    pins, 1         side 0     
+    0xa042, //  5: nop                    side 0     
+    0xb042, //  6: nop                    side 1     
+    0x1084, //  7: jmp    y--, 4          side 1     
+    0xa042, //  8: nop                    side 0     
+    0xa042, //  9: nop                    side 0     
+    0xe000, // 10: set    pins, 0         side 0     
+            //     .wrap
+};
+
+//#if !PICO_NO_HARDWARE
+static const struct pio_program fiber_set_pulsewidth_program = {
+    .instructions = fiber_set_pulsewidth_program_instructions,
+    .length = 11,
+    .origin = -1,
+};
+
+static inline pio_sm_config fiber_set_pulsewidth_program_get_default_config(uint offset) {
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_wrap(&c, offset + fiber_set_pulsewidth_wrap_target, offset + fiber_set_pulsewidth_wrap);
+    sm_config_set_sideset(&c, 1, false, false);
+    return c;
+}
+//#endif
+
+
+
+
+
+
+
+#endif
+
 
 //#define M_PIO_CTRL_DCMOTOR
 #ifdef  M_PIO_CTRL_DCMOTOR

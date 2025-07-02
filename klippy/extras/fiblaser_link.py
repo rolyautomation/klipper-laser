@@ -6,6 +6,9 @@
 import logging
 
 
+PW_HCMD = 0x5A01
+
+
 class FiberLaserLink:
     cmd_RCMD_FIBER_LASER_help = "run cmd mode pwms of a fiber laser"   
     cmd_QUERY_FIBER_LASER_help =  "Query flag of a fiber laser"   
@@ -27,7 +30,8 @@ class FiberLaserLink:
         self._sta_ee_em = config.getint('sta_ee_em', 5000, minval=5000, maxval=100000)
         self._sta_em_ee = config.getint('sta_em_ee', 1000, minval=1000, maxval=100000)   
         self._psyncpwm = config.getint('psyncpwm', 512, minval=2)  
-        self._fiber_type = config.getint('type', 0, minval=0)           
+        self._fiber_type = config.getint('type', 0, minval=0) 
+        self.pulsewidth_en = config.getint('pulsewidth_en', 0, minval=0)          
 
 
         self._oid = self._mcu.create_oid()
@@ -51,14 +55,18 @@ class FiberLaserLink:
         gcode.register_command('TEST_PSYNC_PARAM',
                                 self.cmd_TEST_PSYNC_PARAM,
                                 desc=self.cmd_TEST_PSYNC_PARAM_help)  
-                                                          
+
+        gcode.register_command('SET_PULSEWIDTH',
+                                self.cmd_SET_PULSEWIDTH,
+                                desc=self.cmd_SET_PULSEWIDTH_help)
 
         gcode.register_command("QUERY_FIBER_LASER", self.cmd_QUERY_FIBER_LASER,
                                desc=self.cmd_QUERY_FIBER_LASER_help)
                                                           
-                     
+ 
         self._last_clock = 0
         self._lastprr_clock = 0
+        self._lastpw_clock = 0        
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect_bind)
 
@@ -87,6 +95,9 @@ class FiberLaserLink:
 
         self._modify_psync_param_cmd = self._mcu.lookup_command(
             "modify_psync_param oid=%c psp=%u psd=%u", cq=self._cmd_queue)  
+
+        self._modify_pulsewidth_param_cmd = self._mcu.lookup_command(
+            "modify_pulsewidth_param oid=%c pch=%u pw=%u", cq=self._cmd_queue)              
 
         self._getfiberst_cmds_cmd = self._mcu.lookup_query_command(
             "stepper_get_fiber oid=%c",
@@ -163,6 +174,26 @@ class FiberLaserLink:
         else:
            gcmd.respond_info(msgh + "input psync period error:[%d]" % (psyncp,))  
 
+
+    cmd_SET_PULSEWIDTH_help =  "set pulsewidth param"   
+    def cmd_SET_PULSEWIDTH(self, gcmd):
+        pulsewidth  = gcmd.get_int('PW', 100, minval=1, maxval=1000)
+        msgh = "PulseWidth:"
+        if self.pulsewidth_en > 0:
+            pwhcmd = PW_HCMD
+            toolhead = self.printer.lookup_object('toolhead')
+            toolhead.register_lookahead_callback(
+                lambda print_time: self._run_pulsewidth_send(print_time, pwhcmd, pulsewidth))
+            gcmd.respond_info(msgh + "SET_PULSEWIDTH, PW=%d" % (pulsewidth))
+
+        else:
+           gcmd.respond_info(msgh + "please config pulsewidth_en")  
+
+    def _run_pulsewidth_send(self, print_time, pwhcmd,pulsewidth):
+        clock = self._mcu.print_time_to_clock(print_time)
+        self._modify_pulsewidth_param_cmd.send([self._oid, pwhcmd, pulsewidth],
+                           minclock=self._lastpw_clock, reqclock=clock)
+        self._lastpw_clock = clock 
 
     def _run_prr_send(self, print_time, psyncp, psyncduty):
         clock = self._mcu.print_time_to_clock(print_time)

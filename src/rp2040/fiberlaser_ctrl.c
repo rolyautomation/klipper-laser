@@ -159,6 +159,9 @@ struct stepper_fiber {
     uint8_t  fibertype;  
     uint8_t  powerchgmode;
 
+    uint8_t  workstatus;
+    uint32_t pulsewidth_cmd;
+
     struct move_queue_head mq;
     struct trsync_signal stop_signal;
     // gcc (pre v6) does better optimization when uint8_t are bitfields
@@ -716,6 +719,25 @@ DECL_COMMAND(command_modify_psync_param_fiber,
              "modify_psync_param oid=%c psp=%u psd=%u");    
 
 
+void
+command_modify_pulsewidth_param_fiber(uint32_t *args)
+{
+
+    struct stepper_fiber *s = stepper_oid_lookup_fiber(args[0]);
+    if (s->workstatus == 0)
+    {
+        irq_disable();
+        s->workstatus = 1;
+        s->pulsewidth_cmd  = args[1] << 16 | args[2];
+        irq_enable();
+    }
+    //modify_pio_pwm_param(s->period, s->level);
+
+}
+
+
+DECL_COMMAND(command_modify_pulsewidth_param_fiber,
+            "modify_pulsewidth_param oid=%c pch=%u pw=%u");               
 
 
  // Schedule a set of steps with a given timing
