@@ -1341,6 +1341,20 @@ int  pio_pw_run_end(void)
 
 
 
+int change_gpio_funmode(unsigned int gpionum, uint8_t funmode)
+{
+    if (funmode == 0)
+    {
+        gpio_set_function(gpionum, GPIO_FUNC_SIO);
+    }
+    else
+    {
+        pio_gpio_init(M_SEL_PIO_PW, gpionum);
+    }
+    return 0;
+}
+
+
 static inline void pio_pulsewidthrun_fun(PIO pio, uint sm, uint32_t pw_instr) {
     pio_sm_put_blocking(pio, sm, pw_instr);
 }

@@ -443,6 +443,7 @@ int handle_fiber_timeseq(struct stepper_fiber *s)
 
 
         case M_WK_REDLEDON_MODE:
+            change_gpio_funmode(s->gpio_base_pin+M_GPIO_POINTERL_NUM, 0);
             set_agpio_outstate(s->gpio_base_pin+M_GPIO_POINTERL_NUM, M_HIGH_IO);
             s->workstep = 0;
             s->workflag = s->workflag | M_LASER_RLED_FLAG;
@@ -453,6 +454,7 @@ int handle_fiber_timeseq(struct stepper_fiber *s)
 
         case M_WK_REDLEDOFF_MODE:
             set_agpio_outstate(s->gpio_base_pin+M_GPIO_POINTERL_NUM, M_LOW_IO);
+            change_gpio_funmode(s->gpio_base_pin+M_GPIO_POINTERL_NUM, 1);
             s->workstep = 0;
             s->workflag = s->workflag &  (~M_LASER_RLED_FLAG);
             s->workmode = M_WK_IDLE_MODE;
@@ -658,7 +660,7 @@ int fiber_laser_init(struct stepper_fiber *s)
     //set_power_value(M_DEFAULT_POWER_VAL);
     pio_pw_run_init(s->gpio_base_pin+M_GPIO_PWSDA_NUM, s->gpio_base_pin+M_GPIO_PWENABLE_NUM);
     set_power_value(M_DEFAULT_POWER_VAL);
-    
+
     return(0);
 
 }

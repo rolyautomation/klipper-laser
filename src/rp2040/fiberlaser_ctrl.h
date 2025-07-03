@@ -6,6 +6,7 @@
 
 int set_agpio_out(unsigned int gpionum, uint8_t val);
 int set_agpio_outstate(unsigned int gpionum, uint8_t val);
+int change_gpio_funmode(unsigned int gpionum, uint8_t funmode);
 
 extern int set_agpio_in(unsigned int gpionum);
 extern int get_agpio_in(unsigned int gpionum);
