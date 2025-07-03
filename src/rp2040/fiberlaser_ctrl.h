@@ -22,6 +22,8 @@ int  set_power_value(uint8_t x);
 int  setup_pio_pwm(unsigned int pwmpin, uint32_t period,uint32_t level, unsigned int pin_start, unsigned int pin_latch);
 int  modify_pio_pwm_param( uint32_t period, uint32_t level);
 
+int  pio_pw_run_init(unsigned int sda_pin, unsigned int enable_pin);
+int  send_pulsewidthrun_instr(uint32_t pw_instr);
 
 void change_pwm_duty(uint32_t level);
 

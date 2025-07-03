@@ -51,6 +51,9 @@ enum {
 #define  M_GPIO_PRRSYNC_NUM         (11)
 //pin22
 #define  M_GPIO_POINTERL_NUM        (12)
+#define  M_GPIO_PWENABLE_NUM        (12)
+//pin2
+#define  M_GPIO_PWSDA_NUM           (1)
 //pin23
 #define  M_GPIO_EMERGENCYOFF_NUM    (13)
 
@@ -654,6 +657,7 @@ int fiber_laser_init(struct stepper_fiber *s)
     setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level, s->gpio_base_pin, s->gpio_base_pin+M_GPIO_LATCH_NUM);
     set_power_value(M_DEFAULT_POWER_VAL);
 
+    pio_pw_run_init(s->gpio_base_pin+M_GPIO_PWSDA_NUM, s->gpio_base_pin+M_GPIO_PWENABLE_NUM);
 
     return(0);
 
@@ -727,11 +731,14 @@ command_modify_pulsewidth_param_fiber(uint32_t *args)
     if (s->workstatus == 0)
     {
         irq_disable();
-        s->workstatus = 1;
+        //s->workstatus = 1;
+        s->workstatus = 0;
         s->pulsewidth_cmd  = args[1] << 16 | args[2];
         irq_enable();
     }
+    send_pulsewidthrun_instr(s->pulsewidth_cmd);
     //modify_pio_pwm_param(s->period, s->level);
+
 
 }
 

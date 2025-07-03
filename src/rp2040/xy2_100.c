@@ -1197,9 +1197,12 @@ int  setup_pio_pwm(uint pwmpin, uint32_t period,uint32_t level, uint pin_start, 
 
 
 #define M_PIO_SET_PULSE_WIDTH
+
 #ifdef  M_PIO_SET_PULSE_WIDTH
-
-
+// ------------------ //
+// GPIO: SDA_PIN2, SCL_PIN3, Enable_PIN22 //
+// Share SDA_PIN2, SCL_PIN3 with fiber_set_power //
+// Share Enable_PIN22 with external GPIO //
 
 #define M_SEL_PIO_PW     (pio1)
 #define M_SEL_SM_PW      (2)
@@ -1244,7 +1247,116 @@ static inline pio_sm_config fiber_set_pulsewidth_program_get_default_config(uint
 
 
 
+static inline void fiber_set_pulsewidth_program_init(PIO pio, uint sm, uint offset, uint sda_pin, uint scl_pin, uint enable_pin, float clk_div) {
 
+    pio_gpio_init(pio, sda_pin);
+    pio_gpio_init(pio, scl_pin);
+    // external gpio
+    pio_gpio_init(pio, enable_pin);
+
+    pio_sm_set_consecutive_pindirs(pio, sm, enable_pin, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, sda_pin, 2, true);
+
+    pio_sm_config c = fiber_set_pulsewidth_program_get_default_config(offset);
+
+
+    sm_config_set_sideset_pins(&c, scl_pin);
+    sm_config_set_set_pins(&c, enable_pin, 1);
+    sm_config_set_out_pins(&c, sda_pin, 1);
+    //sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    sm_config_set_clkdiv(&c, clk_div);
+    //sm_config_set_out_shift(&c, true, false, 0);
+    sm_config_set_out_shift(&c, false, false, 0);
+
+    pio_sm_set_pins_with_mask(pio, sm, 0, (1u << enable_pin) | (3u << sda_pin) );
+
+    pio_sm_init(pio, sm, offset, &c);
+    //pio_sm_set_enabled(pio, sm, true);
+    
+
+}
+
+// 8K~10K, use 10K ,100US; half clock, 50US
+//#define PWS_CLK_DIV   (62.5f)   //1us
+//#define   PWS_CLK_DIV   (125.f)   //2us
+//#define PWS_CLK_DIV   (250.f)   //4us
+#define PWS_CLK_DIV   (3000.f)   //48us
+
+
+int  setup_pio_pulsewidthrun(uint sda_pin, uint scl_pin, uint enable_pin)
+{
+    int iret = 0;
+
+    PIO pio = M_SEL_PIO_PW;
+    int pw_sm = M_SEL_SM_PW;   
+
+#ifdef   M_NO_SDK_ONWIN
+    open_piomodulclk();
+#endif	
+
+    uint offset_pw = pio_add_program(pio, &fiber_set_pulsewidth_program);
+    fiber_set_pulsewidth_program_init(pio, pw_sm, offset_pw, sda_pin, scl_pin, enable_pin, PWS_CLK_DIV);
+    //pio_sm_set_enabled(pio, pw_sm, true);
+
+    if ( offset_pw > 0)
+        iret = 1;
+
+    return(iret);
+
+}
+
+//  only run once
+int pio_pw_run_init(uint sda_pin, uint enable_pin)
+{
+    int iret = 0;
+    static int run_startflag = 0;
+
+    if (run_startflag == 0)
+    {
+       run_startflag = 1;
+       setup_pio_pulsewidthrun(sda_pin, sda_pin+1, enable_pin);
+       //pio_sm_set_enabled(M_SEL_PIO_PW, M_SEL_SM_PW, true);
+
+    }    
+    return(iret);
+
+}
+
+// start run
+int  pio_pw_run_start(void)
+{
+    int iret = 0;
+
+    //pio_sm_set_enabled(M_SEL_PIO_PW, M_SEL_SM_PW, true);
+    
+    return(iret);
+}
+
+int  pio_pw_run_end(void)
+{
+    int iret = 0;
+    //pio_sm_set_enabled(M_SEL_PIO_PW, M_SEL_SM_PW, false);    
+    return(iret);
+}
+
+
+static inline void pio_pulsewidthrun_fun(PIO pio, uint sm, uint32_t pw_instr) {
+    pio_sm_put_blocking(pio, sm, pw_instr);
+}
+
+int  send_pulsewidthrun_instr(uint32_t pw_instr)
+{
+     int iret = 0;
+     static int open_flag = 0;
+     if (open_flag == 0)
+     {
+        pio_sm_set_enabled(M_SEL_PIO_PW, M_SEL_SM_PW, true);
+        open_flag = 1;
+     }
+     pio_pulsewidthrun_fun(M_SEL_PIO_PW, M_SEL_SM_PW, pw_instr);
+     return(iret);
+
+}
 
 
 #endif

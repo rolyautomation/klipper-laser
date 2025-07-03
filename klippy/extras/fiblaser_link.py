@@ -7,7 +7,8 @@ import logging
 
 
 PW_HCMD = 0x5A01
-
+#test mode
+#PW_HCMD = 0xA5A5
 
 class FiberLaserLink:
     cmd_RCMD_FIBER_LASER_help = "run cmd mode pwms of a fiber laser"   
