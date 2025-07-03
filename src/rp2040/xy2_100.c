@@ -1210,22 +1210,23 @@ int  setup_pio_pwm(uint pwmpin, uint32_t period,uint32_t level, uint pin_start, 
 // fiber_set_pulsewidth //
 // -------------------- //
 
+
 #define fiber_set_pulsewidth_wrap_target 0
 #define fiber_set_pulsewidth_wrap 10
 
 static const uint16_t fiber_set_pulsewidth_program_instructions[] = {
             //     .wrap_target
-    0x80a0, //  0: pull   block           side 0     
-    0xe001, //  1: set    pins, 1         side 0     
-    0xa042, //  2: nop                    side 0     
-    0xe05f, //  3: set    y, 31           side 0     
-    0x6001, //  4: out    pins, 1         side 0     
-    0xa042, //  5: nop                    side 0     
-    0xb042, //  6: nop                    side 1     
-    0x1084, //  7: jmp    y--, 4          side 1     
-    0xa042, //  8: nop                    side 0     
-    0xa042, //  9: nop                    side 0     
-    0xe000, // 10: set    pins, 0         side 0     
+    0x80a0, //  0: pull   block                      
+    0xe001, //  1: set    pins, 1                    
+    0xb042, //  2: nop                    side 0     
+    0xe05f, //  3: set    y, 31                      
+    0x7001, //  4: out    pins, 1         side 0     
+    0xa042, //  5: nop                               
+    0xb842, //  6: nop                    side 1     
+    0x0084, //  7: jmp    y--, 4                     
+    0xb042, //  8: nop                    side 0     
+    0xa042, //  9: nop                               
+    0xe000, // 10: set    pins, 0                    
             //     .wrap
 };
 
@@ -1239,12 +1240,10 @@ static const struct pio_program fiber_set_pulsewidth_program = {
 static inline pio_sm_config fiber_set_pulsewidth_program_get_default_config(uint offset) {
     pio_sm_config c = pio_get_default_sm_config();
     sm_config_set_wrap(&c, offset + fiber_set_pulsewidth_wrap_target, offset + fiber_set_pulsewidth_wrap);
-    sm_config_set_sideset(&c, 1, false, false);
+    sm_config_set_sideset(&c, 2, true, false);
     return c;
 }
 //#endif
-
-
 
 
 static inline void fiber_set_pulsewidth_program_init(PIO pio, uint sm, uint offset, uint sda_pin, uint scl_pin, uint enable_pin, float clk_div) {
@@ -1276,11 +1275,14 @@ static inline void fiber_set_pulsewidth_program_init(PIO pio, uint sm, uint offs
 
 }
 
+
 // 8K~10K, use 10K ,100US; half clock, 50US
 //#define PWS_CLK_DIV   (62.5f)   //1us
 //#define   PWS_CLK_DIV   (125.f)   //2us
 //#define PWS_CLK_DIV   (250.f)   //4us
-#define PWS_CLK_DIV   (3000.f)   //48us
+//#define PWS_CLK_DIV   (3000.f)   //48us
+#define PWS_CLK_DIV   (3250.f)   //48us
+//max value:65536
 
 
 int  setup_pio_pulsewidthrun(uint sda_pin, uint scl_pin, uint enable_pin)
@@ -1326,9 +1328,7 @@ int pio_pw_run_init(uint sda_pin, uint enable_pin)
 int  pio_pw_run_start(void)
 {
     int iret = 0;
-
     //pio_sm_set_enabled(M_SEL_PIO_PW, M_SEL_SM_PW, true);
-    
     return(iret);
 }
 
@@ -1340,9 +1340,11 @@ int  pio_pw_run_end(void)
 }
 
 
+
 static inline void pio_pulsewidthrun_fun(PIO pio, uint sm, uint32_t pw_instr) {
     pio_sm_put_blocking(pio, sm, pw_instr);
 }
+
 
 int  send_pulsewidthrun_instr(uint32_t pw_instr)
 {
@@ -1353,8 +1355,10 @@ int  send_pulsewidthrun_instr(uint32_t pw_instr)
         pio_sm_set_enabled(M_SEL_PIO_PW, M_SEL_SM_PW, true);
         open_flag = 1;
      }
+
      pio_pulsewidthrun_fun(M_SEL_PIO_PW, M_SEL_SM_PW, pw_instr);
      return(iret);
+
 
 }
 

@@ -162,7 +162,7 @@ struct stepper_fiber {
     uint8_t  fibertype;  
     uint8_t  powerchgmode;
 
-    uint8_t  workstatus;
+    //uint8_t  workstatus;
     uint32_t pulsewidth_cmd;
 
     struct move_queue_head mq;
@@ -655,10 +655,10 @@ int fiber_laser_init(struct stepper_fiber *s)
     //PRR
     //setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level);
     setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level, s->gpio_base_pin, s->gpio_base_pin+M_GPIO_LATCH_NUM);
-    set_power_value(M_DEFAULT_POWER_VAL);
-
+    //set_power_value(M_DEFAULT_POWER_VAL);
     pio_pw_run_init(s->gpio_base_pin+M_GPIO_PWSDA_NUM, s->gpio_base_pin+M_GPIO_PWENABLE_NUM);
-
+    set_power_value(M_DEFAULT_POWER_VAL);
+    
     return(0);
 
 }
@@ -728,17 +728,14 @@ command_modify_pulsewidth_param_fiber(uint32_t *args)
 {
 
     struct stepper_fiber *s = stepper_oid_lookup_fiber(args[0]);
-    if (s->workstatus == 0)
+    if ((s->workflag & M_LASER_EE_FLAG) || (s->workflag & M_LASER_EM_FLAG) || (s->workflag & M_LASER_RLED_FLAG))
     {
-        irq_disable();
-        //s->workstatus = 1;
-        s->workstatus = 0;
-        s->pulsewidth_cmd  = args[1] << 16 | args[2];
-        irq_enable();
+        return;
     }
+    irq_disable();
+    s->pulsewidth_cmd  = args[1] << 16 | args[2];
+    irq_enable();
     send_pulsewidthrun_instr(s->pulsewidth_cmd);
-    //modify_pio_pwm_param(s->period, s->level);
-
 
 }
 

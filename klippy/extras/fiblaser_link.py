@@ -6,9 +6,10 @@
 import logging
 
 
-PW_HCMD = 0x5A01
+PW_HCMD = 0xA501
 #test mode
 #PW_HCMD = 0xA5A5
+# 10Khz, 100us， 3200us, 3220us(head+tail),3.2ms(pulse width)
 
 class FiberLaserLink:
     cmd_RCMD_FIBER_LASER_help = "run cmd mode pwms of a fiber laser"   
