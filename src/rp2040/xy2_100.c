@@ -959,9 +959,15 @@ int set_manygpio_outstate(unsigned int gpio_startnum, unsigned int gpio_count, u
 #define M_SEL_SM_SETPOWER   (1)
 
 
+#define  M_CLOCK_ADJ_DUTYCYCLE   (0)
+#define  M_CLOCK_RUN_HMODE       (1)
+//#define  M_SEL_CLOCK_MODE        (M_CLOCK_ADJ_DUTYCYCLE)
+#define  M_SEL_CLOCK_MODE        (M_CLOCK_RUN_HMODE)
+
+
+#if  M_SEL_CLOCK_MODE == M_CLOCK_ADJ_DUTYCYCLE
 #define pwm_wrap_target 0
 #define pwm_wrap 6
-
 
 static const uint16_t pwm_program_instructions[] = {
             //     .wrap_target
@@ -990,7 +996,7 @@ static inline pio_sm_config pwm_program_get_default_config(uint offset) {
     sm_config_set_sideset(&c, 2, true, false);
     return c;
 }
-
+#endif
 
 
 // --------------- //
@@ -1029,7 +1035,7 @@ static inline pio_sm_config fiber_set_power_program_get_default_config(uint offs
 
 
 
-
+#if  M_SEL_CLOCK_MODE == M_CLOCK_ADJ_DUTYCYCLE
 static inline void pwm_program_init(PIO pio, uint sm, uint offset, uint pin) {
    pio_gpio_init(pio, pin);
    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
@@ -1059,7 +1065,90 @@ void change_pwm_duty(uint32_t level){
      pio_pwm_set_level(M_SEL_PIO_PSYNC, M_SEL_SM_PSYNC, level);       
 
 }
+#endif
 
+
+#if  M_SEL_CLOCK_MODE == M_CLOCK_RUN_HMODE
+
+// ----------------- //
+// psync_clock_smode //
+// ----------------- //
+
+#define psync_clock_smode_wrap_target 0
+#define psync_clock_smode_wrap 1
+
+static const uint16_t psync_clock_smode_program_instructions[] = {
+            //     .wrap_target
+    0xe001, //  0: set    pins, 1                    
+    0xe000, //  1: set    pins, 0                    
+            //     .wrap
+};
+
+//#if !PICO_NO_HARDWARE
+static const struct pio_program psync_clock_smode_program = {
+    .instructions = psync_clock_smode_program_instructions,
+    .length = 2,
+    .origin = -1,
+};
+
+static inline pio_sm_config psync_clock_smode_program_get_default_config(uint offset) {
+    pio_sm_config c = pio_get_default_sm_config();
+    sm_config_set_wrap(&c, offset + psync_clock_smode_wrap_target, offset + psync_clock_smode_wrap);
+    return c;
+}
+//#endif
+
+uint g_psync_offset;
+uint g_psync_pin;
+
+//#define M_MCLOCK_BASE_MODE  (2.0)
+#define M_MCLOCK_BASE_MODE  (2000.0)
+#define M_MCLOCK_SYNC_MODE  (125000000.0/M_MCLOCK_BASE_MODE)
+
+
+
+static inline void psync_clock_smode_program_init(PIO pio, uint sm, uint offset, uint pin, float clk_div) {
+    pio_gpio_init(pio, pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+    pio_sm_config c = psync_clock_smode_program_get_default_config(offset);
+    sm_config_set_set_pins(&c, pin, 1);
+    sm_config_set_clkdiv(&c, clk_div);
+    //sm_config_set_sideset_pins(&c, pin);
+    pio_sm_init(pio, sm, offset, &c);
+ }
+ 
+ // Write `period` to the input shift register
+ void pio_pwm_set_period(PIO pio, uint sm, uint32_t period) {
+     pio_sm_set_enabled(pio, sm, false);
+
+     pio_sm_set_enabled(pio, sm, true);
+ }
+ 
+ // Write `level` to TX FIFO. State machine will copy this into X.
+ void pio_pwm_set_level(PIO pio, uint sm, uint32_t level) {
+      ;
+ }
+
+
+ // Modify period and level
+int  modify_pio_pwm_param( uint32_t period, uint32_t level)
+{
+    int iret = 0;
+    PIO pio = M_SEL_PIO_PSYNC;
+    int sm = M_SEL_SM_PSYNC;  
+
+    pio_sm_set_enabled(pio, sm, false);
+    float clk_div = M_MCLOCK_SYNC_MODE/period;
+    psync_clock_smode_program_init(pio, sm, g_psync_offset, g_psync_pin, clk_div);    
+    pio_sm_set_enabled(pio, sm, true);    
+    //pio_pwm_set_period(pio, sm, period);
+    //pio_pwm_set_level(pio, sm, level);
+    return(iret);
+    
+}
+
+
+#endif
 
 
 static inline void fiber_set_power_program_init(PIO pio, uint sm, uint offset, uint data_pin, uint clk_pin, float clk_div) {
@@ -1112,6 +1201,7 @@ int  set_power_value(uint8_t x)
 }
 
 
+#if  M_SEL_CLOCK_MODE == M_CLOCK_ADJ_DUTYCYCLE
 int  setup_pio_pwm_old(uint pin, uint32_t period,uint32_t level)
 {
     int iret = 0;
@@ -1145,6 +1235,8 @@ int  modify_pio_pwm_param( uint32_t period, uint32_t level)
     return(iret);
     
 }
+#endif
+
 
 
 //#define LATCH_CLK_DIV 20.f
@@ -1172,17 +1264,36 @@ int  setup_pio_pwm(uint pwmpin, uint32_t period,uint32_t level, uint pin_start, 
     open_piomodulclk();
 #endif	
 
+#if  M_SEL_CLOCK_MODE == M_CLOCK_ADJ_DUTYCYCLE
     uint offset = pio_add_program(pio, &pwm_program);
+#endif
+
+#if  M_SEL_CLOCK_MODE == M_CLOCK_RUN_HMODE
+    uint offset = pio_add_program(pio, &psync_clock_smode_program);
+#endif
+
     uint offset_latch = pio_add_program(pio, &fiber_set_power_program);
 
-
+#if  M_SEL_CLOCK_MODE == M_CLOCK_ADJ_DUTYCYCLE
     pwm_program_init(pio, sm, offset, pwmpin);
+#endif 
+
+
+#if  M_SEL_CLOCK_MODE == M_CLOCK_RUN_HMODE
+    g_psync_offset = offset;
+    g_psync_pin = pwmpin;
+    float clk_div = M_MCLOCK_SYNC_MODE/period;
+    psync_clock_smode_program_init(pio, sm, offset, pwmpin, clk_div);
+    pio_sm_set_enabled(pio, sm, true);
+#endif
+
+
     fiber_set_power_program_init(pio, sm_latch, offset_latch, pin_start, pin_latch, LATCH_CLK_DIV);
 
+#if  M_SEL_CLOCK_MODE == M_CLOCK_ADJ_DUTYCYCLE    
     pio_pwm_set_period(pio, sm, period);
     pio_pwm_set_level(pio, sm, level);
-
-
+#endif
     pio_sm_set_enabled(pio, sm_latch, true);
 
 
@@ -1197,7 +1308,6 @@ int  setup_pio_pwm(uint pwmpin, uint32_t period,uint32_t level, uint pin_start, 
 
 
 #define M_PIO_SET_PULSE_WIDTH
-
 #ifdef  M_PIO_SET_PULSE_WIDTH
 // ------------------ //
 // GPIO: SDA_PIN2, SCL_PIN3, Enable_PIN22 //
