@@ -646,7 +646,14 @@ class MCU:
             self.uart_link_mode = True
             self.delay_confirmdev = False
             self.non_critical_disconnected = True
-        self.poweron_prompt = True    
+        self.poweron_prompt = True   
+
+        self.usb_roller_mode = False
+        if self._serialport.startswith("/dev/serial/by-id") and self.is_non_critical and not self.uart_link_mode:
+            self.usb_roller_mode = True
+            self.delay_confirmdev = False
+            self.non_critical_disconnected = True
+            self.config_serialport = self._serialport
 
         self._cached_init_state = False
         self._oid_count_post_inits = 0
@@ -901,6 +908,24 @@ class MCU:
         log_info = self._log_info() + "\n" + move_msg
         self._printer.set_rollover_info(self._name, log_info, log=False)
 
+
+    path_roller = "/dev/serial/by-id"
+    name_roller = "mroller"
+    def get_rollerdev(self):
+        iret = 0
+        roller_dev = ""  
+        try:
+            devlistfa = os.listdir(self.path_roller)
+            devlistf = [s for s in devlistfa if self.name_roller in s.lower() and len(s) > 5]    
+            roller_devs = [self.path_roller + "/" + s for s in devlistf]
+            if roller_devs:
+                roller_dev = roller_devs[0]
+        except FileNotFoundError:
+            iret = 1
+        except PermissionError: 
+            iret = 2
+        return iret, roller_dev  
+
     def _check_serial_exists(self):
         # if self._canbus_iface is not None:
         #     cbid = self._printer.lookup_object("canbus_ids")
@@ -912,7 +937,18 @@ class MCU:
         # else:
         rts = self._restart_method != "cheetah"
         if not self.uart_link_mode:
-            retb = self._serial.check_connect(self._serialport, self._baud, rts)
+            if self.usb_roller_mode:
+                # USB roller mode
+                iret, roller_dev = self.get_rollerdev()
+                if iret == 0 and roller_dev:
+                    self._serialport = roller_dev
+                    logging.info("dev_roller '%s' connection", roller_dev)
+                    retb = self._serial.check_connect(self._serialport, self._baud, rts)
+                    return retb
+                else:
+                    retb = False
+            else:
+                retb = self._serial.check_connect(self._serialport, self._baud, rts)
         else:
             retb = True
         if retb and not self.delay_confirmdev:
@@ -920,6 +956,7 @@ class MCU:
         if self.used_flag:
             retb = False
         return retb
+
 
     def confirm_device_status(self, dlink_status=False):    
             self.non_critical_disconnected = dlink_status
@@ -938,7 +975,8 @@ class MCU:
         #    self.non_critical_disconnected = False
         #    if self.is_non_critical:
         #        self._get_status_info["non_critical_disconnected"] = False
-
+        if self.usb_roller_mode:
+            self.confirm_device_status(False)
         if self.is_fileoutput():
             self._connect_file()
         else:
