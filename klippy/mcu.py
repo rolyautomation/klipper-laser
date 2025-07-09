@@ -953,6 +953,8 @@ class MCU:
             retb = True
         if retb and not self.delay_confirmdev:
             retb = False
+        if self.usb_roller_mode:
+            return retb
         if self.used_flag:
             retb = False
         return retb
