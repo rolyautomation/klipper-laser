@@ -79,13 +79,15 @@ class RotaryCtrlInterface:
 
         self.gcode.register_command("RESTART_LINK", self.cmd_RESTART_LINK, desc=self.cmd_RESTART_LINK_help)
         self.mcu_obj = None
-
+        
+        self.mcu_pin = None
         self.register_switchbutton(config, 'R0_pin', self.R0_callback)
         self.register_switchbutton(config, 'R1_pin', self.R1_callback)
         self.register_switchbutton(config, 'R2_pin', self.R2_callback)
         self.register_switchbutton(config, 'R3_pin', self.R3_callback)
         self.rotray_pkeystate = [0, 0, 0, 0]
         self.doaction_ins = 0
+        
 
         self.printer.register_event_handler(
              self.reconnect_event_name,
@@ -121,6 +123,7 @@ class RotaryCtrlInterface:
         self.rotray_pkeystate = [0, 0, 0, 0]    
         logging.info("rotaryctrl:handle_disconnect") 
         self.cmd_SET_MULTIMOTOR_AXIS(-1)            
+        self.reset_buttons_disconnect()          
         pass
         
 
@@ -429,6 +432,8 @@ class RotaryCtrlInterface:
         pin = config.get(name, None)
         if pin is None:
             return
+        if self.mcu_pin is None:
+            self.mcu_pin = pin
         buttons = self.printer.lookup_object("buttons")
         if config.get('analog_range_' + name, None) is None:
             if push_only:
@@ -443,6 +448,11 @@ class RotaryCtrlInterface:
         else:
             buttons.register_adc_button(pin, amin, amax, pullup, callback)
 
+    def reset_buttons_disconnect(self):
+        if self.mcu_pin is not None:
+            buttons = self.printer.lookup_object("buttons")
+            buttons.reset_buttons_mcu(self.mcu_pin)
+            logging.info("rotaryctrl:reset_buttons_disconnect") 
                
     def get_status(self, eventtime=None):
         rotary_status = {}
