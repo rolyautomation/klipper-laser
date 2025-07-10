@@ -290,8 +290,11 @@ class SerialReader:
             else:
                 self.handlers[name, oid] = callback
 
+
     def _check_noncritical_disconnected(self):
         if self.mcu is not None and self.mcu.non_critical_disconnected and self.mcu.is_non_critical:
+            if self.mcu.usb_roller_mode and self.mcu.midenting_flag:
+                return
             if not self.mcu.uart_link_mode or self.mcu.used_flag:
                 self._error("non-critical MCU is disconnected")
 

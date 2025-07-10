@@ -648,6 +648,7 @@ class MCU:
             self.non_critical_disconnected = True
         self.poweron_prompt = True   
 
+        self.midenting_flag = False 
         self.usb_roller_mode = False
         if self._serialport.startswith("/dev/serial/by-id") and self.is_non_critical and not self.uart_link_mode:
             self.usb_roller_mode = True
@@ -939,13 +940,16 @@ class MCU:
         if not self.uart_link_mode:
             if self.usb_roller_mode:
                 # USB roller mode
+                # if not self.delay_confirmdev:
+                #     retb = False
                 iret, roller_dev = self.get_rollerdev()
                 if iret == 0 and roller_dev:
                     self._serialport = roller_dev
                     logging.info("dev_roller '%s' connection", roller_dev)
                     retb = self._serial.check_connect(self._serialport, self._baud, rts)
-                    return retb
+                    #return retb
                 else:
+                    #logging.info("dev_roller '%s' connection failed", roller_dev)
                     retb = False
             else:
                 retb = self._serial.check_connect(self._serialport, self._baud, rts)
@@ -962,6 +966,7 @@ class MCU:
 
     def confirm_device_status(self, dlink_status=False):    
             self.non_critical_disconnected = dlink_status
+            self.midenting_flag = False
             if self.is_non_critical:
                 self._get_status_info["non_critical_disconnected"] = dlink_status   
 
@@ -978,7 +983,8 @@ class MCU:
         #    if self.is_non_critical:
         #        self._get_status_info["non_critical_disconnected"] = False
         if self.usb_roller_mode:
-            self.confirm_device_status(False)
+            self.midenting_flag = True
+            #self.confirm_device_status(False)
         if self.is_fileoutput():
             self._connect_file()
         else:
