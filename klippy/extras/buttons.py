@@ -35,7 +35,7 @@ class MCU_buttons:
     def build_config(self):
         if not self.pin_list:
             return
-        logging.info("rebuttons:'%s'", self.pin_list)    
+        #logging.info("rebuttons:'%s'", self.pin_list)    
         self.oid = self.mcu.create_oid()
         self.mcu.add_config_cmd("config_buttons oid=%d button_count=%d" % (
             self.oid, len(self.pin_list)))
@@ -57,7 +57,7 @@ class MCU_buttons:
                                    "buttons_state", self.oid)
     def handle_buttons_state(self, params):
         # Expand the message ack_count from 8-bit
-        logging.info("button_params:'%s'", params)    
+        #logging.info("button_params:'%s'", params)    
         ack_count = self.ack_count
         ack_diff = (params['ack_count'] - ack_count) & 0xff
         ack_diff -= (ack_diff & 0x80) << 1
@@ -279,6 +279,7 @@ class PrinterButtons:
         mcu_name = self.pin_to_mcu.get(pin)
         if mcu_name is None:
             return False
+        #logging.info("pin_to_mcu:'%s'", self.pin_to_mcu)    
         mcu_buttons = self.mcu_buttons.get(mcu_name)
         if mcu_buttons is not None:
             mcu_buttons.ack_count = 0
