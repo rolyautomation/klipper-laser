@@ -19,6 +19,9 @@ class StepperEnablePin:
         self.enable_count += 1
     def set_disable(self, print_time):
         self.enable_count -= 1
+        if self.mcu_enable._mcu.non_critical_disconnected:
+            logging.info("StepperEnablePin:set_disable:'%s'", self.mcu_enable._mcu._name)  
+            return
         if not self.enable_count:
             self.mcu_enable.set_digital(print_time, 0)
 
