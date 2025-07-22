@@ -63,8 +63,9 @@ class ManualStepper:
             dist, speed, accel)
         self.trapq_append(self.trapq, self.next_cmd_time,
                           accel_t, cruise_t, accel_t,
-                          cp, 0., 0., axis_r, 0., 0.,
-                          0., cruise_v, accel)
+                          cp, 0., 0.,     0., 0., 0., 0.,
+                          axis_r, 0., 0., 0., 0., 0., 0.,
+                          0., cruise_v, accel, 0)
         self.next_cmd_time = self.next_cmd_time + accel_t + cruise_t + accel_t
         self.rail.generate_steps(self.next_cmd_time)
         self.trapq_finalize_moves(self.trapq, self.next_cmd_time + 99999.9,

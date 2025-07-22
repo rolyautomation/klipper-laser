@@ -14,7 +14,11 @@ struct pull_history_steps {
 struct stepcompress *stepcompress_alloc(uint32_t oid);
 void stepcompress_fill(struct stepcompress *sc, uint32_t max_error
                        , int32_t queue_step_msgtag
-                       , int32_t set_next_step_dir_msgtag);
+                       , int32_t set_next_step_dir_msgtag, int32_t step_ctag_typef, int32_t set_pwm_sw_msgtag, int32_t set_pwm_modepower_msgtag);
+
+void stepcompress_fill_ext(struct stepcompress *sc, int32_t set_pwmpower_msgtag
+                          , int32_t set_plusticks_msgtag, int32_t set_powerftable_msgtag, int32_t set_powerftable_sp_msgtag
+                          , int32_t set_sync_endc_msgtag, int32_t set_pwm_sw_endc_msgtag, int32_t set_tailp_pftable_msgtag);
 void stepcompress_set_invert_sdir(struct stepcompress *sc
                                   , uint32_t invert_sdir);
 void stepcompress_free(struct stepcompress *sc);
@@ -22,6 +26,17 @@ uint32_t stepcompress_get_oid(struct stepcompress *sc);
 int stepcompress_get_step_dir(struct stepcompress *sc);
 int stepcompress_append(struct stepcompress *sc, int sdir
                         , double print_time, double step_time);
+
+void
+stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uint16_t on_off,
+    uint32_t pwmval, uint32_t speed_pulse_ticks, double frestartcmd_sn);  
+
+void
+stepcompress_set_power_table(struct stepcompress *p_sc_insk, uint8_t  pdlen,
+    uint32_t dist_count, uint8_t *  pddata, uint8_t ddata_len, uint8_t ptagcode, uint8_t psynccode);      
+
+int send_pwm_sync_data(struct stepcompress *sc);    
+                            
 int stepcompress_commit(struct stepcompress *sc);
 int stepcompress_reset(struct stepcompress *sc, uint64_t last_step_clock);
 int stepcompress_set_last_position(struct stepcompress *sc, uint64_t clock
@@ -44,5 +59,8 @@ void steppersync_set_time(struct steppersync *ss, double time_offset
                           , double mcu_freq);
 int steppersync_flush(struct steppersync *ss, uint64_t move_clock
                       , uint64_t clear_history_clock);
+
+
+                     
 
 #endif // stepcompress.h

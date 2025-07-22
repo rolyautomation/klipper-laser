@@ -21,7 +21,7 @@ SOURCE_FILES = [
     'pollreactor.c', 'msgblock.c', 'trdispatch.c',
     'kin_cartesian.c', 'kin_corexy.c', 'kin_corexz.c', 'kin_delta.c',
     'kin_deltesian.c', 'kin_polar.c', 'kin_rotary_delta.c', 'kin_winch.c',
-    'kin_extruder.c', 'kin_shaper.c', 'kin_idex.c',
+    'kin_extruder.c', 'kin_shaper.c', 'kin_idex.c', 'kin_galvo.c', 'kin_mmsa.c'
 ]
 DEST_LIB = "c_helper.so"
 OTHER_FILES = [
@@ -38,7 +38,11 @@ defs_stepcompress = """
 
     struct stepcompress *stepcompress_alloc(uint32_t oid);
     void stepcompress_fill(struct stepcompress *sc, uint32_t max_error
-        , int32_t queue_step_msgtag, int32_t set_next_step_dir_msgtag);
+        , int32_t queue_step_msgtag, int32_t set_next_step_dir_msgtag, int32_t step_ctag_typef
+        , int32_t set_pwm_sw_msgtag, int32_t set_pwm_modepower_msgtag);
+    void stepcompress_fill_ext(struct stepcompress *sc, int32_t set_pwmpower_msgtag
+        , int32_t set_plusticks_msgtag, int32_t set_powerftable_msgtag, int32_t set_powerftable_sp_msgtag
+        , int32_t set_sync_endc_msgtag, int32_t set_pwm_sw_endc_msgtag, int32_t set_tailp_pftable_msgtag);
     void stepcompress_set_invert_sdir(struct stepcompress *sc
         , uint32_t invert_sdir);
     void stepcompress_free(struct stepcompress *sc);
@@ -74,9 +78,11 @@ defs_itersolve = """
     void itersolve_set_stepcompress(struct stepper_kinematics *sk
         , struct stepcompress *sc, double step_dist);
     double itersolve_calc_position_from_coord(struct stepper_kinematics *sk
-        , double x, double y, double z);
+        , double x, double y, double z
+        , double a, double b, double c, double d);
     void itersolve_set_position(struct stepper_kinematics *sk
-        , double x, double y, double z);
+        , double x, double y, double z
+        , double a, double b, double c, double d);
     double itersolve_get_commanded_pos(struct stepper_kinematics *sk);
 """
 
@@ -85,7 +91,11 @@ defs_trapq = """
         double print_time, move_t;
         double start_v, accel;
         double start_x, start_y, start_z;
+        double start_a, start_b, start_c;
+        double start_d;
         double x_r, y_r, z_r;
+        double a_r, b_r, c_r;
+        double d_r;
     };
 
     struct trapq *trapq_alloc(void);
@@ -93,12 +103,24 @@ defs_trapq = """
     void trapq_append(struct trapq *tq, double print_time
         , double accel_t, double cruise_t, double decel_t
         , double start_pos_x, double start_pos_y, double start_pos_z
+        , double start_pos_a, double start_pos_b, double start_pos_c, double start_pos_d
         , double axes_r_x, double axes_r_y, double axes_r_z
-        , double start_v, double cruise_v, double accel);
+        , double axes_r_a, double axes_r_b, double axes_r_c, double axes_r_d
+        , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en);
+    void trapq_append_extend(struct trapq *tq, double print_time
+        , double accel_t, double cruise_t, double decel_t
+        , double start_pos_x, double start_pos_y, double start_pos_z
+        , double start_pos_a, double start_pos_b, double start_pos_c, double start_pos_d
+        , double axes_r_x, double axes_r_y, double axes_r_z
+        , double axes_r_a, double axes_r_b, double axes_r_c, double axes_r_d             
+        , double start_v, double cruise_v, double accel, unsigned char pwm_sync_en
+        , unsigned char * power_table, unsigned char len_power_table, unsigned int dist_count
+        , unsigned char ptagcode, unsigned char psynccode);
     void trapq_finalize_moves(struct trapq *tq, double print_time
         , double clear_history_time);
     void trapq_set_position(struct trapq *tq, double print_time
-        , double pos_x, double pos_y, double pos_z);
+        , double pos_x, double pos_y, double pos_z
+        , double pos_a, double pos_b, double pos_c, double pos_d);
     int trapq_extract_old(struct trapq *tq, struct pull_move *p, int max
         , double start_time, double end_time);
 """
@@ -107,8 +129,16 @@ defs_kin_cartesian = """
     struct stepper_kinematics *cartesian_stepper_alloc(char axis);
 """
 
+
 defs_kin_corexy = """
     struct stepper_kinematics *corexy_stepper_alloc(char type);
+"""
+
+
+defs_kin_galvo = """
+    struct stepper_kinematics *galvo_stepper_alloc(char type
+              ,double hradiation_angle, double focus_distance
+              ,double half_distance_galvo, double magnify_factor);
 """
 
 defs_kin_corexz = """
@@ -163,6 +193,15 @@ defs_kin_idex = """
         , char axis, double scale, double offs);
     struct stepper_kinematics * dual_carriage_alloc(void);
 """
+
+defs_kin_mmsa = """
+    void multimotor_axis_set_sk(struct stepper_kinematics *sk
+        , struct stepper_kinematics *orig_sk);
+    int multimotor_axis_set_transform(struct stepper_kinematics *sk
+        , char axis, double scale, double offs);
+    struct stepper_kinematics * multimotor_axis_alloc(void);
+"""
+
 
 defs_serialqueue = """
     #define MESSAGE_MAX 64
@@ -220,9 +259,9 @@ defs_std = """
 defs_all = [
     defs_pyhelper, defs_serialqueue, defs_std, defs_stepcompress,
     defs_itersolve, defs_trapq, defs_trdispatch,
-    defs_kin_cartesian, defs_kin_corexy, defs_kin_corexz, defs_kin_delta,
+    defs_kin_cartesian, defs_kin_corexy, defs_kin_galvo, defs_kin_corexz, defs_kin_delta,
     defs_kin_deltesian, defs_kin_polar, defs_kin_rotary_delta, defs_kin_winch,
-    defs_kin_extruder, defs_kin_shaper, defs_kin_idex,
+    defs_kin_extruder, defs_kin_shaper, defs_kin_idex, defs_kin_mmsa,
 ]
 
 # Update filenames to an absolute path

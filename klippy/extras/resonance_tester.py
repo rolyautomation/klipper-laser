@@ -9,11 +9,22 @@ from . import shaper_calibrate
 class TestAxis:
     def __init__(self, axis=None, vib_dir=None):
         if axis is None:
-            self._name = "axis=%.3f,%.3f" % (vib_dir[0], vib_dir[1])
+            if len(vib_dir) == 2:            
+                self._name = "axis=%.3f,%.3f" % (vib_dir[0], vib_dir[1])
+                vib_dir = [vib_dir[0], vib_dir[1], 0.]
+            else:
+                self._name = "axis=%.3f,%.3f,%.3f" % (vib_dir[0], vib_dir[1], vib_dir[2])
         else:
             self._name = axis
         if vib_dir is None:
-            self._vib_dir = (1., 0.) if axis == 'x' else (0., 1.)
+            if axis == 'x':
+                self._vib_dir = [1., 0., 0.]
+            elif axis == 'y':
+                self._vib_dir = [0., 1., 0.]
+            elif axis == 'a':
+                self._vib_dir = [0., 0., 1.]
+            else:
+                self._vib_dir = [1., 0., 0.]
         else:
             s = math.sqrt(sum([d*d for d in vib_dir]))
             self._vib_dir = [d / s for d in vib_dir]
@@ -22,28 +33,45 @@ class TestAxis:
             return True
         if self._vib_dir[1] and 'y' in chip_axis:
             return True
+        #if len(self._vib_dir) > 2 and self._vib_dir[2] and 'a' in chip_axis:
+        if len(self._vib_dir) > 2 and ('x' in chip_axis or 'y' in chip_axis):        
+            return True            
         return False
     def get_name(self):
         return self._name
     def get_point(self, l):
         return (self._vib_dir[0] * l, self._vib_dir[1] * l)
+    def get_point3d(self, l):
+        return (self._vib_dir[0] * l, self._vib_dir[1] * l, self._vib_dir[2] * l)
+
 
 def _parse_axis(gcmd, raw_axis):
     if raw_axis is None:
         return None
     raw_axis = raw_axis.lower()
-    if raw_axis in ['x', 'y']:
+    if raw_axis in ['x', 'y', 'a']:
         return TestAxis(axis=raw_axis)
     dirs = raw_axis.split(',')
     if len(dirs) != 2:
-        raise gcmd.error("Invalid format of axis '%s'" % (raw_axis,))
-    try:
-        dir_x = float(dirs[0].strip())
-        dir_y = float(dirs[1].strip())
-    except:
-        raise gcmd.error(
-                "Unable to parse axis direction '%s'" % (raw_axis,))
-    return TestAxis(vib_dir=(dir_x, dir_y))
+        if len(dirs) == 3:
+            try:
+                dir_x = float(dirs[0].strip())
+                dir_y = float(dirs[1].strip())
+                dir_a = float(dirs[2].strip())
+                return TestAxis(vib_dir=(dir_x, dir_y, dir_a))
+            except:
+                raise gcmd.error(
+                        "Unable to parse axis direction '%s'" % (raw_axis,))
+        else:    
+            raise gcmd.error("Invalid format of axis '%s'" % (raw_axis,))
+    else:        
+        try:
+            dir_x = float(dirs[0].strip())
+            dir_y = float(dirs[1].strip())
+        except:
+            raise gcmd.error(
+                    "Unable to parse axis direction '%s'" % (raw_axis,))
+        return TestAxis(vib_dir=(dir_x, dir_y))
 
 class VibrationPulseTest:
     def __init__(self, config):
@@ -69,7 +97,8 @@ class VibrationPulseTest:
                                          above=0., maxval=2.)
     def run_test(self, axis, gcmd):
         toolhead = self.printer.lookup_object('toolhead')
-        X, Y, Z, E = toolhead.get_position()
+        #X, Y, Z, E = toolhead.get_position()
+        X, Y, Z, A, B, C, E = toolhead.get_position()
         sign = 1.
         freq = self.freq_start
         # Override maximum acceleration and acceleration to
@@ -96,11 +125,18 @@ class VibrationPulseTest:
             toolhead.cmd_M204(self.gcode.create_gcode_command(
                 "M204", "M204", {"S": accel}))
             L = .5 * accel * t_seg**2
-            dX, dY = axis.get_point(L)
+            # dX, dY = axis.get_point(L)
+            # nX = X + sign * dX
+            # nY = Y + sign * dY
+            dX, dY, dA  = axis.get_point3d(L)
             nX = X + sign * dX
-            nY = Y + sign * dY
-            toolhead.move([nX, nY, Z, E], max_v)
-            toolhead.move([X, Y, Z, E], max_v)
+            nY = Y + sign * dY  
+            nA = Y + sign * dA                       
+            #toolhead.move([nX, nY, Z, E], max_v)
+            #toolhead.move([X, Y, Z, E], max_v)
+            #toolhead.move([nX, nY, Z, A, B, C, E], max_v)
+            toolhead.move([nX, nY, Z, nA, B, C, E], max_v)
+            toolhead.move([X, Y, Z, A, B, C, E], max_v)            
             sign = -sign
             old_freq = freq
             freq += 2. * t_seg * self.hz_per_sec

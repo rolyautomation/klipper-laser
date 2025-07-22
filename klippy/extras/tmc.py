@@ -176,13 +176,16 @@ class TMCErrorCheck:
             return
     def _do_periodic_check(self, eventtime):
         try:
+            if self.mcu_tmc.mcu.non_critical_disconnected:
+                return eventtime + 1.
             self._query_register(self.drv_status_reg_info)
             if self.gstat_reg_info is not None:
                 self._query_register(self.gstat_reg_info)
             if self.adc_temp_reg is not None:
                 self._query_temperature()
         except self.printer.command_error as e:
-            self.printer.invoke_shutdown(str(e))
+            if not self.mcu_tmc.mcu.is_non_critical:
+                self.printer.invoke_shutdown(str(e))
             return self.printer.get_reactor().NEVER
         return eventtime + 1.
     def stop_checks(self):
@@ -247,6 +250,8 @@ class TMCCommandHelper:
                                             self._handle_mcu_identify)
         self.printer.register_event_handler("klippy:connect",
                                             self._handle_connect)
+        self.printer.register_event_handler(self.mcu_tmc.mcu.get_non_critical_reconnect_event_name(),
+                                            self._handle_reconnect)                                            
         # Set microstep config options
         TMCMicrostepHelper(config, mcu_tmc)
         # Register commands
@@ -388,6 +393,30 @@ class TMCCommandHelper:
         else:
             cb = (lambda ev: self._do_disable(print_time))
         self.printer.get_reactor().register_callback(cb)
+
+    def _handle_reconnect(self):
+        logging.info(
+            "TMC %s  mcu: %s in _handle_reconnect",
+            self.name,
+            self.mcu_tmc.mcu.get_name(),
+        )  
+        # Check if using step on both edges optimization
+        pulse_duration, step_both_edge = self.stepper.get_pulse_duration()
+        if step_both_edge:
+            self.fields.set_field("dedge", 1)
+        # Check for soft stepper enable/disable
+        enable_line = self.stepper_enable.lookup_enable(self.stepper_name)
+        enable_line.register_state_callback(self._handle_stepper_enable)
+        if not enable_line.has_dedicated_enable():
+            self.toff = self.fields.get_field("toff")
+            self.fields.set_field("toff", 0)
+            logging.info("Enabling TMC virtual enable for '%s'",
+                         self.stepper_name)        
+        try:
+            self._init_registers()
+        except self.printer.command_error as e:
+            logging.info("TMC %s failed to init: %s", self.name, str(e))        
+
     def _handle_connect(self):
         # Check if using step on both edges optimization
         pulse_duration, step_both_edge = self.stepper.get_pulse_duration()
@@ -401,9 +430,23 @@ class TMCCommandHelper:
             self.fields.set_field("toff", 0)
             logging.info("Enabling TMC virtual enable for '%s'",
                          self.stepper_name)
+
+        logging.info(
+            "TMC %s  mcu: %s in _handle_connect",
+            self.name,
+            self.mcu_tmc.mcu.get_name(),
+        )    
+
         # Send init
         try:
-            self._init_registers()
+            if self.mcu_tmc.mcu.non_critical_disconnected:
+                logging.info(
+                    "TMC %s failed to init - non_critical_mcu: %s is disconnected!",
+                    self.name,
+                    self.mcu_tmc.mcu.get_name(),
+                )
+            else:
+                self._init_registers()
         except self.printer.command_error as e:
             logging.info("TMC %s failed to init: %s", self.name, str(e))
     # get_status information export

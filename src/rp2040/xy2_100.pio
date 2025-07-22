@@ -1,0 +1,42 @@
+;
+; Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+;
+; SPDX-License-Identifier: BSD-3-Clause
+;
+
+; SET pin 0 should be mapped to your LED GPIO
+
+.program xy2_100_clock
+.wrap_target
+    set pins, 1  ; Clock high
+    set pins, 0  ; Clock low
+.wrap
+
+.program xy2_100_x
+.side_set 1 opt
+.wrap_target
+    pull noblock
+    mov x osr
+    set y 18
+bitloop:
+    wait 0 pin 0
+    wait 1 pin 0
+    out pins, 1     side 1
+    jmp y-- bitloop
+
+    wait 0 pin 0
+    wait 1 pin 0
+    out pins, 1     side 0
+.wrap
+
+.program xy2_100_y
+.wrap_target
+    pull noblock
+    mov x osr
+    set y 19
+bitloop:
+    wait 0 pin 0
+    wait 1 pin 0
+    out pins, 1
+    jmp y-- bitloop
+.wrap

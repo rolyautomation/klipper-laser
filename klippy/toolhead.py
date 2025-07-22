@@ -12,7 +12,11 @@ import mcu, chelper, kinematics.extruder
 
 # Class to track each move request
 class Move:
-    def __init__(self, toolhead, start_pos, end_pos, speed):
+    def __init__(self, toolhead, start_pos, end_pos, speed, pwmmode=None, pwmvalue=None, pwmsw=0, power_table=None):
+        self.pwmmode = pwmmode
+        self.pwmvalue = pwmvalue
+        self.pwmsw = pwmsw
+        self.power_table = power_table
         self.toolhead = toolhead
         self.start_pos = tuple(start_pos)
         self.end_pos = tuple(end_pos)
@@ -21,14 +25,27 @@ class Move:
         self.timing_callbacks = []
         velocity = min(speed, toolhead.max_velocity)
         self.is_kinematic_move = True
-        self.axes_d = axes_d = [end_pos[i] - start_pos[i] for i in (0, 1, 2, 3)]
-        self.move_d = move_d = math.sqrt(sum([d*d for d in axes_d[:3]]))
+        # include E axis
+        self.axes_d = axes_d = [end_pos[i] - start_pos[i] for i in (0, 1, 2, 3, 4, 5, 6, 7)]
+        # We pick the maximum between B/C and X/Y moves if they are not in the same direction
+        if axes_d[0] * axes_d[4] < 0 or axes_d[1] * axes_d[5] < 0:
+            xy_move_d = math.sqrt(sum([axes_d[0]**2, axes_d[1]**2, axes_d[2]**2, axes_d[3]**2, axes_d[6]**2]))
+            bc_move_d = math.sqrt(sum([axes_d[4]**2, axes_d[5]**2, axes_d[2]**2, axes_d[3]**2, axes_d[6]**2]))
+            self.move_d = move_d = max(xy_move_d, bc_move_d)
+        # Otherwise we add X/B and Y/C together
+        else:
+            self.move_d = move_d = math.sqrt(sum([(axes_d[0] + axes_d[4])**2, 
+                                              (axes_d[1] + axes_d[5])**2, 
+                                              axes_d[2]**2, axes_d[3]**2, axes_d[6]**2
+                                              ]))
         if move_d < .000000001:
             # Extrude only move
             self.end_pos = (start_pos[0], start_pos[1], start_pos[2],
-                            end_pos[3])
+                            start_pos[0+3], start_pos[1+3], start_pos[2+3], start_pos[0+6],
+                            end_pos[3+4])
             axes_d[0] = axes_d[1] = axes_d[2] = 0.
-            self.move_d = move_d = abs(axes_d[3])
+            axes_d[0+3] = axes_d[1+3] = axes_d[2+3] = axes_d[0+6] = 0.
+            self.move_d = move_d = abs(axes_d[3+4])
             inv_move_d = 0.
             if move_d:
                 inv_move_d = 1. / move_d
@@ -47,6 +64,15 @@ class Move:
         self.delta_v2 = 2.0 * move_d * self.accel
         self.max_smoothed_v2 = 0.
         self.smooth_delta_v2 = 2.0 * move_d * toolhead.max_accel_to_decel
+        
+    def set_speed_for_g0(self, g0_speed):
+        # This is to prevent editing homing speed (Move object created without G0/G1)
+        if self.pwmmode is None or self.pwmvalue is None:
+            return
+        if g0_speed > 0:
+            self.max_cruise_v2 = g0_speed**2
+            self.min_move_t = self.move_d / g0_speed
+
     def limit_speed(self, speed, accel):
         speed2 = speed**2
         if speed2 < self.max_cruise_v2:
@@ -55,10 +81,13 @@ class Move:
         self.accel = min(self.accel, accel)
         self.delta_v2 = 2.0 * self.move_d * self.accel
         self.smooth_delta_v2 = min(self.smooth_delta_v2, self.delta_v2)
+    
     def move_error(self, msg="Move out of range"):
         ep = self.end_pos
-        m = "%s: %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[3])
+        #m = "%s: %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[3])
+        m = "%s: %.3f %.3f %.3f %.3f %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[0+3], ep[1+3], ep[2+3], ep[0+6],ep[3+4])
         return self.toolhead.printer.command_error(m)
+    
     def calc_junction(self, prev_move):
         if not self.is_kinematic_move or not prev_move.is_kinematic_move:
             return
@@ -67,12 +96,17 @@ class Move:
         # Find max velocity using "approximated centripetal velocity"
         axes_r = self.axes_r
         prev_axes_r = prev_move.axes_r
-        junction_cos_theta = -(axes_r[0] * prev_axes_r[0]
-                               + axes_r[1] * prev_axes_r[1]
-                               + axes_r[2] * prev_axes_r[2])
+        junction_cos_theta = -((axes_r[0] + axes_r[4]) * (prev_axes_r[0] + prev_axes_r[4])
+                               + (axes_r[1] + axes_r[5]) * (prev_axes_r[1] + prev_axes_r[5])
+                               + axes_r[2] * prev_axes_r[2]
+                               + axes_r[3] * prev_axes_r[3]
+                               + axes_r[6] * prev_axes_r[6])
+               
         if junction_cos_theta > 0.999999:
             return
-        junction_cos_theta = max(junction_cos_theta, -0.999999)
+        if (junction_cos_theta < -0.998): junction_cos_theta = -0.999999
+        else: junction_cos_theta = max(junction_cos_theta, -0.999999)
+        
         sin_theta_d2 = math.sqrt(0.5*(1.0-junction_cos_theta))
         R_jd = sin_theta_d2 / (1. - sin_theta_d2)
         # Approximated circle must contact moves no further away than mid-move
@@ -87,9 +121,11 @@ class Move:
             move_centripetal_v2, prev_move_centripetal_v2,
             extruder_v2, self.max_cruise_v2, prev_move.max_cruise_v2,
             prev_move.max_start_v2 + prev_move.delta_v2)
+                
         self.max_smoothed_v2 = min(
             self.max_start_v2
             , prev_move.max_smoothed_v2 + prev_move.smooth_delta_v2)
+    
     def set_junction(self, start_v2, cruise_v2, end_v2):
         # Determine accel, cruise, and decel portions of the move distance
         half_inv_accel = .5 / self.accel
@@ -124,6 +160,9 @@ class LookAheadQueue:
         if self.queue:
             return self.queue[-1]
         return None
+    def get_data_len_queue(self):
+        return len(self.queue)
+
     def flush(self, lazy=False):
         self.junction_flush = LOOKAHEAD_FLUSH_TIME
         update_flush_count = lazy
@@ -213,23 +252,22 @@ class ToolHead:
         self.mcu = self.all_mcus[0]
         self.lookahead = LookAheadQueue(self)
         self.lookahead.set_flush_time(BUFFER_TIME_HIGH)
-        self.commanded_pos = [0., 0., 0., 0.]
+        self.commanded_pos = [0., 0., 0., 0., 0., 0., 0., 0.]
+
+        self.powervary_mode = config.getint('powervary_mode', 0, minval=0)
+        self.powervary_factor = config.getfloat('powervary_factor', 0.5, above=0.2,maxval=1.)
+
         # Velocity and acceleration control
         self.max_velocity = config.getfloat('max_velocity', above=0.)
         self.max_accel = config.getfloat('max_accel', above=0.)
         min_cruise_ratio = 0.5
         if config.getfloat('minimum_cruise_ratio', None) is None:
-            req_accel_to_decel = config.getfloat('max_accel_to_decel', None,
-                                                 above=0.)
+            req_accel_to_decel = config.getfloat('max_accel_to_decel', None, above=0.)
             if req_accel_to_decel is not None:
                 config.deprecate('max_accel_to_decel')
-                min_cruise_ratio = 1. - min(1., (req_accel_to_decel
-                                                 / self.max_accel))
-        self.min_cruise_ratio = config.getfloat('minimum_cruise_ratio',
-                                                min_cruise_ratio,
-                                                below=1., minval=0.)
-        self.square_corner_velocity = config.getfloat(
-            'square_corner_velocity', 5., minval=0.)
+                min_cruise_ratio = 1. - min(1., (req_accel_to_decel / self.max_accel))
+        self.min_cruise_ratio = config.getfloat('minimum_cruise_ratio',min_cruise_ratio, below=1., minval=0.)
+        self.square_corner_velocity = config.getfloat('square_corner_velocity', 5., minval=0.)
         self.junction_deviation = self.max_accel_to_decel = 0.
         self._calc_junction_deviation()
         # Input stall detection
@@ -346,9 +384,11 @@ class ToolHead:
                     self.trapq, next_move_time,
                     move.accel_t, move.cruise_t, move.decel_t,
                     move.start_pos[0], move.start_pos[1], move.start_pos[2],
+                    move.start_pos[0+3], move.start_pos[1+3], move.start_pos[2+3], move.start_pos[0+6],
                     move.axes_r[0], move.axes_r[1], move.axes_r[2],
-                    move.start_v, move.cruise_v, move.accel)
-            if move.axes_d[3]:
+                    move.axes_r[0+3], move.axes_r[1+3], move.axes_r[2+3], move.axes_r[0+6],
+                    move.start_v, move.cruise_v, move.accel, 0)
+            if move.axes_d[3+4]:
                 self.extruder.move(next_move_time, move)
             next_move_time = (next_move_time + move.accel_t
                               + move.cruise_t + move.decel_t)
@@ -451,23 +491,58 @@ class ToolHead:
             self.printer.invoke_shutdown("Exception in flush_handler")
         return self.reactor.NEVER
     # Movement commands
+    # selected function
+    def predict_move_distance(self,newpos):
+        start_pos_in = self.commanded_pos
+        end_pos_in   = newpos
+        start_pos_use = tuple(start_pos_in)
+        end_pos_use  = tuple(end_pos_in)
+        axes_d = [end_pos_use[i] - start_pos_use[i] for i in (0, 1, 2, 3, 4, 5, 6, 7)]
+         # We pick the maximum between B/C and X/Y moves if they are not in the same direction
+        if axes_d[0] * axes_d[4] < 0 or axes_d[1] * axes_d[5] < 0:
+            xy_move_d = math.sqrt(sum([axes_d[0]**2, axes_d[1]**2, axes_d[2]**2, axes_d[3]**2, axes_d[6]**2]))
+            bc_move_d = math.sqrt(sum([axes_d[4]**2, axes_d[5]**2, axes_d[2]**2, axes_d[3]**2, axes_d[6]**2]))
+            move_d = max(xy_move_d, bc_move_d)
+        # Otherwise we add X/B and Y/C together
+        else:
+            move_d = math.sqrt(sum([(axes_d[0] + axes_d[4])**2, 
+                                              (axes_d[1] + axes_d[5])**2, 
+                                              axes_d[2]**2, axes_d[3]**2, axes_d[6]**2
+                                              ]))
+        if move_d < .000000001:
+            move_d = 0.01
+        else:  
+            move_d = self.powervary_factor * move_d
+        return(move_d)
+
+    # def predict_move_distance(self,newpos):
+    #     resd = 0.01
+    #     if self.powervary_mode > 0 :
+    #         resd = self.predict_move_distance_old(newpos)    
+    #     else:
+    #         resd = self.predict_move_distance_old(newpos)
+    #     return(resd)
+         
+    def soft_homing_BC_AXIS(self):
+        self.kin.soft_homing_BC_AXIS()
     def get_position(self):
         return list(self.commanded_pos)
     def set_position(self, newpos, homing_axes=()):
         self.flush_step_generation()
         ffi_main, ffi_lib = chelper.get_ffi()
         ffi_lib.trapq_set_position(self.trapq, self.print_time,
-                                   newpos[0], newpos[1], newpos[2])
+                                   newpos[0], newpos[1], newpos[2],
+                                   newpos[0+3], newpos[1+3], newpos[2+3], newpos[0+6])
         self.commanded_pos[:] = newpos
         self.kin.set_position(newpos, homing_axes)
         self.printer.send_event("toolhead:set_position")
-    def move(self, newpos, speed):
-        move = Move(self, self.commanded_pos, newpos, speed)
+    def move(self, newpos, speed, pwmmode=None, pwmvalue=None, pwmsw=0, power_table=None):
+        move = Move(self, self.commanded_pos, newpos, speed, pwmmode, pwmvalue, pwmsw, power_table)
         if not move.move_d:
             return
         if move.is_kinematic_move:
             self.kin.check_move(move)
-        if move.axes_d[3]:
+        if move.axes_d[3+4]:    
             self.extruder.check_move(move)
         self.commanded_pos[:] = move.end_pos
         self.lookahead.add_move(move)
@@ -480,6 +555,20 @@ class ToolHead:
                 curpos[i] = coord[i]
         self.move(curpos, speed)
         self.printer.send_event("toolhead:manual_move")
+
+    def check_lookqueue_addnum(self):    
+        return self.lookahead.get_data_len_queue()
+
+    def manual_move_zaxis(self, zpos, speed):
+        curpos = list(self.commanded_pos)
+        curpos[2] = zpos
+        #for i in range(len(coord)):
+            #if coord[i] is not None:
+                #curpos[i] = coord[i]
+        #self.move(curpos, speed, 0, 0, 0)
+        self.move(curpos, speed)
+        self.printer.send_event("toolhead:manual_move")
+
     def dwell(self, delay):
         next_print_time = self.get_last_move_time() + max(0., delay)
         self._advance_move_time(next_print_time)
@@ -494,7 +583,7 @@ class ToolHead:
             eventtime = self.reactor.pause(eventtime + 0.100)
     def set_extruder(self, extruder, extrude_pos):
         self.extruder = extruder
-        self.commanded_pos[3] = extrude_pos
+        self.commanded_pos[3+4] = extrude_pos
     def get_extruder(self):
         return self.extruder
     # Homing "drip move" handling
@@ -668,3 +757,4 @@ class ToolHead:
 def add_printer_objects(config):
     config.get_printer().add_object('toolhead', ToolHead(config))
     kinematics.extruder.add_printer_objects(config)
+  

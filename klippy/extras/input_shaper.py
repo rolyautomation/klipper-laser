@@ -91,7 +91,8 @@ class InputShaper:
         self.printer.register_event_handler("klippy:connect", self.connect)
         self.toolhead = None
         self.shapers = [AxisInputShaper('x', config),
-                        AxisInputShaper('y', config)]
+                        AxisInputShaper('y', config),
+                        AxisInputShaper('a', config)]                        
         self.input_shaper_stepper_kinematics = []
         self.orig_stepper_kinematics = []
         # Register gcode commands

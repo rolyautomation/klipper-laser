@@ -25,6 +25,8 @@
 //#define console_sendf(ce,va) console_sendf_usb(ce,va)
 //#define command_find_and_dispatch(rb, rp, pc) ({*(pc) = rp; 1;})
 
+DECL_CONSTANT_STR("REP_FN", CONFIG_REP_FN);
+
 
 /****************************************************************
  * Message block sending
@@ -133,7 +135,8 @@ DECL_TASK(usb_bulk_out_task);
 
 #define CONCAT1(a, b) a ## b
 #define CONCAT(a, b) CONCAT1(a, b)
-#define USB_STR_MANUFACTURER u"Klipper"
+//#define USB_STR_MANUFACTURER u"Klipper"
+#define USB_STR_MANUFACTURER CONCAT(u,CONFIG_REP_FN)
 #define USB_STR_PRODUCT CONCAT(u,CONFIG_MCU)
 #define USB_STR_SERIAL CONCAT(u,CONFIG_USB_SERIAL_NUMBER)
 

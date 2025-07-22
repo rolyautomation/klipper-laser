@@ -8,8 +8,9 @@ class HomingOverride:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.start_pos = [config.getfloat('set_position_' + a, None)
-                          for a in 'xyz']
-        self.axes = config.get('axes', 'XYZ').upper()
+                          for a in 'xyzabcd']
+        #default value: XYZABCD                  
+        self.axes = config.get('axes', 'XYZABCD').upper()
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
         self.template = gcode_macro.load_template(config, 'gcode')
         self.in_script = False
@@ -17,6 +18,7 @@ class HomingOverride:
         self.gcode = self.printer.lookup_object('gcode')
         self.prev_G28 = self.gcode.register_command("G28", None)
         self.gcode.register_command("G28", self.cmd_G28)
+        self.gcode.register_command("G32", self.prev_G28) 
     def cmd_G28(self, gcmd):
         if self.in_script:
             # Was called recursively - invoke the real G28 command

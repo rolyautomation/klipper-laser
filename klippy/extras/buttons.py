@@ -35,6 +35,7 @@ class MCU_buttons:
     def build_config(self):
         if not self.pin_list:
             return
+        #logging.info("rebuttons:'%s'", self.pin_list)    
         self.oid = self.mcu.create_oid()
         self.mcu.add_config_cmd("config_buttons oid=%d button_count=%d" % (
             self.oid, len(self.pin_list)))
@@ -56,6 +57,7 @@ class MCU_buttons:
                                    "buttons_state", self.oid)
     def handle_buttons_state(self, params):
         # Expand the message ack_count from 8-bit
+        #logging.info("button_params:'%s'", params)    
         ack_count = self.ack_count
         ack_diff = (params['ack_count'] - ack_count) & 0xff
         ack_diff -= (ack_diff & 0x80) << 1
@@ -255,6 +257,7 @@ class PrinterButtons:
         self.printer.load_object(config, 'query_adc')
         self.mcu_buttons = {}
         self.adc_buttons = {}
+        self.pin_to_mcu = {}
     def register_adc_button(self, pin, min_val, max_val, pullup, callback):
         adc_buttons = self.adc_buttons.get(pin)
         if adc_buttons is None:
@@ -266,6 +269,23 @@ class PrinterButtons:
             if state:
                 callback(eventtime)
         self.register_adc_button(pin, min_val, max_val, pullup, helper)
+
+    def reset_buttons_mcu(self, pin):
+        #ppins = self.printer.lookup_object('pins')
+        #mcu = mcu_name = None
+        #pin_params = ppins.lookup_pin(pin, can_invert=True, can_pullup=True)
+        #mcu = pin_params['chip']
+        #mcu_name = pin_params['chip_name']    
+        mcu_name = self.pin_to_mcu.get(pin)
+        if mcu_name is None:
+            return False
+        #logging.info("pin_to_mcu:'%s'", self.pin_to_mcu)    
+        mcu_buttons = self.mcu_buttons.get(mcu_name)
+        if mcu_buttons is not None:
+            mcu_buttons.ack_count = 0
+            return True
+        return False
+
     def register_buttons(self, pins, callback):
         # Parse pins
         ppins = self.printer.lookup_object('pins')
@@ -277,6 +297,7 @@ class PrinterButtons:
                 raise ppins.error("button pins must be on same mcu")
             mcu = pin_params['chip']
             mcu_name = pin_params['chip_name']
+            self.pin_to_mcu[pin] = mcu_name
             pin_params_list.append(pin_params)
         # Register pins and callback with the appropriate MCU
         mcu_buttons = self.mcu_buttons.get(mcu_name)

@@ -24,9 +24,16 @@
 #include "pyhelper.h" // errorf
 #include "serialqueue.h" // struct queue_message
 #include "stepcompress.h" // stepcompress_alloc
+#include "common_ptd.h"
+#include <stdarg.h>
+
+//#define DEBUG_LOGFILE_EN   (1)
+#define DEBUG_LOGFILE_EN   (0)
+
 
 #define CHECK_LINES 1
 #define QUEUE_START_SIZE 1024
+
 
 struct stepcompress {
     // Buffer management
@@ -39,6 +46,7 @@ struct stepcompress {
     struct list_head msg_queue;
     uint32_t oid;
     int32_t queue_step_msgtag, set_next_step_dir_msgtag;
+    int32_t step_ctag_typef;
     int sdir, invert_sdir;
     // Step+dir+step filter
     uint64_t next_step_clock;
@@ -46,6 +54,37 @@ struct stepcompress {
     // History tracking
     int64_t last_position;
     struct list_head history_list;
+
+    // pwm mode
+    //uint16_t restartcmd_flag;
+    uint8_t  restartcmd_sn;
+    uint8_t  pre_restartcmd_sn;    
+    uint16_t pwm_mode;  
+    uint16_t on_off;    
+    uint32_t speed_pulse_ticks;    
+    uint32_t pwmval;
+
+    uint8_t  ptagcode;
+    uint8_t  pre_ptagcode;
+    uint8_t  psynccode;
+    uint8_t  pre_psynccode;
+    uint8_t  pdlen; 
+    uint8_t  ddata[MAX_PTABLE_LEN];
+    uint32_t dist_count;     
+
+    uint16_t pre_pwm_mode;  
+    uint16_t pre_on_off;    
+    uint32_t pre_speed_pulse_ticks;    
+    uint32_t pre_pwmval;  
+    int32_t set_pwm_sw_msgtag, set_pwm_modepower_msgtag;
+    int32_t set_pwmpower_msgtag;
+    int32_t set_plusticks_msgtag;
+    int32_t set_powerftable_msgtag;
+    int32_t set_powerftable_sp_msgtag;
+    int32_t set_tailp_pftable_msgtag;
+    int32_t set_sync_endc_msgtag;    
+    int32_t set_pwm_sw_endc_msgtag;
+
 };
 
 struct step_move {
@@ -257,12 +296,29 @@ stepcompress_alloc(uint32_t oid)
 // Fill message id information
 void __visible
 stepcompress_fill(struct stepcompress *sc, uint32_t max_error
-                  , int32_t queue_step_msgtag, int32_t set_next_step_dir_msgtag)
+                  , int32_t queue_step_msgtag, int32_t set_next_step_dir_msgtag, int32_t step_ctag_typef, int32_t set_pwm_sw_msgtag, int32_t set_pwm_modepower_msgtag)
 {
     sc->max_error = max_error;
     sc->queue_step_msgtag = queue_step_msgtag;
     sc->set_next_step_dir_msgtag = set_next_step_dir_msgtag;
+    sc->step_ctag_typef = step_ctag_typef;
+    sc->set_pwm_sw_msgtag = set_pwm_sw_msgtag;
+    sc->set_pwm_modepower_msgtag = set_pwm_modepower_msgtag;
 }
+
+void __visible
+stepcompress_fill_ext(struct stepcompress *sc, int32_t set_pwmpower_msgtag, int32_t set_plusticks_msgtag, int32_t set_powerftable_msgtag, int32_t set_powerftable_sp_msgtag
+    , int32_t set_sync_endc_msgtag, int32_t set_pwm_sw_endc_msgtag, int32_t set_tailp_pftable_msgtag)
+{
+    sc->set_pwmpower_msgtag = set_pwmpower_msgtag;
+    sc->set_plusticks_msgtag = set_plusticks_msgtag;
+    sc->set_powerftable_msgtag = set_powerftable_msgtag;
+    sc->set_powerftable_sp_msgtag = set_powerftable_sp_msgtag;
+    sc->set_sync_endc_msgtag = set_sync_endc_msgtag;
+    sc->set_pwm_sw_endc_msgtag = set_pwm_sw_endc_msgtag;
+    sc->set_tailp_pftable_msgtag = set_tailp_pftable_msgtag;
+}
+
 
 // Set the inverted stepper direction flag
 void __visible
@@ -321,6 +377,44 @@ stepcompress_get_step_dir(struct stepcompress *sc)
     return sc->next_step_dir;
 }
 
+
+void
+stepcompress_set_pwm_data(struct stepcompress *p_sc_insk, uint16_t pwm_mode, uint16_t on_off,
+    uint32_t pwmval, uint32_t speed_pulse_ticks, double frestartcmd_sn)
+{
+    p_sc_insk->pwm_mode = pwm_mode;
+    p_sc_insk->on_off = on_off;    
+    p_sc_insk->pwmval = pwmval;
+    p_sc_insk->speed_pulse_ticks = speed_pulse_ticks;
+    p_sc_insk->restartcmd_sn = (uint8_t)frestartcmd_sn;
+
+}
+
+
+
+void
+stepcompress_set_power_table(struct stepcompress *p_sc_insk, uint8_t  pdlen,
+    uint32_t dist_count, uint8_t *  pddata, uint8_t ddata_len, uint8_t ptagcode, uint8_t psynccode)
+{
+    p_sc_insk->psynccode = psynccode;
+    p_sc_insk->pdlen = pdlen;
+    if ((p_sc_insk->pdlen > 0) && (p_sc_insk->ptagcode != ptagcode))
+    {
+        p_sc_insk->ptagcode = ptagcode;
+        p_sc_insk->dist_count = dist_count;
+        // if (ddata_len > MAX_PTABLE_LEN)
+        //     ddata_len = MAX_PTABLE_LEN;
+        if (p_sc_insk->pdlen > ddata_len)
+            p_sc_insk->pdlen = ddata_len;
+        memcpy(p_sc_insk->ddata, pddata, p_sc_insk->pdlen);
+
+    }
+
+
+}
+
+
+
 // Determine the "print time" of the last_step_clock
 static void
 calc_last_step_print_time(struct stepcompress *sc)
@@ -350,11 +444,13 @@ add_move(struct stepcompress *sc, uint64_t first_clock, struct step_move *move)
     uint32_t ticks = move->add*addfactor + move->interval*(move->count-1);
     uint64_t last_clock = first_clock + ticks;
 
-    // Create and queue a queue_step command
+ 
+    // Create and queue a queue_step command old
     uint32_t msg[5] = {
         sc->queue_step_msgtag, sc->oid, move->interval, move->count, move->add
     };
     struct queue_message *qm = message_alloc_and_encode(msg, 5);
+
     qm->min_clock = qm->req_clock = sc->last_step_clock;
     if (move->count == 1 && first_clock >= sc->last_step_clock + CLOCK_DIFF_MAX)
         qm->req_clock = first_clock;
@@ -426,6 +522,277 @@ set_next_step_dir(struct stepcompress *sc, int sdir)
     return 0;
 }
 
+
+
+static int 
+set_pwm_on_off_send(struct stepcompress *sc)
+{
+
+    int runflag = 0;
+    if ( sc->pre_on_off != sc->on_off )
+    {
+        sc->pre_on_off = sc->on_off;
+        runflag = runflag | 0x01;
+    }
+    if (sc->pre_psynccode != sc->psynccode)
+    {
+        sc->pre_psynccode = sc->psynccode;
+        runflag = runflag | 0x02;
+    }
+    if (runflag > 0)
+    {
+
+        uint32_t msg[4] = {0}; 
+        int msg_len = 0;
+        if (runflag  == 1)
+        {
+            msg[0] = sc->set_pwm_sw_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->on_off;
+            msg_len = 3;
+        } else if (runflag  == 2)
+        {
+            msg[0] = sc->set_sync_endc_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->psynccode;
+            msg_len = 3;
+        }
+        else
+        {
+            msg[0] = sc->set_pwm_sw_endc_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->on_off;
+            msg[3] = sc->psynccode;
+            msg_len = 4;
+        }
+        struct queue_message *qm = message_alloc_and_encode(msg, msg_len);
+        qm->req_clock = sc->last_step_clock;
+        list_add_tail(&qm->node, &sc->msg_queue);
+        return 0;
+
+    }
+    return 0;
+
+}
+
+
+static int 
+set_pwm_mode_power_send(struct stepcompress *sc)
+{
+    int runflag = 0;
+
+    if ( (sc->pre_pwmval != sc->pwmval) )
+    {
+        sc->pre_pwmval = sc->pwmval;
+        runflag = runflag | 0x01;
+    }
+
+    if (sc->pre_speed_pulse_ticks != sc->speed_pulse_ticks)
+    {
+        sc->pre_speed_pulse_ticks = sc->speed_pulse_ticks;
+        runflag = runflag | 0x02;
+    }
+
+    if (sc->pre_pwm_mode != sc->pwm_mode)
+    {
+        sc->pre_pwm_mode = sc->pwm_mode;
+        runflag = runflag | 0x04;
+    }
+
+    if (runflag > 0)
+    {
+        uint32_t msg[5] = {0}; 
+        int msg_len = 0;
+
+        if (runflag  == 1)
+        {
+            msg[0] = sc->set_pwmpower_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->pwmval;
+            msg_len = 3;
+        } else if (runflag  == 2)
+        {
+            msg[0] = sc->set_plusticks_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->speed_pulse_ticks;
+            msg_len = 3;
+        }
+        else
+        {
+            msg[0] = sc->set_pwm_modepower_msgtag;
+            msg[1] = sc->oid;
+            msg[2] = sc->pwm_mode;
+            msg[3] = sc->pwmval;
+            msg[4] = sc->speed_pulse_ticks;
+            msg_len = 5;
+        }
+        struct queue_message *qm = message_alloc_and_encode(msg, msg_len);
+        qm->req_clock = sc->last_step_clock;
+        list_add_tail(&qm->node, &sc->msg_queue);
+        return 0;
+        
+    }
+    return 0;
+
+
+}
+
+
+
+#if  DEBUG_LOGFILE_EN
+void log_to_file(const char *fmt, ...) {
+    FILE *fp = fopen("/tmp/klippy_test.log", "a");
+    if (fp) {
+        va_list args;
+        va_start(args, fmt);
+        vfprintf(fp, fmt, args);
+        va_end(args);
+        fclose(fp);
+    }
+}
+#endif  // DEBUG_LOGFILE_EN
+
+
+static int 
+set_power_table_data_send(struct stepcompress *sc)
+{
+    int runflag = 0;
+    int power_table_len = sc->pdlen;
+    const int BLOCK_SIZE = 48; 
+
+    if (sc->pre_ptagcode != sc->ptagcode)
+    {
+        runflag = 1;
+        sc->pre_ptagcode = sc->ptagcode;
+    }
+    #if  DEBUG_LOGFILE_EN
+    log_to_file("DEBUG: power_table[0]=%d, len_power_table=%d, dist_count=%d\n", 
+            sc->ddata[0], power_table_len, sc->dist_count);
+    log_to_file("DEBUG: power_table[1]=%d, power_table[2]=%d, power_table[3]=%d\n", 
+            sc->ddata[1], sc->ddata[2], sc->ddata[3]); 
+    #endif  // DEBUG_LOGFILE_EN                   
+
+    if (( power_table_len > 0 ) && (runflag))
+    {
+        
+        if (power_table_len > BLOCK_SIZE) {
+            // first send the tail part (tail data)
+            int tail_size = power_table_len - BLOCK_SIZE;
+            uint32_t tail_msg[3] = {
+                sc->set_tailp_pftable_msgtag, sc->oid, BLOCK_SIZE
+            };
+            struct queue_message *tail_qm = message_alloc_and_encode_psbuffer(
+                tail_msg, 3, sc->ddata + BLOCK_SIZE, tail_size);
+            tail_qm->req_clock = sc->last_step_clock;
+            list_add_tail(&tail_qm->node, &sc->msg_queue);
+            #if DEBUG_LOGFILE_EN
+            log_to_file("DEBUG: tail block offset=%d, size=%d\n", 
+                BLOCK_SIZE, tail_size);
+            #endif
+
+            // then send the main part (first 48 bytes)
+            uint32_t main_msg[3] = {
+                sc->set_powerftable_msgtag, sc->oid, sc->dist_count
+            };
+            struct queue_message *main_qm = message_alloc_and_encode_psbuffer(
+                main_msg, 3, sc->ddata, BLOCK_SIZE);
+            main_qm->req_clock = sc->last_step_clock;
+            list_add_tail(&main_qm->node, &sc->msg_queue);
+
+            #if DEBUG_LOGFILE_EN
+            log_to_file("DEBUG: main block offset=0, size=%d\n", BLOCK_SIZE);
+            #endif
+
+        } else {
+            // if data length is less than or equal to 48, use the original way to send
+            uint32_t msg[3] = {
+                sc->set_powerftable_msgtag, sc->oid, sc->dist_count
+            };
+            struct queue_message *qm = message_alloc_and_encode_psbuffer(
+                msg, 3, sc->ddata, power_table_len);
+            qm->req_clock = sc->last_step_clock;
+            list_add_tail(&qm->node, &sc->msg_queue);
+
+            #if  DEBUG_LOGFILE_EN
+            log_to_file("DEBUG: qmlen=%d, power_table_len=%d \n", 
+                qm->len, power_table_len);  
+            #endif  // DEBUG_LOGFILE_EN   
+        }
+        sc->pdlen = 0;
+        return 0;
+        
+    }
+    return 0;
+
+}
+
+
+static int 
+check_syncdata_send(struct stepcompress *sc)
+{
+    int runflag = 0;
+    if (( sc->pre_pwm_mode != sc->pwm_mode ) || (sc->pre_pwmval != sc->pwmval) || (sc->pre_speed_pulse_ticks != sc->speed_pulse_ticks)
+             || ( sc->pre_on_off != sc->on_off ) || (sc->pre_psynccode != sc->psynccode))
+    {
+       runflag = 1;
+    }
+    if ((sc->pre_ptagcode != sc->ptagcode) && (sc->pdlen > 0))
+    {
+        runflag = 1;
+    }
+    else if (sc->pdlen > 0)
+    {
+        sc->pdlen = 0;
+    }
+    return(runflag);
+
+}
+
+static int 
+reset_initdata_send(struct stepcompress *sc)
+{
+    //if ( sc->restartcmd_sn > 0 )
+    if ( sc->pre_restartcmd_sn != sc->restartcmd_sn )
+    {
+        #if  DEBUG_LOGFILE_EN   
+        log_to_file("DEBUG: resend restartcmd_sn=%d, pre_restartcmd_sn=%d \n", sc->restartcmd_sn, sc->pre_restartcmd_sn);
+        #endif  // DEBUG_LOGFILE_EN                    
+        sc->pre_restartcmd_sn = sc->restartcmd_sn;
+        //sc->restartcmd_sn = 0;
+        // no use value
+        sc->pre_pwm_mode = 100;
+        sc->pre_pwmval = 500;
+        sc->pre_speed_pulse_ticks = 0;
+        sc->pre_on_off = 100;
+        //sc->pre_ptagcode = 0;
+    }
+    return 0;
+
+}
+
+
+int send_pwm_sync_data(struct stepcompress *sc)
+{
+    if ( sc->step_ctag_typef > 0 )
+    {   
+        reset_initdata_send(sc);
+        if(0 == check_syncdata_send(sc))
+        {
+            return 0;
+        }
+        int ret = queue_flush(sc, UINT64_MAX);
+        if (ret)
+            return ret;
+
+        set_pwm_mode_power_send(sc);
+        set_pwm_on_off_send(sc);
+        set_power_table_data_send(sc);
+    }
+    return 0;
+
+}
+
+
 // Slow path for queue_append() - handle next step far in future
 static int
 queue_append_far(struct stepcompress *sc)
@@ -488,6 +855,8 @@ queue_append(struct stepcompress *sc)
         if (ret)
             return ret;
     }
+    //todo
+
     if (unlikely(sc->next_step_clock >= sc->last_step_clock + CLOCK_DIFF_MAX))
         return queue_append_far(sc);
     if (unlikely(sc->queue_next >= sc->queue_end))

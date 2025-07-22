@@ -5,13 +5,15 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import os, sys, logging, io
 
-VALID_GCODE_EXTS = ['gcode', 'g', 'gco']
+#VALID_GCODE_EXTS = ['gcode', 'g', 'gco']
+VALID_GCODE_EXTS = ['gcode', 'g', 'gco', 'gc']
 
 DEFAULT_ERROR_GCODE = """
 {% if 'heaters' in printer %}
    TURN_OFF_HEATERS
 {% endif %}
 """
+
 
 class VirtualSD:
     def __init__(self, config):
@@ -46,6 +48,19 @@ class VirtualSD:
         self.gcode.register_command(
             "SDCARD_PRINT_FILE", self.cmd_SDCARD_PRINT_FILE,
             desc=self.cmd_SDCARD_PRINT_FILE_help)
+        self.gen_supergcode_obj = None            
+        self.printer.register_event_handler("klippy:connect",
+                                            self._handle_connect_gensupercode) 
+
+    def _handle_connect_gensupercode(self):
+        self.gen_supergcode_obj = self.printer.lookup_object('gen_supergcode',None)
+        pass
+
+    def clean_gensupercode(self):
+        if  self.gen_supergcode_obj is not None:
+            self.gen_supergcode_obj.clean_cache_cmd()
+        pass
+
     def handle_shutdown(self):
         if self.work_timer is not None:
             self.must_pause_work = True
@@ -125,6 +140,7 @@ class VirtualSD:
             self.current_file.close()
             self.current_file = None
             self.print_stats.note_cancel()
+            self.clean_gensupercode()
         self.file_position = self.file_size = 0
     # G-Code commands
     def cmd_error(self, gcmd):
@@ -134,6 +150,7 @@ class VirtualSD:
             self.do_pause()
             self.current_file.close()
             self.current_file = None
+            self.clean_gensupercode()
         self.file_position = self.file_size = 0
         self.print_stats.reset()
         self.printer.send_event("virtual_sdcard:reset_file")
@@ -269,6 +286,16 @@ class VirtualSD:
             else:
                 next_file_position = self.file_position + len(line) + 1
             self.next_file_position = next_file_position
+            if self.gen_supergcode_obj is not None:
+                retstatus, line_gcode = self.gen_supergcode_obj.handle_supercode(line)
+                if retstatus > 0:
+                    line = line_gcode
+                    if self.gen_supergcode_obj.debug_flog_en:
+                        self.gen_supergcode_obj.debug_writefile("/tmp/supergcode.log", line)
+                else:
+                    self.cmd_from_sd = False
+                    self.file_position = self.next_file_position
+                    continue    
             try:
                 self.gcode.run_script(line)
             except self.gcode.error as e:

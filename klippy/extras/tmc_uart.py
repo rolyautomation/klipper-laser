@@ -175,6 +175,8 @@ class MCU_TMC_uart_bitbang:
             self.analog_mux.activate(instance_id)
         msg = self._encode_read(0xf5, addr, reg)
         params = self.tmcuart_send_cmd.send([self.oid, msg, 10])
+        if params is None or 'read' not in params:
+            return None
         return self._decode_read(reg, params['read'])
     def reg_write(self, instance_id, addr, reg, val, print_time=None):
         minclock = 0
@@ -220,6 +222,8 @@ class MCU_TMC_uart:
             config, max_addr)
         self.mutex = self.mcu_uart.mutex
         self.tmc_frequency = tmc_frequency
+        self.mcu = self.mcu_uart.mcu
+        
     def get_fields(self):
         return self.fields
     def _do_get_register(self, reg_name):
@@ -230,6 +234,8 @@ class MCU_TMC_uart:
             val = self.mcu_uart.reg_read(self.instance_id, self.addr, reg)
             if val is not None:
                 return val
+        if self.mcu.is_non_critical:
+            return 0
         raise self.printer.command_error(
             "Unable to read tmc uart '%s' register %s" % (self.name, reg_name))
     def get_register(self, reg_name):
@@ -249,6 +255,8 @@ class MCU_TMC_uart:
                 self.ifcnt = self._do_get_register("IFCNT")
                 if self.ifcnt == (ifcnt + 1) & 0xff:
                     return
+        if self.mcu.is_non_critical:
+            return                     
         raise self.printer.command_error(
             "Unable to write tmc uart '%s' register %s" % (self.name, reg_name))
     def get_tmc_frequency(self):

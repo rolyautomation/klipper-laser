@@ -131,6 +131,62 @@ choice
        select USBCANBUS
 endchoice
 
+
+choice
+ prompt "Report USB Firmware Name"
+ #default MFIBER_OPT
+ default MMAINBOARD_OPT
+ config MMAINBOARD_OPT
+     bool "Main control board"
+ config MGALVO_OPT
+      bool "head galvo board"
+ config MROLLER_OPT
+      bool "roller board"
+ config MFIBER_OPT
+      bool "optical fiber board"
+ config KLIPPER_OPT
+      bool "default klipper"      
+endchoice
+
+
+# Define the final string value based on the selected option
+if MMAINBOARD_OPT
+    config REP_FN
+        string 
+        default "mmain"
+endif
+
+if MGALVO_OPT
+    config REP_FN
+        string 
+        default "mgalvo"
+endif
+
+if MROLLER_OPT
+    config REP_FN
+        string 
+        default "mroller"
+endif
+
+if MFIBER_OPT
+    config REP_FN
+        string 
+        default "mfiber"
+endif
+
+if KLIPPER_OPT
+    config REP_FN
+        string 
+        default "Klipper"
+endif
+
+
+config XY2100
+    bool "Enable XY2-100 protocol"
+    depends on MACH_RP2040
+    help
+        Enable support for the XY2-100 protocol on RP2040 boards.
+
 config RP2040_CANBUS_GPIO_RX
     int "CAN RX gpio number" if CANBUS
     default 4

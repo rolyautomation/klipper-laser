@@ -38,8 +38,10 @@ class PrinterTemperatureMCU:
         if self.printer.get_start_args().get('debugoutput') is not None:
             self.mcu_adc.setup_adc_sample(SAMPLE_TIME, SAMPLE_COUNT)
             return
-        self.printer.register_event_handler("klippy:mcu_identify",
-                                            self.handle_mcu_identify)
+        # self.printer.register_event_handler("klippy:mcu_identify",
+        #                                     self.handle_mcu_identify)
+        self.mcu_adc.get_mcu().register_config_callback(self._build_config)
+
     # Temperature interface
     def setup_callback(self, temperature_callback):
         self.temperature_callback = temperature_callback
@@ -58,7 +60,9 @@ class PrinterTemperatureMCU:
         return (temp - self.base_temperature) / self.slope
     def calc_base(self, temp, adc):
         return temp - adc * self.slope
-    def handle_mcu_identify(self):
+
+    def _build_config(self):
+    #def handle_mcu_identify(self):
         # Obtain mcu information
         mcu = self.mcu_adc.get_mcu()
         self.debug_read_cmd = mcu.lookup_query_command(
@@ -100,6 +104,8 @@ class PrinterTemperatureMCU:
                                       range_check_count=RANGE_CHECK_COUNT)
         self.diag_helper.setup_diag_minmax(self.min_temp, self.max_temp,
                                            min_adc, max_adc)
+        self.mcu_adc._build_config()
+        
     def config_unknown(self):
         raise self.printer.config_error("MCU temperature not supported on %s"
                                         % (self.mcu_type,))

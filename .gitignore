@@ -4,6 +4,7 @@
 .config
 .config.old
 klippy/.version
+out/
 
 # Ignore temporary files
 *.log

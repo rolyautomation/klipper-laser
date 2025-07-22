@@ -18,7 +18,9 @@ LD=$(CROSS_PREFIX)ld
 OBJCOPY=$(CROSS_PREFIX)objcopy
 OBJDUMP=$(CROSS_PREFIX)objdump
 STRIP=$(CROSS_PREFIX)strip
-CPP=cpp
+# Explictly set the preprocessor to gcc, for macOS compiles
+#CPP=cpp
+CPP=$(CROSS_PREFIX)gcc -E
 PYTHON=python3
 
 # Source files
@@ -36,8 +38,14 @@ CFLAGS := -iquote $(OUT) -iquote src -iquote $(OUT)board-generic/ \
 CFLAGS += -flto=auto -fwhole-program -fno-use-linker-plugin -ggdb3
 
 OBJS_klipper.elf = $(patsubst %.c, $(OUT)src/%.o,$(src-y))
+# Add SDK files to the build
+ifeq ($(CONFIG_MACH_RP2040),y)
+OBJS_klipper.elf += $(patsubst $(RP2040_SDK_DIR)/%.c,$(OUT)$(RP2040_SDK_DIR)/%.o,$(filter $(RP2040_SDK_DIR)/%.c,$(src-y)))
+endif
 OBJS_klipper.elf += $(OUT)compile_time_request.o
 CFLAGS_klipper.elf = $(CFLAGS) -Wl,--gc-sections
+# When compiling on macOS, ArmGNUToolchain can't find some standard functions
+#CFLAGS_klipper.elf += --specs=nosys.specs
 
 CPPFLAGS = -I$(OUT) -P -MD -MT $@
 

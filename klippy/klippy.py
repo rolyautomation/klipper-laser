@@ -96,6 +96,16 @@ class Printer:
                                'extras', module_name + '.py')
         py_dirname = os.path.join(os.path.dirname(__file__),
                                   'extras', module_name, '__init__.py')
+
+        wkenvvalue = len(self.start_args.get('run_env'))
+        if wkenvvalue > 4:
+            py_name = os.path.join(os.path.dirname(__file__),
+                                'extras', module_name + '.pyc')
+            py_dirname = os.path.join(os.path.dirname(__file__),
+                                    'extras', module_name, '__init__.pyc')
+
+        logging.info("%d:%s" ,wkenvvalue, py_name)                            
+
         if not os.path.exists(py_name) and not os.path.exists(py_dirname):
             if default is not configfile.sentinel:
                 return default
@@ -284,6 +294,13 @@ def main():
     start_args = {'config_file': args[0], 'apiserver': options.apiserver,
                   'start_reason': 'startup'}
 
+
+    wkenv = "DEV"
+    enterfilename = os.path.basename(__file__)
+    if enterfilename.endswith(".pyc"):
+        wkenv = "RELEASE"
+    start_args['run_env'] = wkenv
+
     debuglevel = logging.INFO
     if options.verbose:
         debuglevel = logging.DEBUG
@@ -303,6 +320,18 @@ def main():
     else:
         logging.getLogger().setLevel(debuglevel)
     logging.info("Starting Klippy...")
+
+    autoselcfile = importlib.import_module('.autoselcfile', 'extras')
+    autoselcfile.FUN_GPIO_EN = 0
+    iret = autoselcfile.open_rpi_gpio6()
+    logging.info("rpi_gpio6_runstate:%d",iret)
+    newfn = autoselcfile.get_autoselcfile()
+    if len(newfn) > 0:
+        start_args['config_file'] = newfn
+        logging.info("ASelConfigFile: %s" % (newfn,))
+    else:
+        logging.info("config_file: %s" % (start_args['config_file'],))
+
     git_info = util.get_git_version()
     git_vers = git_info["version"]
     extra_files = [fname for code, fname in git_info["file_status"]

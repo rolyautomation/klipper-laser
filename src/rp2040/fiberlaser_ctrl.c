@@ -1,0 +1,1178 @@
+// Handling of fiberlaser control drivers.
+//
+// Copyright (C) 2024-2028  jinqiang <jinqiang@ecomedge.io>
+//
+// This file may be distributed under the terms of the GNU GPLv3 license.
+
+#include "autoconf.h" // CONFIG_*
+#include "board/armcm_boot.h" // armcm_enable_irq
+#include "basecmd.h" // oid_alloc
+#include "board/gpio.h" // gpio_out_write
+#include "board/irq.h" // irq_disable
+#include "board/misc.h" // timer_is_before
+#include "command.h" // DECL_COMMAND
+#include "internal.h" // PIO0_IRQ_0_IRQn
+#include "sched.h" // struct timer
+//#include "stepper.h" // stepper_event
+#include "fiberlaser_ctrl.h"  // 
+#include "trsync.h" // trsync_add_signal
+
+
+int init_ring_buff_setup(void);
+
+#define M_FIBERLASER_CTRL_FUN   (1)
+#ifdef M_FIBERLASER_CTRL_FUN
+
+struct stepper_move_fiber {
+    struct move_node node;
+    uint8_t workmode;
+    uint8_t workstep;
+    uint8_t workpower;
+    uint8_t flags;
+};
+
+
+
+enum {
+    SF_LAST_DIR=1<<0, SF_NEXT_DIR=1<<1, SF_INVERT_STEP=1<<2, SF_NEED_RESET=1<<3,
+    SF_SINGLE_SCHED=1<<4, SF_HAVE_ADD=1<<5
+};
+
+//10s: from power on to normal
+//pin1-8 (D0-D7)
+#define  M_POWER_IO_TOTAL           (8)
+//pin9
+#define  M_GPIO_LATCH_NUM           (8)
+//pin18
+#define  M_GPIO_MOEE_NUM            (9)
+//pin19
+#define  M_GPIO_BSEM_NUM            (10)
+//pin20
+#define  M_GPIO_PRRSYNC_NUM         (11)
+//pin22
+#define  M_GPIO_POINTERL_NUM        (12)
+#define  M_GPIO_PWENABLE_NUM        (12)
+//pin2
+#define  M_GPIO_PWSDA_NUM           (1)
+//pin23
+#define  M_GPIO_EMERGENCYOFF_NUM    (13)
+
+
+
+//#define  MCU_ALARM_FUNC_EN           (0)
+#define  MCU_ALARM_FUNC_EN           (0)
+//pin16
+#define  M_GPIO_IN_ALARM16_NUM       (14)
+//pin21
+#define  M_GPIO_IN_ALARM21_NUM       (15)
+
+
+//Emission Modulation(booster,Laser Modulation), Emission Enable(Master Oscillator)
+
+
+#define  M_WK_IDLE_MODE         (0)
+#define  M_WK_CHGPOWER_MODE     (1)
+#define  M_WK_POWERON_MODE      (2)
+#define  M_WK_POWEROFF_MODE     (3)
+#define  M_WK_LASERON_MODE      (4)
+#define  M_WK_LASEROFF_MODE     (5)
+#define  M_WK_REDLEDON_MODE      (6)
+#define  M_WK_REDLEDOFF_MODE     (7)
+#define  M_WK_ESTOPON_MODE       (8)
+#define  M_WK_ESTOPOFF_MODE      (9)
+#define  M_WK_POWERMODE_T_MODE      (10)
+#define  M_WK_POWERMODE_U_MODE      (11)
+
+
+
+
+
+#define  M_WK_CHGPOWER_STEP     (5)
+#define  M_WK_POWERON_STEP      (3)
+#define  M_WK_POWEROFF_STEP     (3)
+//#define  M_WK_LASERONOFF_STEP (3)
+
+#define  M_LASER_EE_FLAG          (0x0001)
+#define  M_LASER_EM_FLAG          (0x0002)
+#define  M_LASER_RLED_FLAG        (0x0004)
+#define  M_LASER_STOP_FLAG        (0x0008)
+#define  M_LASER_SETPOWER_FLAG    (0x0010)
+
+#define  M_LASER_POWERMODE_FLAG   (0x0020)
+
+#define  M_ST_PIN16_BIT           (0x4000)
+#define  M_ST_PIN21_BIT           (0x8000)
+
+#define  M_HIGH_IO    (1)
+#define  M_LOW_IO     (0)
+#define  M_MIN_DEDAYTIME_US    (1)
+
+//#define  M_LOGLEVEL_INVERSION
+//relase  version
+#ifdef   M_LOGLEVEL_INVERSION
+#define  M_HIGH_IO_X    (0)
+#define  M_LOW_IO_X     (1)
+#else
+#define  M_HIGH_IO_X    (1)
+#define  M_LOW_IO_X     (0)
+#endif
+
+
+#define  M_LATCH_BEFORE_WAIT_TM  (1)
+#define  M_LATCH_AFTER_WAIT_TM   (2)
+#define  M_LATCH_INTER_WAIT_TM   (2)
+#define  M_MIN_US_SYSTEM     (4)
+
+//255*0.97
+#define  M_MAX_FIBER_POWER_VAL    (247)
+//255*0.1
+#define  M_MIN_FIBER_POWER_VAL    (25)
+//255*0.2
+#define  M_P20_FIBER_POWER_VAL    (51)
+
+#define  M_LASER_ON_CMD       (1)
+#define  M_LASER_OFF_CMD      (2)
+
+#define  M_GCODEF_INFTERF     (1)
+
+//#define  M_DEBUG_INFO_EN       (1)
+#define  M_DEBUG_INFO_EN       (0)
+
+struct stepper_fiber {
+    struct timer time;
+    uint32_t STA_EE_EM_TIME_us; //5ms = 5000us
+    uint32_t PLATCH_BEFORE_TIME_us; //1us =   
+    uint32_t PLATCH_AFTER_TIME_us; //2us  
+    uint32_t PLATCH_CHG_INTERTIME_us; //4us      
+    uint32_t STA_EM_EE_TIME_us; //1us 
+    uint32_t STA_MIN_DELAYTIME_us; //1us 
+    uint8_t  gpio_base_pin;
+    uint8_t  workmode;
+    uint8_t  workstep;
+    uint8_t  workpower;    
+    //uint32_t  interval;
+    uint8_t  recvmode;
+    uint8_t  recvpower;
+    uint32_t workflag;
+
+    uint8_t  poweron_mode;
+
+    uint32_t period;
+    uint32_t level;  
+    uint8_t  fibertype;  
+    uint8_t  powerchgmode;
+
+    //uint8_t  workstatus;
+    uint32_t pulsewidth_cmd;
+
+    struct move_queue_head mq;
+    struct trsync_signal stop_signal;
+    // gcc (pre v6) does better optimization when uint8_t are bitfields
+    uint8_t flags : 8;
+};
+
+
+
+typedef uint8_t ring_data_t;
+typedef uint8_t  ring_len_t;
+
+
+struct powerring_buffer_t {
+  /** Buffer memory.  X,Y value */
+  ring_data_t *buffer;   
+  /** Buffer mask. */
+  ring_len_t buffer_mask;
+  /** Index of tail. */
+  ring_len_t tail_index;
+  /** Index of head. */
+  ring_len_t head_index;
+};
+
+
+typedef struct powerring_buffer_t  ring_buffer_t;
+
+#define M_PRING_BUFF_SIZE  (16)
+
+struct latch_time_s_t {
+    ring_buffer_t  power_buff;
+    ring_data_t  buf_arr[M_PRING_BUFF_SIZE];
+    uint32_t step1_time;
+    uint32_t step2_time;
+    uint32_t step2_waittm;
+    uint8_t  gpio_base_pin;
+
+};
+
+typedef struct latch_time_s_t latch_time_s_t;
+
+latch_time_s_t   g_latch_time_d;
+
+/*
+void ring_buffer_init_p(ring_buffer_t *buffer, ring_data_t *buf, size_t buf_size);
+uint8_t  ring_buffer_queue_p(ring_buffer_t *buffer, ring_data_t data);
+uint8_t ring_buffer_dequeue_p(ring_buffer_t *buffer, ring_data_t *data);
+*/
+
+#define  RING_BUFFER_MASK(rb) (rb->buffer_mask)
+
+void ring_buffer_init_p(ring_buffer_t *buffer, ring_data_t *buf, size_t buf_size) {
+  buffer->buffer = buf;
+  buffer->buffer_mask = buf_size - 1;
+  buffer->tail_index = 0;
+  buffer->head_index = 0;
+
+}
+
+int init_ring_buff_setup(void)
+{
+    int ret = 0;
+    ring_buffer_init_p(&g_latch_time_d.power_buff, &g_latch_time_d.buf_arr[0], M_PRING_BUFF_SIZE);
+    return(ret);
+
+}
+
+
+inline uint8_t ring_buffer_is_empty(ring_buffer_t *buffer) {
+  return (buffer->head_index == buffer->tail_index);
+}
+
+
+inline uint8_t ring_buffer_is_full(ring_buffer_t *buffer) {
+  return ((buffer->head_index - buffer->tail_index) & RING_BUFFER_MASK(buffer)) == RING_BUFFER_MASK(buffer);
+}
+
+
+
+uint8_t  ring_buffer_queue_p(ring_buffer_t *buffer, ring_data_t data) {
+  uint8_t ret  = 0;    
+  /* Is buffer full? */
+  if(ring_buffer_is_full(buffer)) {
+    /* Is going to overwrite the oldest byte */
+    /* Increase tail index */
+    buffer->tail_index = ((buffer->tail_index + 1) & RING_BUFFER_MASK(buffer));
+  }
+  else
+  {
+    ret = 1;
+  }
+
+  /* Place data in buffer */
+  buffer->buffer[buffer->head_index] = data;
+  buffer->head_index = ((buffer->head_index + 1) & RING_BUFFER_MASK(buffer));
+  return (ret);
+  
+}
+
+
+
+uint8_t ring_buffer_dequeue_p(ring_buffer_t *buffer, ring_data_t *data) {
+  if(ring_buffer_is_empty(buffer)) {
+    /* No items */
+    return 0;
+  }
+  
+  *data = buffer->buffer[buffer->tail_index];
+  buffer->tail_index = ((buffer->tail_index + 1) & RING_BUFFER_MASK(buffer));
+  return 1;
+}
+
+
+
+int handle_fiber_timeseq(struct stepper_fiber *s)
+{
+    int iret = 0;
+    uint8_t  workmode = s->workmode;
+    uint8_t  workstep = s->workstep;
+    uint32_t curtime = timer_read_time();
+    //uint32_t min_next_time = 0; //curtime + timer_from_us(10000); //10ms    
+
+    switch(workmode)
+    {
+        case M_WK_POWERON_MODE :
+            if (workstep > 0)
+            {
+                if (M_WK_POWERON_STEP == workstep) 
+                {
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_MOEE_NUM, M_HIGH_IO_X);
+                    s->time.waketime =  curtime +  timer_from_us(s->STA_EE_EM_TIME_us);
+                    s->workstep = s->workstep - 1;
+                    s->workflag = s->workflag | M_LASER_EE_FLAG; 
+                    iret = 0;
+
+                } else if ((M_WK_POWERON_STEP-1) == workstep)  
+                {
+                    if (s->poweron_mode > 0)
+                    {
+                        set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO_X);
+                        s->workflag = s->workflag | M_LASER_EM_FLAG;
+
+                    }
+                    else
+                    {
+                        set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO_X);
+                        s->workflag = s->workflag &  (~M_LASER_EM_FLAG);  
+
+                    }
+                    s->workstep = 0;
+                    s->workmode = M_WK_IDLE_MODE;
+                    s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);
+                    iret = 1;
+
+
+                }
+
+            }
+            else
+            {
+                s->workmode = M_WK_IDLE_MODE;
+                s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);
+                iret = 1;
+            }
+            break;
+        case M_WK_CHGPOWER_MODE :
+            if (workstep > 0)
+            {
+                if (M_WK_CHGPOWER_STEP == workstep) 
+                {
+                    
+                    set_manygpio_outstate(s->gpio_base_pin, M_POWER_IO_TOTAL, s->workpower);
+                    s->time.waketime =  curtime +  timer_from_us(s->PLATCH_BEFORE_TIME_us);
+                    s->workstep = s->workstep - 1;
+                    s->workflag = s->workflag | M_LASER_SETPOWER_FLAG; 
+                    #if M_DEBUG_INFO_EN
+                    //output("fiber:[%u,%u]",3,s->PLATCH_BEFORE_TIME_us);
+                    #endif                      
+                    iret = 0;
+
+                } else if ((M_WK_CHGPOWER_STEP-1) == workstep)  
+                {
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_LATCH_NUM, M_HIGH_IO);
+                    s->workstep = s->workstep - 1;
+                    s->time.waketime =  curtime +  timer_from_us(s->PLATCH_AFTER_TIME_us);
+                    #if M_DEBUG_INFO_EN
+                    //output("fiber:[%u,%u]",M_HIGH_IO,s->PLATCH_AFTER_TIME_us);
+                    #endif 
+                    iret = 0;
+                }else if ((M_WK_CHGPOWER_STEP-2) == workstep)  
+                {
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_LATCH_NUM, M_LOW_IO);
+                    s->workstep = s->workstep - 1;
+                    if (s->PLATCH_CHG_INTERTIME_us > 0)
+                    {
+                        s->time.waketime =  curtime +  timer_from_us(s->PLATCH_CHG_INTERTIME_us);
+                        #if M_DEBUG_INFO_EN
+                        //output("fiber:[%u,%u]",M_LOW_IO,s->PLATCH_CHG_INTERTIME_us);
+                        #endif                         
+                        iret = 0;
+                    }
+                    else
+                    {
+                        s->workstep = 0;
+                        s->workflag = s->workflag & (~M_LASER_SETPOWER_FLAG);
+                        s->workmode = M_WK_IDLE_MODE;
+                        s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);
+                        iret = 1;                        
+                    }
+
+                }else if ((M_WK_CHGPOWER_STEP-3) == workstep)  
+                {
+                    s->workstep = 0;
+                    s->workflag = s->workflag & (~M_LASER_SETPOWER_FLAG);
+                    s->workmode = M_WK_IDLE_MODE;
+                    s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);
+                    iret = 1;  
+
+                }
+
+            }
+            else
+            {
+                s->workmode = M_WK_IDLE_MODE;
+                s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);
+                iret = 1;
+            }
+            break;
+        case M_WK_POWEROFF_MODE :
+            if (workstep > 0)
+            {
+                if (M_WK_POWEROFF_STEP == workstep) 
+                {   
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO_X);
+                    s->time.waketime =  curtime +  timer_from_us(s->STA_EM_EE_TIME_us);
+                    s->workstep = s->workstep - 1;
+                    s->workflag = s->workflag &  (~M_LASER_EM_FLAG);
+                    iret = 0;
+
+                } else if ((M_WK_POWEROFF_STEP-1) == workstep)  
+                {
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_MOEE_NUM, M_LOW_IO_X);
+                    s->workstep = 0;
+                    s->workflag = s->workflag & (~M_LASER_EE_FLAG);
+                    s->workmode = M_WK_IDLE_MODE;
+                    s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);
+                    iret = 1;
+                }
+
+            }
+            else
+            {
+                s->workmode = M_WK_IDLE_MODE;
+                s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);                
+                iret = 1;
+            }
+
+            break;
+
+        case M_WK_LASERON_MODE:
+            set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO_X);
+            s->workstep = 0;
+            s->workflag = s->workflag | M_LASER_EM_FLAG;
+            s->workmode = M_WK_IDLE_MODE;
+            s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);
+            iret = 1;        
+            break; 
+
+        case M_WK_LASEROFF_MODE:
+            set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO_X);
+            s->workstep = 0;
+            s->workflag = s->workflag &  (~M_LASER_EM_FLAG);
+            s->workmode = M_WK_IDLE_MODE;
+            s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);            
+            iret =1;
+            break;   
+
+
+        case M_WK_REDLEDON_MODE:
+            change_gpio_funmode(s->gpio_base_pin+M_GPIO_POINTERL_NUM, 0);
+            set_agpio_outstate(s->gpio_base_pin+M_GPIO_POINTERL_NUM, M_HIGH_IO);
+            s->workstep = 0;
+            s->workflag = s->workflag | M_LASER_RLED_FLAG;
+            s->workmode = M_WK_IDLE_MODE;
+            s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);
+            iret = 1;        
+            break; 
+
+        case M_WK_REDLEDOFF_MODE:
+            set_agpio_outstate(s->gpio_base_pin+M_GPIO_POINTERL_NUM, M_LOW_IO);
+            change_gpio_funmode(s->gpio_base_pin+M_GPIO_POINTERL_NUM, 1);
+            s->workstep = 0;
+            s->workflag = s->workflag &  (~M_LASER_RLED_FLAG);
+            s->workmode = M_WK_IDLE_MODE;
+            s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);            
+            iret =1;
+            break; 
+
+        case M_WK_ESTOPON_MODE:
+            set_agpio_outstate(s->gpio_base_pin+M_GPIO_EMERGENCYOFF_NUM, M_LOW_IO);  //low
+            s->workstep = 0;
+            s->workflag = s->workflag | M_LASER_STOP_FLAG;
+            s->workmode = M_WK_IDLE_MODE;
+            s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);
+            iret = 1;        
+            break; 
+
+        case M_WK_ESTOPOFF_MODE:
+            set_agpio_outstate(s->gpio_base_pin+M_GPIO_EMERGENCYOFF_NUM, M_HIGH_IO);//high
+            s->workstep = 0;
+            s->workflag = s->workflag &  (~M_LASER_STOP_FLAG);
+            s->workmode = M_WK_IDLE_MODE;
+            s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);            
+            iret =1;
+            break;            
+
+        case M_WK_IDLE_MODE:
+            s->workstep = 0;
+            s->workmode = M_WK_IDLE_MODE;
+            s->time.waketime =  curtime +  timer_from_us(s->STA_MIN_DELAYTIME_us);            
+            iret =1;        
+            break;
+
+    }
+    return(iret);
+
+}
+
+
+static struct task_wake power_latch_wake;
+
+
+void
+fiberlaser_shorttime_task(void)
+{
+    uint32_t end =  0;
+    uint8_t  recpower = 0;
+    uint8_t  sendflag = 0;
+    if (!sched_check_wake(&power_latch_wake))
+    {
+        return;
+    }
+    sendflag = 0;
+
+    #if 0
+    uint8_t  ret = 0;
+    while(1)
+    {
+        ret = ring_buffer_dequeue_p(&g_latch_time_d.power_buff, &recpower);
+        if (ret == 0)
+        {
+            break;
+        }
+        sendflag = 1;
+
+    }
+    #endif
+    if (sendflag)
+    {
+        set_manygpio_outstate(g_latch_time_d.gpio_base_pin, M_POWER_IO_TOTAL, recpower);
+        end  =   timer_read_time() +  timer_from_us(M_LATCH_BEFORE_WAIT_TM);;  
+        while (timer_is_before(timer_read_time(), end))
+            ;
+        set_agpio_outstate(g_latch_time_d.gpio_base_pin+M_GPIO_LATCH_NUM, M_HIGH_IO);
+        //end  = timer_read_time() + g_latch_time_d.step2_waittm; 
+        end  = timer_read_time() + timer_from_us(M_LATCH_AFTER_WAIT_TM);
+        while (timer_is_before(timer_read_time(), end))
+            ;    
+        set_agpio_outstate(g_latch_time_d.gpio_base_pin+M_GPIO_LATCH_NUM, M_LOW_IO);
+        end  = timer_read_time() + timer_from_us(M_LATCH_INTER_WAIT_TM);
+        while (timer_is_before(timer_read_time(), end))
+            ;  
+
+    }
+    	
+}
+DECL_TASK(fiberlaser_shorttime_task);
+
+
+
+// Setup a stepper for the next move in its queue
+static uint_fast8_t
+stepper_load_next_fiber(struct stepper_fiber *s)
+{
+    if (move_queue_empty(&s->mq)) {
+        // There is no next move - the queue is empty
+        s->workstep = 0;
+        return SF_DONE;
+    }
+
+    // Load next 'struct stepper_move' into 'struct stepper'
+    struct move_node *mn = move_queue_pop(&s->mq);
+    struct stepper_move_fiber *m = container_of(mn, struct stepper_move_fiber, node);
+    s->workmode =  m->workmode;
+    s->workstep =  m->workstep;
+    s->workpower =  m->workpower; 
+    int iret = handle_fiber_timeseq(s);
+    move_free(m);
+    if (iret == 0)
+    {
+        return SF_RESCHEDULE; 
+    }
+    else
+    {
+        if(s->STA_MIN_DELAYTIME_us > 0)
+        {
+            return SF_RESCHEDULE; 
+        }
+        else
+        {
+            s->time.waketime =  timer_read_time() +  timer_from_us(M_MIN_DEDAYTIME_US);  
+            return SF_RESCHEDULE; 
+
+        }
+
+    }
+    //return SF_RESCHEDULE;
+}
+
+// Optimized step function to step on each step pin edge
+uint_fast8_t
+stepper_event_edge_fiber(struct timer *t)
+{
+    struct stepper_fiber *s = container_of(t, struct stepper_fiber, time);
+    uint32_t count = s->workstep;
+    if (likely(count)) {
+
+        int iret = handle_fiber_timeseq(s);
+        if (iret == 0)
+        {
+            return SF_RESCHEDULE; 
+        }
+    }
+    return stepper_load_next_fiber(s);
+
+}
+
+
+
+// Optimized entry point for step function (may be inlined into sched.c code)
+uint_fast8_t
+stepper_event_fiber(struct timer *t)
+{
+
+    return stepper_event_edge_fiber(t);
+
+}
+/*
+    uint32_t STA_EE_EM_TIME_us; //5ms = 5000us
+    uint32_t PLATCH_BEFORE_TIME_us; //1us =   
+    uint32_t PLATCH_AFTER_TIME_us; //2us  
+    uint32_t PLATCH_CHG_INTERTIME_us; //4us      
+    uint32_t STA_EM_EE_TIME_us; //1us 
+    uint32_t STA_MIN_DELAYTIME_us; //1us 
+
+*/
+
+
+
+//pin20
+//#define  M_GPIO_PRRSYNC_NUM         (11)
+//#define M_DEFAULT_POWER_VAL         (0)
+#define M_DEFAULT_POWER_VAL           M_MIN_FIBER_POWER_VAL
+
+
+
+int fiber_laser_init(struct stepper_fiber *s)
+{
+    init_ring_buff_setup();
+    g_latch_time_d.gpio_base_pin = s->gpio_base_pin;
+
+    set_manygpio_out(s->gpio_base_pin, M_POWER_IO_TOTAL, M_DEFAULT_POWER_VAL);
+
+    #ifdef   M_LOGLEVEL_INVERSION
+    set_agpio_out(s->gpio_base_pin+M_GPIO_LATCH_NUM, 1);
+    set_agpio_out(s->gpio_base_pin+M_GPIO_MOEE_NUM, 1);
+    set_agpio_out(s->gpio_base_pin+M_GPIO_BSEM_NUM, 1); 
+    #else
+    set_agpio_out(s->gpio_base_pin+M_GPIO_LATCH_NUM, 0);
+    set_agpio_out(s->gpio_base_pin+M_GPIO_MOEE_NUM, 0);
+    set_agpio_out(s->gpio_base_pin+M_GPIO_BSEM_NUM, 0);
+    #endif   
+    
+    set_agpio_out(s->gpio_base_pin+M_GPIO_POINTERL_NUM, 0);
+    set_agpio_out(s->gpio_base_pin+M_GPIO_EMERGENCYOFF_NUM, 1);
+
+    #if MCU_ALARM_FUNC_EN
+    set_agpio_in(s->gpio_base_pin+M_GPIO_IN_ALARM16_NUM);
+    set_agpio_in(s->gpio_base_pin+M_GPIO_IN_ALARM21_NUM);  
+    #endif      
+    //PRR
+    //setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level);
+    setup_pio_pwm(s->gpio_base_pin+M_GPIO_PRRSYNC_NUM, s->period,s->level, s->gpio_base_pin, s->gpio_base_pin+M_GPIO_LATCH_NUM);
+    //set_power_value(M_DEFAULT_POWER_VAL);
+    pio_pw_run_init(s->gpio_base_pin+M_GPIO_PWSDA_NUM, s->gpio_base_pin+M_GPIO_PWENABLE_NUM);
+    set_power_value(M_DEFAULT_POWER_VAL);
+
+    return(0);
+
+}
+
+
+
+void
+command_config_stepper_fiber(uint32_t *args)
+{
+    struct stepper_fiber *s = oid_alloc(args[0], command_config_stepper_fiber, sizeof(*s));
+
+    s->gpio_base_pin = args[1];
+    s->STA_EE_EM_TIME_us = args[2];
+    s->STA_EM_EE_TIME_us = args[3];
+    s->PLATCH_BEFORE_TIME_us = M_MIN_US_SYSTEM;  //1; //10; //1us 
+    s->PLATCH_AFTER_TIME_us =  M_MIN_US_SYSTEM;  //2; //2000;  //2us  
+    //s->PLATCH_CHG_INTERTIME_us = M_MIN_US_SYSTEM;  //4; //40; //4us 
+    s->PLATCH_CHG_INTERTIME_us = 0;
+    s->STA_MIN_DELAYTIME_us = 0; //0: nodelay
+    s->period  = args[4];
+    s->fibertype = args[5];
+
+    #if M_DEBUG_INFO_EN
+    output("fiber:[%c,%u,%u,%u,:%u,%u]",args[0],args[1],args[2],args[3],args[4],args[5]);
+    #endif 
+
+    s->level = s->period/2;
+    move_queue_setup(&s->mq, sizeof(struct stepper_move_fiber));
+    s->time.func = stepper_event_edge_fiber;
+    fiber_laser_init(s);
+
+}
+DECL_COMMAND(command_config_stepper_fiber, "config_stepper_fiber oid=%c start_pin=%c"
+             " sta_ee_em=%u sta_em_ee=%u psyncpwm=%u type=%c");
+
+// Return the 'struct stepper' for a given stepper oid
+static struct stepper_fiber *
+stepper_oid_lookup_fiber(uint8_t oid)
+{
+    return oid_lookup(oid, command_config_stepper_fiber);
+}
+
+
+
+void
+command_modify_psync_param_fiber(uint32_t *args)
+{
+
+    //uint8_t recoid = args[0];
+    struct stepper_fiber *s = stepper_oid_lookup_fiber(args[0]);
+
+    irq_disable();
+    s->period  = args[1];
+    s->level   = args[2];
+    irq_enable();
+    modify_pio_pwm_param(s->period, s->level);
+     
+
+}
+
+DECL_COMMAND(command_modify_psync_param_fiber,
+             "modify_psync_param oid=%c psp=%u psd=%u");    
+
+
+void
+command_modify_pulsewidth_param_fiber(uint32_t *args)
+{
+
+    struct stepper_fiber *s = stepper_oid_lookup_fiber(args[0]);
+    if ((s->workflag & M_LASER_EE_FLAG) || (s->workflag & M_LASER_EM_FLAG) || (s->workflag & M_LASER_RLED_FLAG))
+    {
+        return;
+    }
+    irq_disable();
+    s->pulsewidth_cmd  = args[1] << 16 | args[2];
+    irq_enable();
+    send_pulsewidthrun_instr(s->pulsewidth_cmd);
+
+}
+
+
+DECL_COMMAND(command_modify_pulsewidth_param_fiber,
+            "modify_pulsewidth_param oid=%c pch=%u pw=%u");               
+
+
+ // Schedule a set of steps with a given timing
+void
+command_queue_step_fiber(uint32_t *args)
+{
+
+    uint8_t recoid = args[0];
+    uint8_t recmode = 0;
+    //uint8_t reconf = 0;
+    uint8_t recpower = 0;  
+    uint8_t laser_on_off = 0; 
+    uint8_t interfmd = 0; 
+
+    recmode = args[1];
+    recpower = args[2];
+    if (recpower > 0)
+    {
+        //recpower = chg_power_val(args[2]);
+        laser_on_off = M_LASER_ON_CMD;
+    }
+    else
+    {
+        //recpower = M_MIN_FIBER_POWER_VAL;
+        laser_on_off = M_LASER_OFF_CMD;
+        
+    }
+    handle_rec_command(recoid, recmode, recpower, laser_on_off, interfmd);
+
+ 
+}
+//DECL_COMMAND(command_queue_step_fiber,
+             //"queue_step_fiber oid=%c cmdmod=%c onf=%c pwmv=%hu");
+DECL_COMMAND(command_queue_step_fiber,
+             "queue_step_fiber oid=%c cmdmod=%c pwmv=%hu");            
+
+//sts
+void report_speed_stauts_ontest(void);
+
+int  handle_rec_command(uint8_t foid, uint8_t recmode_in, uint8_t recpower_in, uint8_t  laser_on_off, uint8_t  interfmd)
+{
+    int iret = 0;
+    struct stepper_fiber *s = stepper_oid_lookup_fiber(foid);
+    struct stepper_move_fiber *m = move_alloc();
+    uint8_t recmode = 0;
+    //uint8_t reconf = 0;
+    uint8_t recpower = 0;  
+    uint8_t runflag = 0;  
+
+    recmode = recmode_in;
+    //reconf = args[2];
+    recpower = recpower_in;
+    m->workmode =  recmode;
+    m->workstep =  M_WK_CHGPOWER_STEP;
+    m->workpower = recpower;
+    switch(recmode)
+    {
+        case M_WK_POWERON_MODE : 
+            runflag = 1;
+            m->workstep =  M_WK_POWERON_STEP;
+            s->poweron_mode = recpower_in;
+            if (s->workflag & M_LASER_EE_FLAG)
+            {
+                runflag = 0;
+            }
+        break;
+        case M_WK_POWEROFF_MODE : 
+            runflag = 1;
+            m->workstep =  M_WK_POWEROFF_STEP;   
+            if (s->workflag & M_LASER_EE_FLAG)
+            {
+                 runflag = 1;
+            }   
+            else
+            {
+                runflag = 0;
+            }                  
+        break;
+        case M_WK_LASERON_MODE : 
+            runflag = 1;
+        break;
+        case M_WK_LASEROFF_MODE : 
+            runflag = 1;
+        break;  
+        case M_WK_REDLEDON_MODE  : 
+            runflag = 1;
+        break;
+        case M_WK_REDLEDOFF_MODE  : 
+            runflag = 1;
+        break;  
+        case M_WK_ESTOPON_MODE : 
+            runflag = 1;
+        break;
+        case M_WK_ESTOPOFF_MODE : 
+            runflag = 1;
+        break; 
+
+        case M_WK_POWERMODE_T_MODE : 
+            runflag = 0;
+            s->powerchgmode = 1;
+            s->workflag = s->workflag | M_LASER_POWERMODE_FLAG;
+            //sts
+            report_speed_stauts_ontest();
+        break;
+
+        case M_WK_POWERMODE_U_MODE : 
+            runflag = 0;
+            s->workflag = s->workflag & (~M_LASER_POWERMODE_FLAG);
+            s->powerchgmode = 0;
+        break; 
+
+        case M_WK_CHGPOWER_MODE : 
+            runflag = 1;
+            m->workstep =  M_WK_CHGPOWER_STEP;
+            if(laser_on_off == M_LASER_ON_CMD)
+            {
+                if (((s->workflag & M_LASER_EM_FLAG) == 0 ) && (s->workflag & M_LASER_EE_FLAG))
+                {
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_HIGH_IO_X);
+                    s->workflag = s->workflag | M_LASER_EM_FLAG;     
+                }
+           
+
+            }else if (laser_on_off == M_LASER_OFF_CMD)
+            {
+                if (((s->workflag & M_LASER_EM_FLAG) > 0 ) && (s->workflag & M_LASER_EE_FLAG))
+                {
+                    set_agpio_outstate(s->gpio_base_pin+M_GPIO_BSEM_NUM, M_LOW_IO_X);
+                    s->workflag = s->workflag & (~M_LASER_EM_FLAG);
+
+                }
+
+            }
+        break;  
+        case M_WK_IDLE_MODE : 
+             runflag = 0;
+        break;                                     
+    }  
+
+    if (runflag)
+    {
+        if ((s->recvmode == recmode ) && (s->recvpower == recpower) && (recmode == M_WK_CHGPOWER_MODE) )
+        {
+            runflag = 0;
+        }
+        else if ((s->recvmode == recmode ) && (recmode != M_WK_CHGPOWER_MODE) )
+        {
+            runflag = 0;
+        }
+        else 
+        {
+            s->recvmode = recmode;
+            s->recvpower = recpower;
+
+        }
+         
+    }
+    //if ((runflag) && (recmode == M_WK_CHGPOWER_MODE))
+    if ((1) && (recmode == M_WK_CHGPOWER_MODE))
+    {
+          if (s->powerchgmode == 0) 
+          {
+
+                if (recpower > 0)
+                {
+                    recpower = chg_power_val(recpower);
+                    
+                }
+                else
+                {
+                    recpower = M_MIN_FIBER_POWER_VAL;
+                }
+
+          }   
+          if (interfmd == M_GCODEF_INFTERF)   
+          {
+              if(laser_on_off == M_LASER_ON_CMD)
+              {
+                 set_power_value(recpower);   
+
+              }
+              else
+              {
+                 //set_power_value(recpower); 
+                 ;
+              }  //???
+
+          } 
+          else
+          {
+            set_power_value(recpower);
+          }   
+          //sched_wake_task(&power_latch_wake);
+          //ring_buffer_queue_p(&g_latch_time_d.power_buff, recpower);
+          //set_manygpio_outstate(s->gpio_base_pin, M_POWER_IO_TOTAL, recpower);
+          //g_latch_time_d.step1_time =  timer_read_time() +  timer_from_us(s->PLATCH_BEFORE_TIME_us);
+          //g_latch_time_d.step1_time =  timer_read_time() +  timer_from_us(M_LATCH_BEFORE_WAIT_TM);
+          //g_latch_time_d.step2_time =  timer_read_time() +  timer_from_us(s->PLATCH_AFTER_TIME_us);
+          //g_latch_time_d.step2_waittm = timer_from_us(s->PLATCH_AFTER_TIME_us);
+          //g_latch_time_d.gpio_base_pin  = s->gpio_base_pin;
+          runflag = 0;
+
+
+           
+    }
+    irq_disable();
+    if (runflag)
+    {
+        uint8_t flags = s->flags;
+        if (s->workstep) {
+            s->flags = flags;
+            move_queue_push(&m->node, &s->mq);
+        } else if (flags & SF_NEED_RESET) {
+            move_free(m);
+        } else {
+            s->flags = flags;
+            move_queue_push(&m->node, &s->mq);
+            stepper_load_next_fiber(s);
+            sched_add_timer(&s->time);
+        }
+    }
+    else
+    {
+        move_free(m);
+    }
+    irq_enable();
+    return iret;
+    
+}
+
+
+
+
+
+uint8_t  chg_power_val(uint32_t val)
+{
+
+    uint8_t  power_val = 0;
+    if (val > M_MAX_FIBER_POWER_VAL)
+    {
+        power_val = M_MAX_FIBER_POWER_VAL;
+        return(power_val);
+    }
+    if (val < M_P20_FIBER_POWER_VAL)
+    {
+        val = val/2 + M_MIN_FIBER_POWER_VAL;
+        power_val = val & 0xFF;
+
+    }
+    else
+    {
+        power_val = val & 0xFF;
+    }
+    return(power_val);
+
+
+}
+
+//#define M_OUTINFO_EN  (1)
+#define M_OUTINFO_EN  (0)
+
+
+
+void 
+direct_set_pwm_pulse_width_fibertype(uint8_t pwd_oid, uint32_t val, uint8_t  pwm_on_off)
+{
+    
+    uint8_t recoid = pwd_oid;
+    uint8_t recmode = 0;
+    //uint8_t reconf = 0;
+    uint8_t recpower = 0;  
+    recpower = val & 0xFF;
+    recmode =  M_WK_CHGPOWER_MODE;
+    uint8_t laser_on_off = 0;  
+    //todo 
+    uint8_t interfmd = M_GCODEF_INFTERF; 
+
+    /*
+    if (recpower > 0)
+    {
+        //recpower = chg_power_val(val);
+        laser_on_off = M_LASER_ON_CMD;
+    }
+    else
+    {
+        //recpower = M_MIN_FIBER_POWER_VAL;
+        laser_on_off = M_LASER_OFF_CMD;
+
+        
+    }
+    */
+
+    laser_on_off = M_LASER_OFF_CMD;
+    if (pwm_on_off != 0)
+    {
+        laser_on_off = M_LASER_ON_CMD;
+    }
+    #if M_OUTINFO_EN
+    output("fibertypev:[%c,%u,%hu]",pwd_oid,val,recpower); 
+    #endif 
+    if (recpower > 0)   
+    {
+        ;
+    }
+    else
+    {
+        laser_on_off = M_LASER_OFF_CMD;
+    }
+    handle_rec_command(recoid, recmode, recpower,laser_on_off,interfmd);
+    
+
+   
+}
+
+
+
+// Set an absolute time that the next step will be relative to
+void
+command_reset_step_clock_fiber(uint32_t *args)
+{
+    struct stepper_fiber *s = stepper_oid_lookup_fiber(args[0]);
+    uint32_t waketime = args[1];
+    irq_disable();
+    if (s->workstep)
+        shutdown("Can't reset time when stepper active");
+    s->time.waketime = waketime;
+    //s->next_step_time = 
+    s->flags &= ~SF_NEED_RESET;
+    irq_enable();
+}
+DECL_COMMAND(command_reset_step_clock_fiber, "reset_step_clock_fiber oid=%c clock=%u");
+
+
+// Report the current position of the stepper
+void
+command_stepper_get_position_fiber(uint32_t *args)
+{
+    uint8_t oid = args[0];
+    struct stepper_fiber *s = stepper_oid_lookup_fiber(oid);
+
+    s->workflag  = s->workflag & (~(M_ST_PIN16_BIT+M_ST_PIN21_BIT));
+    #if MCU_ALARM_FUNC_EN
+    if(1 == get_agpio_in(s->gpio_base_pin+M_GPIO_IN_ALARM16_NUM))
+    {
+        s->workflag  = s->workflag | M_ST_PIN16_BIT;
+    }
+    if(1 == get_agpio_in(s->gpio_base_pin+M_GPIO_IN_ALARM21_NUM)) 
+    {
+         s->workflag  = s->workflag | M_ST_PIN21_BIT;
+    } 
+    #endif
+    irq_disable();
+    uint32_t val = s->workflag ;
+    irq_enable();
+    sendf("stepper_fiber oid=%c flag=%i", oid, val);
+}
+DECL_COMMAND(command_stepper_get_position_fiber, "stepper_get_fiber oid=%c");
+
+
+
+// Stop all moves for a given stepper (caller must disable IRQs)
+static void
+stepper_stop_fiber(struct trsync_signal *tss, uint8_t reason)
+{
+    struct stepper_fiber *s = container_of(tss, struct stepper_fiber, stop_signal);
+    sched_del_timer(&s->time);
+    s->time.waketime = 0;
+    s->workstep = 0;
+    s->flags = (s->flags ) | SF_NEED_RESET;
+
+    while (!move_queue_empty(&s->mq)) {
+        struct move_node *mn = move_queue_pop(&s->mq);
+        struct stepper_move_fiber *m = container_of(mn, struct stepper_move_fiber, node);
+        move_free(m);
+    }
+}
+
+// Set the stepper to stop on a "trigger event" (used in homing)
+void
+command_stepper_stop_on_trigger_fiber(uint32_t *args)
+{
+    struct stepper_fiber *s = stepper_oid_lookup_fiber(args[0]);
+    struct trsync *ts = trsync_oid_lookup(args[1]);
+    trsync_add_signal(ts, &s->stop_signal, stepper_stop_fiber);
+}
+DECL_COMMAND(command_stepper_stop_on_trigger_fiber,
+             "stepper_stop_on_trigger_fiber oid=%c trsync_oid=%c");
+
+
+
+
+void
+stepper_shutdown_fiber(void)
+{
+    uint8_t i;
+    struct stepper_fiber *s;
+    foreach_oid(i, s, command_config_stepper_fiber) {
+        move_queue_clear(&s->mq);
+        stepper_stop_fiber(&s->stop_signal, 0);
+    }
+
+
+}
+DECL_SHUTDOWN(stepper_shutdown_fiber);
+
+
+/*
+uint_fast8_t
+xy2_100t_event_tm(struct timer *t)
+{
+
+    uint32_t curtime = timer_read_time();
+    //uint32_t min_next_time = curtime + s->step_pulse_ticks;
+    uint32_t min_next_time = curtime + timer_from_us(10000); //10ms
+    sched_wake_task(&xy2_100_wake);
+	t->waketime = min_next_time;
+
+	
+    return SF_RESCHEDULE;
+
+
+	
+}
+*/
+#endif
+
+
+
+
+
+
+
