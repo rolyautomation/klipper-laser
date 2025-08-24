@@ -16,5 +16,5 @@ Adapt Klipper to laser engraving applications, with various optimizations, inclu
 Limitations and Challenges:
 - 
 
-Development lead by: Jinqiang CHEN. Find me at: jinqiang@ecomedge.io.
+Development led by: Jinqiang CHEN. Find me at: jinqiang@ecomedge.io.
 Project started: July 10, 2024 by Leo QU. Initial Klipper commit pulled is 248d3db.
